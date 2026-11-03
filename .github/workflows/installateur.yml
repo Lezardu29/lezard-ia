@@ -1,0 +1,76 @@
+# Installateur Windows signé (32.2) : construit sur une machine hébergée par GitHub, puis signé par SignPath
+# (signature gratuite des projets open source : https://signpath.org).
+#   Lancement : à la main (onglet Actions, « Run workflow ») ou en poussant une étiquette v* (ex. v1.0.5).
+#   Sans réglages SignPath, l'installateur est seulement construit (artefact « installateur-non-signe ») ; le zip
+#   (installation sans installateur) est toujours fourni à part (artefact « zip »).
+# Réglages du dépôt, une fois le projet accepté par SignPath Foundation (Settings > Secrets and variables > Actions) :
+#   secret    SIGNPATH_API_TOKEN               clé d'un utilisateur SignPath autorisé à envoyer des demandes
+#   variables SIGNPATH_ORGANIZATION_ID, SIGNPATH_PROJECT_SLUG, SIGNPATH_POLICY_SLUG (release-signing en général)
+# Chaque demande de signature est approuvée à la main sur signpath.io avant d'être signée.
+name: Installateur
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  installateur:
+    name: Construction et signature
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Construction (installer\build.ps1)
+        shell: powershell
+        run: .\installer\build.ps1
+      - name: Envoi de l'installateur non signé
+        id: non-signe
+        uses: actions/upload-artifact@v4
+        with:
+          name: installateur-non-signe
+          path: installer/build/out/LezardIA-Setup-*.exe
+          if-no-files-found: error
+          retention-days: 14
+      - name: Envoi du zip (installation sans installateur)
+        uses: actions/upload-artifact@v4
+        with:
+          name: zip
+          path: installer/build/out/LezardIA-*.zip
+          if-no-files-found: error
+          retention-days: 14
+      - name: Signature par SignPath
+        if: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.non-signe.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600   # le temps d'approuver la demande sur signpath.io
+          output-artifact-directory: signe
+      - name: Vérification de la signature
+        if: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
+        shell: powershell
+        run: |
+          $exe = Get-ChildItem signe -Filter "LezardIA-Setup-*.exe" | Select-Object -First 1
+          $sig = Get-AuthenticodeSignature $exe.FullName
+          Write-Host "$($exe.Name) : $($sig.Status), $($sig.SignerCertificate.Subject)"
+          if ($sig.Status -ne "Valid") { exit 1 }
+          "SHA-256 : $((Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower())" | Tee-Object -Append $env:GITHUB_STEP_SUMMARY
+      - name: Envoi de l'installateur signé
+        if: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: installateur-signe
+          path: signe/LezardIA-Setup-*.exe
+          if-no-files-found: error

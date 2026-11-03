@@ -1,0 +1,23 @@
+# Contexte de build Docker : ni secrets, ni données, ni tests (11.4). Motifs ancrés à la racine : `**/` pour tout niveau.
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.git
+.gitignore
+.venv
+venv
+data
+tests
+requirements-dev.txt
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.key
+**/*.pem
+**/*.log
+**/.env
+**/.env.*
+!**/.env.example
+**/providers.json
+.vscode
+.idea

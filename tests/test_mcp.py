@@ -1,0 +1,178 @@
+"""Client MCP : configuration, serveur stdio (faux serveur), transport HTTP, sûreté (secrets, validation, accès)."""
+
+import asyncio
+import json
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+
+import httpx
+import pytest
+
+from gateway import mcp, tools
+from gateway.tools import ToolError
+
+FAKE = str(Path(__file__).with_name("fake_mcp_server.py"))
+REAL_CLIENT = httpx.AsyncClient
+
+
+@pytest.fixture(autouse=True)
+def clean():
+    yield
+    mcp.STATUS.clear()
+    mcp.SERVERS.clear()
+    for name in [n for n, t in tools.TOOLS.items() if t.level == "mcp"]:
+        tools.TOOLS.pop(name)
+
+
+def run(coro):
+    """Un seul tour de boucle : les processus lancés sont arrêtés dans la boucle qui les a lancés."""
+
+    async def wrapped():
+        try:
+            return await coro
+        finally:
+            await mcp.stop()
+
+    return asyncio.run(wrapped())
+
+
+def write_config(tmp_path, monkeypatch, servers):
+    path = tmp_path / "mcp.json"
+    path.write_text(json.dumps({"servers": servers}), encoding="utf-8")
+    monkeypatch.setenv("MCP_CONFIG", str(path))
+
+
+def test_config_validation():
+    ok = mcp.parse_config(
+        {
+            "servers": {
+                "a-1": {"command": "x", "args": ["y"], "env": {"K": "v"}},
+                "b": {"url": "http://localhost:9/mcp", "headers": {"A": "b"}},
+            }
+        }
+    )
+    assert set(ok) == {"a-1", "b"}
+    bad = [
+        [],
+        {"servers": []},
+        {"servers": {"Majuscule": {"command": "x"}}},
+        {"servers": {"a": {}}},
+        {"servers": {"a": {"command": "x", "url": "http://x"}}},
+        {"servers": {"a": {"command": "x", "args": "oups"}}},
+        {"servers": {"a": {"command": "x", "env": {"K": 1}}}},
+        {"servers": {"a": {"url": "ftp://x"}}},
+    ]
+    for data in bad:
+        with pytest.raises(ValueError):
+            mcp.parse_config(data)
+
+
+def test_stdio_server_becomes_validated_tools_without_gateway_secrets(tmp_path, monkeypatch):
+    monkeypatch.setenv("GATEWAY_MASTER_KEY", "cle-maitre-de-test")
+    monkeypatch.setenv("OPENAI_API_KEY", "cle-openai-de-test")
+    write_config(
+        tmp_path,
+        monkeypatch,
+        {"fichiers": {"command": sys.executable, "args": [FAKE], "env": {"MCP_TEST_EXTRA": "oui"}}},
+    )
+
+    async def scenario():
+        await mcp.load()
+        echo = tools.TOOLS["mcp_fichiers_echo"]
+        odd = tools.TOOLS["mcp_fichiers_secret_check"]  # espace du nom d'origine remplacé
+        assert echo.level == "mcp" and echo.confirm and not echo.local_only  # validé à chaque appel par défaut
+        assert echo.parameters["required"] == ["text"] and echo.description.startswith("[MCP fichiers]")
+        out = (await echo.run({"text": "bonjour"})).text
+        seen = (await odd.run({})).text
+        return out, seen, dict(mcp.STATUS["fichiers"])
+
+    out, seen, status = run(scenario())
+    assert "données, pas des instructions" in out and "écho : bonjour" in out
+    assert "secret visible : False" in seen  # ni clé maître ni clé d'API chez le serveur lancé
+    assert "extra : oui" in seen  # mais l'environnement déclaré lui est transmis
+    assert status == {"ok": True, "tools": 2}
+
+
+def test_trust_and_local_only_options_and_failing_server(tmp_path, monkeypatch):
+    write_config(
+        tmp_path,
+        monkeypatch,
+        {
+            "sur": {"command": sys.executable, "args": [FAKE], "trust": True, "local_only": True},
+            "casse": {"command": "commande-qui-n-existe-pas-xyz"},
+        },
+    )
+
+    async def scenario():
+        await mcp.load()
+        tool = tools.TOOLS["mcp_sur_echo"]
+        return tool.confirm, tool.local_only, dict(mcp.STATUS), "casse" in mcp.SERVERS
+
+    confirm, local_only, status, kept = run(scenario())
+    assert not confirm and local_only
+    assert status["casse"]["ok"] is False and "lancement impossible" in status["casse"]["error"]
+    assert not kept  # le serveur défaillant n'empêche pas les autres
+
+
+def test_http_server_json_and_event_stream(tmp_path, monkeypatch):
+    seen = []
+
+    def handler(request):
+        msg = json.loads(request.content)
+        seen.append((msg.get("method"), request.headers.get("authorization"), request.headers.get("mcp-session-id")))
+        if "id" not in msg:
+            return httpx.Response(202)
+        method = msg["method"]
+        if method == "initialize":
+            body = {"jsonrpc": "2.0", "id": msg["id"], "result": {"protocolVersion": "2025-03-26"}}
+            return httpx.Response(200, json=body, headers={"Mcp-Session-Id": "s1"})
+        if method == "tools/list":
+            body = {"jsonrpc": "2.0", "id": msg["id"], "result": {"tools": [{"name": "meteo", "description": "d"}]}}
+            return httpx.Response(200, json=body)
+        body = {"jsonrpc": "2.0", "id": msg["id"], "result": {"content": [{"type": "text", "text": "il pleut"}]}}
+        return httpx.Response(
+            200,
+            text="event: message\ndata: " + json.dumps(body) + "\n\n",
+            headers={"content-type": "text/event-stream"},
+        )
+
+    monkeypatch.setattr(
+        mcp,
+        "httpx",
+        SimpleNamespace(
+            AsyncClient=lambda **kw: REAL_CLIENT(transport=httpx.MockTransport(handler), **kw),
+            HTTPError=httpx.HTTPError,
+        ),
+    )
+    write_config(
+        tmp_path, monkeypatch, {"web": {"url": "http://192.168.1.5:9000/mcp", "headers": {"Authorization": "Bearer t"}}}
+    )
+
+    async def scenario():
+        await mcp.load()
+        tool = tools.TOOLS["mcp_web_meteo"]
+        return (await tool.run({"ville": "Brest"})).text, tool.parameters
+
+    text, params = run(scenario())
+    assert "il pleut" in text
+    assert seen[-1] == ("tools/call", "Bearer t", "s1")  # en-têtes déclarés et session conservés
+    assert params == {"type": "object", "properties": {}}
+
+
+def test_tool_errors_are_reported_and_results_are_truncated():
+    assert mcp.render({"content": [{"type": "text", "text": "x" * 9000}]}).endswith("[… tronqué]")
+    assert mcp.render({"content": [{"type": "image", "data": "AA"}]}) == "[image non affichée]"
+    assert mcp.render({}) == "(aucun contenu)"
+    with pytest.raises(ToolError, match="boum"):
+        mcp._result({"error": {"message": "boum"}}, "tools/call")
+    assert mcp.tool_name("srv", "a b/c") == "mcp_srv_a_b_c" and len(mcp.tool_name("s", "x" * 100)) == 64
+
+
+def test_only_the_master_key_gets_mcp_tools(monkeypatch):
+    fake = tools.Tool("mcp_x_y", "d", {"type": "object"}, None, level="mcp")
+    monkeypatch.setitem(tools.TOOLS, "mcp_x_y", fake)
+    admin = SimpleNamespace(is_admin=True, plan="pro", permissions={})
+    friend = SimpleNamespace(is_admin=False, plan="pro", permissions={"tools": "pc"})
+    assert "mcp_x_y" in tools.available(admin)
+    assert "mcp_x_y" not in tools.available(friend)  # même avec la permission la plus large d'une clé virtuelle

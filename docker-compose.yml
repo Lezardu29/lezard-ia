@@ -1,0 +1,55 @@
+# Smart AI Gateway en conteneur (7.4).
+#
+#   Machine personnelle / serveur maison :  docker compose up -d
+#   Serveur distant managé (TLS, 24/7)    :  docker compose -f docker-compose.yml -f deploy/docker-compose.cloud.yml up -d
+#
+# Variables : copier deploy/.env.example en .env et le compléter.
+services:
+  gateway:
+    build: .
+    image: smart-ai-gateway:latest
+    restart: unless-stopped            # redémarre après crash ou reboot du serveur
+    env_file:
+      - path: .env
+        required: false                # absent sur une machine qui ne fait tourner que l'agent de pont
+    environment:
+      GATEWAY_DB: /data/gateway.db
+      # Ollama / LM Studio installés sur l'hôte (hors conteneur) : joignables via host.docker.internal
+      GATEWAY_LOCAL_HOST: ${GATEWAY_LOCAL_HOST:-host.docker.internal}
+      # accès sans clé (12.2) : vu du conteneur, l'hôte arrive par le pont Docker ; le port n'étant publié que
+      # sur 127.0.0.1 de l'hôte, ces réseaux ne contiennent que cette machine (et ses conteneurs)
+      GATEWAY_ANONYMOUS_FROM: ${GATEWAY_ANONYMOUS_FROM:-127.0.0.1/32,::1/128,172.16.0.0/12,192.168.65.0/24}
+      # mode réseau local : la gateway le sait et exige alors une clé hors 127.0.0.1 (ces réseaux sont ignorés)
+      GATEWAY_BIND: ${GATEWAY_BIND:-127.0.0.1}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - gateway-data:/data
+    ports:
+      # local uniquement par défaut ; GATEWAY_BIND=0.0.0.0 (lancer.ps1 -Docker -Lan) : réseau local (12.1) ;
+      # exposition publique via Caddy (cloud)
+      - "${GATEWAY_BIND:-127.0.0.1}:${GATEWAY_PORT:-8000}:8000"
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  # Agent de pont : relie une gateway HÉBERGÉE à l'Ollama de cette machine (profil « bridge »).
+  #   GATEWAY_URL=https://… GATEWAY_BRIDGE_TOKEN=gwb_… docker compose --profile bridge up -d bridge
+  bridge:
+    profiles: ["bridge"]
+    image: smart-ai-gateway:latest
+    build: .
+    restart: unless-stopped
+    command: ["python", "-m", "gateway.bridge_agent"]
+    environment:
+      GATEWAY_URL: ${GATEWAY_URL:-}
+      GATEWAY_BRIDGE_TOKEN: ${GATEWAY_BRIDGE_TOKEN:-}
+      BRIDGE_TARGET: ${BRIDGE_TARGET:-http://host.docker.internal:11434/v1}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      disable: true
+
+volumes:
+  gateway-data:

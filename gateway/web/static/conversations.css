@@ -1,0 +1,67 @@
+/* Conversations enregistrées (19.1) : liste ancrée à gauche à partir de 1100 px, tiroir par-dessus le chat sinon. */
+.conv-panel {
+  position: fixed; inset: 0 auto 0 0; z-index: 40; width: min(300px, 86vw);
+  display: flex; flex-direction: column; gap: 10px; padding: 12px;
+  background: var(--surface); border-right: 1px solid var(--border);
+  transform: translateX(-100%); visibility: hidden; transition: transform .2s ease, visibility .2s;
+}
+.conv-panel.open { transform: none; visibility: visible; box-shadow: var(--shadow); }
+.conv-current { display: none; }                    /* titre de la conversation en haut : interface Claude seulement */
+.sb { display: none; }                              /* barre latérale et menu du compte : interface Claude seulement */
+.conv-backdrop { position: fixed; inset: 0; z-index: 39; background: rgb(0 0 0 / .35); }
+@media (min-width: 1100px) {
+  /* ancrée : le chat se décale au lieu d'être recouvert */
+  body.conv-docked { padding-left: 300px; }
+  body.conv-docked .conv-panel { width: 300px; box-shadow: none; }
+  body.conv-docked .conv-backdrop { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .conv-panel { transition: none; } }
+
+.conv-head { display: flex; align-items: center; gap: 4px; }
+.conv-head strong { flex: 1; font-size: 15px; }
+.conv-search {
+  width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font: inherit; font-size: 14px;
+}
+.conv-search:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+
+.conv-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; min-height: 0;
+             display: flex; flex-direction: column; gap: 2px; }
+.conv-item { display: flex; align-items: center; gap: 2px; border-radius: var(--radius-sm); }
+.conv-item:hover, .conv-item:focus-within { background: var(--surface-2); }
+.conv-item[aria-current="true"] { background: var(--accent-soft); }
+.conv-open {
+  flex: 1; min-width: 0; display: grid; gap: 1px; text-align: left; padding: 8px 10px; border: 0;
+  background: none; color: var(--text); font: inherit; cursor: pointer; border-radius: var(--radius-sm);
+}
+.conv-open:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.conv-title { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv-title.untitled { color: var(--text-muted); font-style: italic; }
+.conv-date { font-size: 12px; color: var(--text-muted); }
+
+.conv-empty, .conv-note { margin: 0; font-size: 13px; color: var(--text-muted); }
+.conv-empty { padding: 12px 10px; }
+.conv-import { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px;
+               display: flex; flex-wrap: wrap; gap: 8px; font-size: 13px; }
+.conv-import p { margin: 0; flex-basis: 100%; }
+.conv-foot { border-top: 1px solid var(--border); padding-top: 10px; display: grid; gap: 6px; }
+.conv-toggle { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+
+/* avis d'enregistrement (échec, version d'un autre appareil) au-dessus de la saisie */
+.chat-notice { max-width: 760px; margin: 0 auto 8px; padding: 8px 12px; border-radius: var(--radius-sm);
+               background: var(--surface-2); color: var(--text); font-size: 13px; }
+
+/* tactile : cibles de 44 px (13.5) */
+[data-input="touch"] .conv-open { min-height: 44px; }
+/* recherche plein texte (19.3) : extrait du message trouvé */
+.conv-snippet { font-size: 12px; color: var(--text-muted); display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2;
+  -webkit-box-orient: vertical; overflow: hidden; white-space: normal; overflow-wrap: anywhere; }
+
+/* sections Favoris / Récents ; « Récents » seul : interface Claude seulement (ui-claude.css) */
+.conv-section { padding: 12px 10px 4px; font-size: 12px; font-weight: 600; color: var(--text-muted); list-style: none; }
+.conv-section:first-child { padding-top: 4px; }
+/* menu « ⋯ » de chaque conversation (row-menu.js) : visible au survol, toujours au doigt */
+.conv-menu summary { width: 32px; height: 32px; display: grid; place-items: center; padding: 0; opacity: 0; }
+.conv-item:hover .conv-menu summary, .conv-item:focus-within .conv-menu summary, .conv-menu[open] summary,
+[data-input="touch"] .conv-menu summary { opacity: 1; }
+[data-input="touch"] .conv-menu summary { width: 44px; height: 44px; }

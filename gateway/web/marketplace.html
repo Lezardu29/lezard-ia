@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Marketplace · Lezard IA</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/theme.css">
+  <link rel="stylesheet" href="/static/admin.css">
+  <link rel="stylesheet" href="/static/models.css">
+  <link rel="stylesheet" href="/static/marketplace.css">
+  <link rel="stylesheet" href="/static/mobile.css">
+  <link rel="stylesheet" href="/static/claude.css">
+  <link rel="stylesheet" href="/static/ui-claude.css">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/static/icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  <meta name="theme-color" content="#092f5c">
+  <script src="/static/device.js"></script>
+  <script src="/static/theme.js"></script>
+  <script type="module" src="/static/select-ui.js"></script>
+  <script src="/static/splash.js"></script>
+  <script type="module" src="/static/net-warning.js"></script>
+  <script type="module" src="/static/marketplace.js"></script>
+</head>
+<body class="admin-page market-body">
+  <header class="topbar market-top">
+    <a class="market-brand" href="/marketplace" aria-label="Marketplace Lezard IA">
+      <span class="logo" aria-hidden="true"><img src="/static/icons/logo-mark.png" alt="" width="128" height="117"></span>
+      <strong>Lezard IA</strong><span class="market-brand-sub">Marketplace</span>
+    </a>
+    <span class="grow"></span>
+    <span class="pill" id="who">Visiteur</span>
+    <button class="icon-btn" type="button" id="theme-btn" title="Apparence" aria-label="Personnaliser l'apparence">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22a10 10 0 1 1 10-10c0 2.8-2.2 4-4 4h-2.2a1.8 1.8 0 0 0-1.3 3.1A1.8 1.8 0 0 1 12 22z"/><circle cx="7.5" cy="10.5" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16.5" cy="10.5" r="1"/></svg>
+    </button>
+    <a class="btn btn-ghost btn-inline" href="/app" id="open-app" hidden>Ouvrir Lezard IA</a>
+    <a class="btn btn-primary btn-inline" href="/?next=/marketplace" id="login">Se connecter</a>
+    <button class="btn btn-ghost btn-inline" type="button" id="logout" hidden>Se déconnecter</button>
+  </header>
+
+  <main class="dash market-page">
+    <div class="dash-head">
+      <h1>Marketplace</h1>
+      <button type="button" class="btn btn-ghost btn-inline" id="refresh">Actualiser</button>
+    </div>
+    <p class="muted market-intro">Gratuit. Outils (contrôle du PC, voix, recherche web…), modèles d'IA, compétences, serveurs MCP, outils pour agents et
+      applications, avec la licence et les droits d'auteur de chacun. Visitez librement ; pour installer sur votre PC,
+      connectez-vous avec la clé maître de votre Lezard IA.</p>
+    <p class="alert" id="msg" role="status"></p>
+    <p class="alert show warn-box" id="denied" hidden></p>
+
+    <div id="content">
+      <section class="panel market-reco" aria-labelledby="mr-title">
+        <div class="panel-head"><h2 id="mr-title">Conseillé pour ce PC</h2>
+          <a class="btn btn-primary btn-inline" href="/?next=/marketplace" id="reco-login" hidden>Se connecter</a></div>
+        <p class="small muted" id="mr-hw"></p>
+        <ul class="market-reco-list" id="mr-list"></ul>
+      </section>
+
+      <div class="market-tools">
+        <div class="market-tabs" role="tablist" aria-label="Catégories" id="tabs"></div>
+        <input id="search" type="search" placeholder="Rechercher : qwen, vision, voix, MIT…" spellcheck="false"
+          aria-label="Rechercher dans la marketplace">
+        <label class="market-sort">Trier par
+          <select id="sort">
+            <option value="">Conseillés d'abord</option>
+            <option value="stars-desc">Plus d'étoiles GitHub</option>
+            <option value="stars-asc">Moins d'étoiles GitHub</option>
+            <option value="name">Nom (A → Z)</option>
+            <option value="name-desc">Nom (Z → A)</option>
+          </select>
+        </label>
+        <label class="check"><input type="checkbox" id="fit-only"> Adaptés à ce PC seulement</label>
+      </div>
+      <p class="small muted" id="count" aria-live="polite"></p>
+      <ul class="market-grid" id="grid"></ul>
+      <button type="button" class="btn btn-ghost market-more" id="more" hidden>Afficher plus</button>
+      <p class="small muted market-legal" id="legal"></p>
+    </div>
+  </main>
+
+  <dialog class="dlg market-dlg" id="detail" aria-labelledby="d-title">
+    <div class="dlg-head"><h2 id="d-title"></h2>
+      <button type="button" class="icon-btn" data-close aria-label="Fermer">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button></div>
+    <div class="dlg-body" id="d-body"></div>
+    <footer class="dlg-foot" id="d-foot"></footer>
+  </dialog>
+</body>
+</html>

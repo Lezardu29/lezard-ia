@@ -1,0 +1,49 @@
+# Smart AI Gateway — fichiers à ne jamais versionner ni archiver (11.4). Même base que .dockerignore.
+
+# --- secrets et données de l'instance ---
+# configuration locale : clé maître, jetons de compte, clés des fournisseurs (deploy/.env.example reste versionné)
+.env
+.env.*
+!.env.example
+# fournisseurs personnalisés : peut contenir des clés API
+providers.json
+# base SQLite (+ WAL), clé de chiffrement, journaux, certificats HTTPS et clé privée de l'autorité locale (12.7)
+data/
+*.db
+*.db-shm
+*.db-wal
+*.key
+*.pem
+*.log
+# clé de signature et paquets de l'application Android (android/build.py : clé dans data/android/)
+*.jks
+*.keystore
+*.apk
+# bibliothèques téléchargées par android/build.py (empreinte vérifiée)
+android/libs/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# --- tests et outils ---
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+.mypy_cache/
+
+# --- éditeurs et système ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+coverage.xml
+
+# application Android publiée sur le site (téléchargement public)
+!site/fichiers/LezardIA.apk

@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Connexion · Lezard IA</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/mobile.css">
+  <link rel="stylesheet" href="/static/claude.css">
+  <link rel="stylesheet" href="/static/ui-claude.css">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/static/icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  <meta name="theme-color" content="#092f5c">
+  <script src="/static/device.js"></script>
+  <script src="/static/theme.js"></script>
+  <script type="module" src="/static/select-ui.js"></script>
+  <script src="/static/splash.js"></script>
+  <script type="module" src="/static/net-warning.js"></script>
+  <script type="module" src="/static/login.js"></script>
+</head>
+<body>
+  <main class="auth">
+    <section class="card" aria-labelledby="title">
+      <div class="brand brand-wordmark">
+        <img class="wordmark wordmark-light" src="/static/icons/lezard-ia-logo.png" alt="" width="600" height="200">
+        <img class="wordmark wordmark-dark" src="/static/icons/lezard-ia-logo-dark.png" alt="" width="600" height="200">
+        <div>
+          <h1 id="title" class="sr-only">Lezard IA</h1>
+          <p>Toutes vos IA, locales et cloud, au meilleur coût.</p>
+        </div>
+      </div>
+
+      <div class="alert" id="error" role="alert" aria-live="assertive">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+        <span id="error-text"></span>
+      </div>
+
+      <!-- avec un compte lezard-ia.fr (conseillé) : identifiant et mot de passe -->
+      <form id="account-form" novalidate>
+        <h2 class="auth-title">Se connecter avec mon compte</h2>
+        <label for="user">Identifiant ou e-mail</label>
+        <input id="user" name="username" type="text" autocomplete="username" spellcheck="false" autocapitalize="none" required>
+        <label for="password">Mot de passe</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+
+        <div class="row">
+          <label class="check"><input type="checkbox" id="account-remember"> Se souvenir de moi sur cet appareil</label>
+        </div>
+
+        <button class="btn btn-primary" type="submit" id="account-submit">
+          <span class="spinner" aria-hidden="true"></span>
+          <span>Se connecter</span>
+        </button>
+        <p class="hint">Le mot de passe ne quitte pas cette page : il déchiffre ici l'accès à ce PC.
+          <a href="https://lezard-ia.fr/web.html" target="_blank" rel="noopener noreferrer">Mot de passe oublié ?</a></p>
+        <p class="hint">Pas encore de compte ? Connectez-vous sans compte avec la clé maître, puis Tableau de bord ›
+          Accès par le site › « Créer mon compte web ».</p>
+      </form>
+
+      <div class="divider">ou</div>
+
+      <button class="btn btn-ghost" type="button" id="no-account" aria-expanded="false" aria-controls="without-account">
+        Se connecter sans compte
+      </button>
+
+      <!-- sans compte : la clé maître (fenêtre « Lezard IA », raccourci) ou une clé d'accès donnée par le propriétaire -->
+      <div id="without-account" hidden>
+        <form id="login-form" novalidate>
+          <label for="key">Clé d'accès</label>
+          <div class="field">
+            <input id="key" name="key" type="password" autocomplete="off" spellcheck="false"
+                   placeholder="Clé maître ou sk-app-…" required aria-describedby="key-hint">
+            <button type="button" class="icon-btn" id="toggle" aria-label="Afficher la clé" aria-pressed="false">
+              <svg class="icon" id="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <p class="sr-only" id="key-hint">La clé maître, ou une clé d'accès fournie par le propriétaire de ce PC.</p>
+
+          <div class="row">
+            <label class="check"><input type="checkbox" id="remember"> Se souvenir de moi sur cet appareil</label>
+          </div>
+
+          <button class="btn btn-primary" type="submit" id="submit">
+            <span class="spinner" aria-hidden="true"></span>
+            <span>Se connecter avec la clé</span>
+          </button>
+        </form>
+        <p class="foot">La clé maître s'affiche en dernière ligne de la fenêtre « Lezard IA » ; le raccourci Lezard IA
+          vous connecte aussi tout seul, sur ce PC.</p>
+      </div>
+
+      <p class="foot"><a href="/marketplace">Visiter la marketplace</a> : modèles, compétences et outils, sans connexion.</p>
+      <button class="btn btn-ghost" type="button" id="change-server" hidden>Changer de serveur</button>
+    </section>
+  </main>
+</body>
+</html>

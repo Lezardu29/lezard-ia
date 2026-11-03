@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- couleurs du thème sombre de l'interface web (gateway/web/static/styles.css) ; barres du système : theme-color -->
+<resources>
+  <color name="bars">#092f5c</color>
+  <color name="bg">#0c1117</color>
+  <color name="surface">#121a23</color>
+  <color name="border">#243243</color>
+  <color name="text">#e8eef5</color>
+  <color name="muted">#93a4b8</color>
+  <color name="accent">#2fc59f</color>
+  <color name="accent_contrast">#0c1117</color>
+  <color name="danger">#ff6b6b</color>
+</resources>

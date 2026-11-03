@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Configuration d'artefact SignPath (à recopier dans le projet sur signpath.io) : l'envoi de GitHub Actions
+     (.github/workflows/installateur.yml) est un zip qui contient l'installateur ; seul l'installateur est signé. -->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <zip-file>
+    <pe-file path="LezardIA-Setup-*.exe" max-matches="1">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

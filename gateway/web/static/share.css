@@ -1,0 +1,16 @@
+/* Conversation partagée par lien (share.html) : le fil du chat, en lecture seule. */
+body.share-page { background: var(--bg); color: var(--text); min-height: 100dvh; }
+.share-top {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  max-width: 760px; margin: 0 auto; padding: 14px 16px; box-sizing: border-box;
+}
+.share-brand { display: inline-flex; align-items: center; gap: 8px; color: var(--text); text-decoration: none; font-weight: 600; }
+.share-brand img { width: 26px; height: auto; }
+.share-badge { font-size: 12px; color: var(--text-muted); background: var(--surface-2); padding: 4px 10px; border-radius: 999px; }
+.share-main { max-width: 760px; margin: 0 auto; padding: 8px 16px 48px; box-sizing: border-box; }
+.share-title { margin: 12px 0 4px; font-size: 28px; overflow-wrap: anywhere; }
+.share-date { margin: 0 0 8px; color: var(--text-muted); font-size: 13px; }
+.share-main .messages { padding-left: 0; padding-right: 0; }
+.share-model { margin: 4px 0 0; font-size: 12px; color: var(--text-muted); }
+.share-image { display: block; max-width: min(320px, 100%); border-radius: 12px; margin: 0 0 6px auto; }
+.share-foot { margin: 32px 0 0; font-size: 12px; color: var(--text-muted); text-align: center; }

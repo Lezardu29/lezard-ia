@@ -1,0 +1,4 @@
+# Facultatif : multi-agents avec CrewAI, seulement pour les gros modèles (70 milliards de paramètres ou plus, d'après
+# le nom du modèle). Sans ce paquet, l'orchestration reste celle de gateway/orchestrator.py.
+# Télémétrie de CrewAI coupée par la gateway (CREWAI_DISABLE_TELEMETRY, OTEL_SDK_DISABLED) : rien ne sort du PC.
+crewai>=1.15,<2

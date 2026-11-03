@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+  <title>Lezard IA</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/chat.css">
+  <link rel="stylesheet" href="/static/theme.css">
+  <link rel="stylesheet" href="/static/settings.css">
+  <link rel="stylesheet" href="/static/conversations.css">
+  <link rel="stylesheet" href="/static/row-menu.css">
+  <link rel="stylesheet" href="/static/preview.css">
+  <link rel="stylesheet" href="/static/projects.css">
+  <link rel="stylesheet" href="/static/mobile.css">
+  <link rel="stylesheet" href="/static/claude.css">
+  <link rel="stylesheet" href="/static/ui-claude.css">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/static/icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  <meta name="theme-color" content="#092f5c">
+  <script src="/static/device.js"></script>
+  <script src="/static/theme.js"></script>
+  <script src="/static/frame.js"></script>
+  <script type="module" src="/static/select-ui.js"></script>
+  <script src="/static/splash.js"></script>
+  <script type="module" src="/static/net-warning.js"></script>
+  <script type="module" src="/static/app.js"></script>
+</head>
+<body class="chat-page">
+  <header class="topbar">
+    <div class="logo" aria-hidden="true"><img src="/static/icons/logo-mark.png" alt="" width="128" height="117"></div>
+    <strong class="hide-sm">Lezard IA</strong>
+    <span class="pill" id="plan">…</span>
+    <button class="conv-project" type="button" id="conv-project" title="Ouvrir le projet" hidden></button>
+    <span class="conv-current" id="conv-current"></span>
+    <span class="grow"></span>
+    <button class="icon-btn" type="button" id="conv-btn" title="Conversations" aria-label="Conversations"
+            aria-controls="conv-panel" aria-expanded="false" hidden>
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h5"/></svg>
+    </button>
+    <button class="icon-btn" type="button" id="new-chat" title="Nouvelle conversation" aria-label="Nouvelle conversation">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+    </button>
+    <div class="export-wrap" id="export-wrap">
+      <button class="icon-btn" type="button" id="export-btn" title="Exporter la conversation" aria-label="Exporter la conversation"
+              aria-haspopup="menu" aria-expanded="false" aria-controls="export-menu">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 13v7h14v-7"/></svg>
+      </button>
+      <div class="export-menu" id="export-menu" role="menu" hidden>
+        <button type="button" role="menuitem" data-export="md">Markdown (.md)</button>
+        <button type="button" role="menuitem" data-export="json">JSON (variantes comprises)</button>
+      </div>
+    </div>
+    <a class="icon-btn" href="/admin" title="Tableau de bord" aria-label="Tableau de bord" data-drawer>
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>
+      <span class="drawer-label">Tableau de bord</span>
+    </a>
+    <a class="icon-btn" href="/models" id="models-link" title="Modèles" aria-label="Gérer les modèles" hidden data-drawer>
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg>
+      <span class="drawer-label">Modèles</span>
+    </a>
+    <a class="icon-btn" href="/marketplace" target="_blank" id="market-link" data-market title="Marketplace" aria-label="Marketplace" data-drawer>
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9 4.5 4h15L21 9"/><path d="M3 9h18v1.5a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z"/><path d="M5 13v7h14v-7M10 20v-4h4v4"/></svg>
+      <span class="drawer-label">Marketplace</span>
+    </a>
+    <button class="icon-btn" type="button" id="remote-btn" title="Accès distant" aria-label="Accès distant" hidden data-drawer>
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+      <span class="drawer-label">Accès distant</span>
+    </button>
+    <button class="icon-btn" type="button" id="phone-btn" title="Connecter un téléphone" aria-label="Connecter un téléphone" hidden data-drawer>
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/></svg>
+      <span class="drawer-label">Connecter un téléphone</span>
+    </button>
+    <button class="icon-btn" type="button" id="install-btn" title="Installer l'application" aria-label="Installer l'application" hidden data-drawer>
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+      <span class="drawer-label">Installer l'application</span>
+    </button>
+    <button class="icon-btn" type="button" id="settings-btn" title="Paramètres" aria-label="Paramètres : nom, préférences, styles" data-drawer>
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+      <span class="drawer-label">Paramètres</span>
+    </button>
+    <button class="icon-btn" type="button" id="usage-btn" title="Utilisation" aria-label="Utilisation : contexte et plafonds" data-drawer>
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg>
+      <span class="drawer-label">Utilisation</span>
+    </button>
+    <!-- formulaire de signalement sur GitHub, prérempli (version, système) par app.js : rien n'est envoyé tout seul -->
+    <a class="icon-btn" href="https://github.com/Lezardu29/lezard-ia/issues/new?template=bug.yml" target="_blank" rel="noopener" id="bug-link" title="Signaler un bug" aria-label="Signaler un bug (formulaire sur GitHub)" data-drawer>
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2l1.9 1.9M16 2l-1.9 1.9"/><rect x="7" y="6" width="10" height="14" rx="5"/><path d="M12 20v-9M3 13h4M17 13h4M4 7l3 2M20 7l-3 2M4 19l3-2M20 19l-3-2"/></svg>
+      <span class="drawer-label">Signaler un bug</span>
+    </a>
+    <button class="icon-btn" type="button" id="theme-btn" title="Apparence" aria-label="Personnaliser l'apparence" data-drawer>
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22a10 10 0 1 1 10-10c0 2.8-2.2 4-4 4h-2.2a1.8 1.8 0 0 0-1.3 3.1A1.8 1.8 0 0 1 12 22z"/><circle cx="7.5" cy="10.5" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16.5" cy="10.5" r="1"/></svg>
+      <span class="drawer-label">Apparence</span>
+    </button>
+    <span class="muted hide-sm" id="who" data-drawer></span>
+    <button class="btn btn-ghost btn-inline" type="button" id="logout" data-drawer>Se déconnecter</button>
+  </header>
+
+  <!-- conversations enregistrées sur la gateway (19.1) : ancré à gauche sur grand écran, tiroir sinon -->
+  <aside class="conv-panel" id="conv-panel" aria-label="Conversations">
+    <!-- barre latérale de l'interface Claude (sidebar.js) : marque, nouvelle conversation, recherche ; cachée sinon -->
+    <div class="sb sb-head">
+      <button class="icon-btn sb-toggle" type="button" id="sb-toggle" title="Replier la barre latérale" aria-label="Replier la barre latérale">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></svg>
+      </button>
+      <span class="sb-brand"><img src="/static/icons/logo-mark.png" alt="" width="128" height="117">Lezard IA</span>
+    </div>
+    <nav class="sb sb-nav" aria-label="Actions">
+      <button class="sb-item sb-new" type="button" id="sb-new" title="Nouvelle conversation (Ctrl+Maj+O)">
+        <span class="sb-plus" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg></span>
+        <span class="sb-label">Nouvelle conversation</span>
+      </button>
+      <button class="sb-item" type="button" id="sb-search" title="Rechercher (Ctrl+K)">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <span class="sb-label">Rechercher</span>
+      </button>
+      <button class="sb-item" type="button" id="sb-projects" hidden>
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        <span class="sb-label">Projets</span>
+      </button>
+    </nav>
+    <div class="conv-head">
+      <strong>Conversations</strong>
+      <button class="icon-btn" type="button" id="conv-new" title="Nouvelle conversation" aria-label="Nouvelle conversation">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+      <button class="icon-btn" type="button" id="conv-projects" title="Projets" aria-label="Projets" hidden>
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      </button>
+      <button class="icon-btn" type="button" id="conv-close" title="Fermer la liste" aria-label="Fermer la liste">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <label class="sr-only" for="conv-search">Rechercher une conversation</label>
+    <input type="search" class="conv-search" id="conv-search" placeholder="Rechercher dans les conversations…" autocomplete="off">
+    <div class="conv-import" id="conv-import" hidden>
+      <p id="conv-import-text"></p>
+      <button class="btn btn-primary btn-inline" type="button" id="conv-import-yes">L'enregistrer sur la gateway</button>
+      <button class="btn btn-ghost btn-inline" type="button" id="conv-import-no">La supprimer</button>
+    </div>
+    <ul class="conv-list" id="conv-list"></ul>
+    <p class="conv-empty" id="conv-empty" hidden></p>
+    <div class="conv-foot" id="conv-foot">
+      <label class="conv-toggle"><input type="checkbox" id="conv-store"> Enregistrer sur la gateway</label>
+      <p class="conv-note" id="conv-note"></p>
+    </div>
+    <!-- menu du compte (interface Claude) : les boutons de la barre du haut marqués data-drawer y sont rangés -->
+    <div class="sb sb-account" id="sb-account">
+      <div class="acct-menu" id="acct-menu" role="menu" aria-label="Compte et réglages" hidden></div>
+      <button class="acct-btn" type="button" id="acct-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="acct-menu">
+        <span class="acct-avatar" id="acct-avatar" aria-hidden="true"></span>
+        <span class="acct-text"><span class="acct-name" id="acct-name"></span><span class="acct-plan" id="acct-plan"></span></span>
+        <svg class="icon acct-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 15 5 5 5-5M7 9l5-5 5 5"/></svg>
+      </button>
+    </div>
+  </aside>
+  <div class="conv-backdrop" id="conv-backdrop" hidden></div>
+  <!-- panneau d'aperçu (preview-panel.js) : page HTML, image SVG ou diagramme écrits par l'IA, à droite du chat -->
+  <aside class="preview-panel" id="preview-panel" aria-label="Aperçu" hidden>
+    <div class="preview-head">
+      <div class="preview-title"><strong id="preview-title"></strong><span id="preview-kind"></span></div>
+      <div class="preview-versions" id="preview-versions">
+        <button class="icon-btn" type="button" id="preview-prev" aria-label="Version précédente">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+        <span id="preview-count"></span>
+        <button class="icon-btn" type="button" id="preview-next" aria-label="Version suivante">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
+      </div>
+      <div class="preview-tabs" role="tablist" aria-label="Affichage">
+        <button type="button" role="tab" id="preview-tab-view" aria-selected="true" aria-controls="preview-frame-wrap">Aperçu</button>
+        <button type="button" role="tab" id="preview-tab-code" aria-selected="false" aria-controls="preview-code">Code</button>
+      </div>
+      <button class="icon-btn" type="button" id="preview-copy" title="Copier le code" aria-label="Copier le code">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 9h10v12H9z"/><path d="M5 15V3h10"/></svg>
+      </button>
+      <button class="icon-btn" type="button" id="preview-download" title="Télécharger" aria-label="Télécharger">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+      </button>
+      <button class="icon-btn" type="button" id="preview-close" title="Fermer l'aperçu" aria-label="Fermer l'aperçu">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div class="preview-body">
+      <div class="preview-frame-wrap" id="preview-frame-wrap" role="tabpanel" aria-labelledby="preview-tab-view"></div>
+      <pre class="preview-code" id="preview-code" role="tabpanel" aria-labelledby="preview-tab-code" hidden><code></code></pre>
+    </div>
+  </aside>
+
+  <main class="conversation" id="scroller">
+    <!-- projets (projects-ui.js) : conversations regroupées, avec des instructions et des fichiers communs -->
+    <section class="projects-list" id="projects-list" aria-labelledby="projects-title" hidden>
+      <div class="pl-head">
+        <h1 id="projects-title">Projets</h1>
+        <button class="btn btn-primary btn-inline" type="button" id="project-create">Nouveau projet</button>
+      </div>
+      <p class="pl-intro">Un projet regroupe des conversations qui partagent des instructions et des fichiers de référence.</p>
+      <ul class="pl-grid" id="projects-grid"></ul>
+      <p class="pl-empty" id="projects-empty" hidden>Aucun projet pour l'instant.</p>
+    </section>
+    <section class="welcome" id="welcome">
+      <div class="project-head" id="project-head" hidden>
+        <button class="ph-back" type="button" id="ph-back">‹ Tous les projets</button>
+        <div class="ph-title">
+          <h1 id="ph-name"></h1>
+          <button class="icon-btn" type="button" id="ph-edit" title="Renommer ou décrire le projet" aria-label="Renommer ou décrire le projet">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+          </button>
+          <button class="icon-btn" type="button" id="ph-delete" title="Supprimer le projet" aria-label="Supprimer le projet">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+          </button>
+        </div>
+        <p class="ph-desc" id="ph-desc"></p>
+      </div>
+      <h1><span class="gradient">Bonjour</span><br>Que puis-je faire pour vous ?</h1>
+      <div class="suggestions" id="suggestions"></div>   <!-- tirées au hasard (chat.js) -->
+      <div class="project-home" id="project-home" hidden>
+        <section class="ph-convs" aria-labelledby="ph-convs-title">
+          <h2 id="ph-convs-title">Conversations du projet</h2>
+          <ul class="ph-list" id="ph-list"></ul>
+          <p class="ph-none" id="ph-list-empty" hidden>Écrivez ci-dessus pour démarrer la première conversation de ce projet.</p>
+        </section>
+        <div class="ph-side">
+          <section class="ph-card" aria-labelledby="ph-instr-title">
+            <h2 id="ph-instr-title">Instructions</h2>
+            <label class="sr-only" for="ph-instructions">Instructions du projet</label>
+            <textarea id="ph-instructions" rows="5" placeholder="Comment l'IA doit répondre dans ce projet : ton, rôle, règles, contexte…"></textarea>
+            <div class="ph-row">
+              <span class="ph-status" id="ph-instr-status" role="status"></span>
+              <button class="btn btn-ghost btn-inline" type="button" id="ph-save">Enregistrer</button>
+            </div>
+          </section>
+          <section class="ph-card" aria-labelledby="ph-files-title">
+            <h2 id="ph-files-title">Fichiers</h2>
+            <ul class="ph-files" id="ph-files"></ul>
+            <p class="ph-none" id="ph-files-empty">Les passages utiles de ces fichiers sont donnés à l'IA à chaque question.</p>
+            <div class="ph-row">
+              <span class="ph-status" id="ph-files-status" role="status"></span>
+              <button class="btn btn-ghost btn-inline" type="button" id="ph-add">Ajouter un fichier</button>
+            </div>
+            <input type="file" id="ph-file" multiple hidden
+                   accept=".pdf,.docx,.xlsx,.txt,.md,.markdown,.htm,.html,.csv,.tsv,.json,.yaml,.yml,.xml,.css,.js,.ts,.tsx,.jsx,.py,.java,.c,.h,.cpp,.cs,.go,.rs,.rb,.php,.sh,.ps1,.sql,.log,.ini,.toml">
+          </section>
+        </div>
+      </div>
+    </section>
+    <div class="messages" id="messages" role="log" aria-live="polite" aria-relevant="additions"></div>
+  </main>
+
+  <dialog class="project-dialog" id="project-dialog" aria-labelledby="pd-title">
+    <form method="dialog" id="project-form">
+      <h2 id="pd-title">Nouveau projet</h2>
+      <label for="pd-name">Nom</label>
+      <input id="pd-name" maxlength="100" required autocomplete="off">
+      <label for="pd-desc">Description <span class="muted">(facultative)</span></label>
+      <textarea id="pd-desc" rows="3" maxlength="500"></textarea>
+      <p class="pd-error" id="pd-error" role="alert" hidden></p>
+      <div class="pd-actions">
+        <button class="btn btn-ghost btn-inline" type="button" id="pd-cancel">Annuler</button>
+        <button class="btn btn-primary btn-inline" type="submit" id="pd-ok">Créer le projet</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- préférences personnelles et styles de réponse (profile.js) -->
+  <dialog class="project-dialog profile-dialog" id="profile-dialog" aria-labelledby="pf-title">
+    <form method="dialog" id="profile-form">
+      <h2 id="pf-title">Paramètres</h2>
+      <label for="pf-name">Comment l'IA doit-elle vous appeler ?</label>
+      <input id="pf-name" maxlength="60" autocomplete="given-name">
+      <label for="pf-about">Que doit savoir l'IA sur vous ?</label>
+      <textarea id="pf-about" rows="4" maxlength="2000" placeholder="Votre métier, vos centres d'intérêt, vos préférences de réponse…"></textarea>
+      <p class="muted pf-hint">Envoyé à l'IA avec chaque message, y compris à une IA du cloud quand elle répond.</p>
+      <h3 class="pf-sub">Styles personnalisés</h3>
+      <p class="muted pf-hint">Choisissez le style de réponse dans le sélecteur de modèle, sous la saisie.</p>
+      <ul class="pf-styles" id="pf-styles"></ul>
+      <button class="btn btn-ghost btn-inline" type="button" id="pf-add-style">Nouveau style</button>
+      <p class="pd-error" id="pf-error" role="alert" hidden></p>
+      <div class="pd-actions">
+        <button class="btn btn-ghost btn-inline" type="button" id="pf-cancel">Annuler</button>
+        <button class="btn btn-primary btn-inline" type="submit">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- conversation : ranger dans un projet, partager par lien (conversations-ui.js) -->
+  <dialog class="project-dialog" id="move-dialog" aria-labelledby="mv-title">
+    <form method="dialog" id="move-form">
+      <h2 id="mv-title">Ranger dans un projet</h2>
+      <label for="mv-project">Projet</label>
+      <select id="mv-project"></select>
+      <p class="pd-error" id="mv-error" role="alert" hidden></p>
+      <div class="pd-actions">
+        <button class="btn btn-ghost btn-inline" type="button" id="mv-cancel">Annuler</button>
+        <button class="btn btn-primary btn-inline" type="submit">Ranger</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog class="project-dialog" id="share-dialog" aria-labelledby="sh-title">
+    <form method="dialog" id="share-form">
+      <h2 id="sh-title">Partager la conversation</h2>
+      <p class="sh-text" id="sh-text"></p>
+      <div class="sh-link" id="sh-link-row" hidden>
+        <label class="sr-only" for="sh-link">Lien de partage</label>
+        <input id="sh-link" readonly>
+        <button class="btn btn-primary btn-inline" type="button" id="sh-copy">Copier</button>
+      </div>
+      <p class="muted pf-hint" id="sh-note"></p>
+      <p class="pd-error" id="sh-error" role="alert" hidden></p>
+      <div class="pd-actions">
+        <button class="btn btn-ghost btn-inline" type="button" id="sh-remove" hidden>Retirer le lien</button>
+        <button class="btn btn-ghost btn-inline" type="button" id="sh-close">Fermer</button>
+        <button class="btn btn-primary btn-inline" type="button" id="sh-create">Créer le lien</button>
+      </div>
+    </form>
+  </dialog>
+
+  <footer class="composer-wrap">
+    <p class="chat-notice" id="chat-notice" role="status" hidden></p>
+    <form class="composer" id="composer">
+      <div class="attachments" id="attachments" role="list" aria-label="Pièces jointes" hidden></div>
+      <div class="composer-input">
+        <button type="button" class="attach" id="attach" aria-label="Joindre une image ou un document" hidden
+                title="Joindre une image ou un document (PDF, texte, code, CSV) — ou glissez-déposez, ou collez une image">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l7.9-7.9"/></svg>
+        </button>
+        <input type="file" id="attach-input" multiple hidden
+               accept="image/*,.pdf,.docx,.xlsx,.txt,.md,.markdown,.htm,.csv,.tsv,.json,.yaml,.yml,.xml,.html,.css,.js,.ts,.tsx,.jsx,.py,.java,.c,.h,.cpp,.cs,.go,.rs,.rb,.php,.sh,.ps1,.sql,.log,.ini,.toml">
+        <input type="file" id="camera-input" accept="image/*" capture="environment" hidden>
+        <label for="prompt" class="sr-only">Votre message</label>
+        <textarea id="prompt" rows="1" placeholder="Posez votre question… (/ pour les commandes)" autocomplete="off" enterkeyhint="send"></textarea>
+        <button type="button" class="mic" id="mic" aria-label="Dicter un message" aria-pressed="false" hidden
+                title="Dicter : appuyer pour commencer, appuyer à nouveau pour terminer (sur téléphone : maintenir pour parler)">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></svg>
+        </button>
+        <button type="submit" class="send" id="send" aria-label="Envoyer" disabled>
+          <svg class="icon send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+          <svg class="icon stop-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg>
+        </button>
+      </div>
+      <p class="dictation" id="dictation" role="status" aria-live="polite" hidden></p>
+      <div class="toolbar" id="toolbar" aria-label="Réglages rapides"></div>
+    </form>
+    <p class="disclaimer">Les IA peuvent se tromper. Vérifiez les informations importantes.</p>
+  </footer>
+</body>
+</html>

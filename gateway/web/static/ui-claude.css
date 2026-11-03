@@ -1,0 +1,299 @@
+/* Interface « Claude » : la mise en page et l'ambiance de l'interface Claude, sur les mêmes pages (aucune fonction
+   retirée). Active seulement avec <html data-ui="claude"> (theme.js : panneau Apparence, ou ?ui=claude) ; les couleurs
+   viennent du thème « claude » de theme.js. Le logo et le nom restent ceux de Lezard IA.
+   Chargée en dernier, après claude.css. */
+:root[data-ui="claude"] {
+  --font-serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Georgia, Cambria, serif;
+  --radius: 14px;
+  --radius-sm: 10px;
+  --shadow: 0 1px 2px rgb(20 20 19 / .04), 0 4px 20px rgb(20 20 19 / .045);
+}
+:root[data-ui="claude"][data-theme="dark"] { --shadow: 0 1px 2px rgb(0 0 0 / .3), 0 4px 20px rgb(0 0 0 / .25); }
+:root[data-ui="claude"] ::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+:root[data-ui="claude"] body { background: var(--bg); }
+:root[data-ui="claude"] * { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+
+/* ----- titres : caractères empattés, trait régulier ----- */
+:root[data-ui="claude"] h1, :root[data-ui="claude"] h2,
+:root[data-ui="claude"] .conv-head strong, :root[data-ui="claude"] .kpi-value {
+  font-family: var(--font-serif); font-weight: 500; letter-spacing: -.01em;
+}
+
+/* ----- barre du haut : fondue dans la page, sans bordure ----- */
+:root[data-ui="claude"] .topbar { background: transparent; border-bottom-color: transparent; padding: 10px 16px; }
+:root[data-ui="claude"] .topbar > strong { font-family: var(--font-serif); font-weight: 500; font-size: 17px; }
+:root[data-ui="claude"] .topbar .pill { background: var(--surface-2); color: var(--text-muted); font-weight: 500; }
+:root[data-ui="claude"] .icon-btn { border-radius: 8px; }
+:root[data-ui="claude"] .icon-btn:hover { background: var(--surface-2); color: var(--text); }
+
+/* titre de la conversation en cours, comme dans l'application Claude */
+:root[data-ui="claude"] body.has-messages .conv-current:not(:empty) {
+  display: block; min-width: 0; flex: 0 1 auto; max-width: 40vw; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; font-weight: 600; font-size: 15px; color: var(--text);
+}
+
+/* ----- barre du haut de la page du chat : titre de la conversation et export ; le reste est dans la barre
+   latérale (menu du compte). Ouverture de la barre à gauche quand elle n'est pas ancrée. ----- */
+:root[data-ui="claude"] .chat-page .topbar [data-drawer], :root[data-ui="claude"] .chat-page .topbar .pill,
+:root[data-ui="claude"] .chat-page .topbar .logo, :root[data-ui="claude"] .chat-page.has-messages .topbar > strong {
+  display: none;
+}
+:root[data-ui="claude"] .chat-page #conv-btn { order: -1; }
+:root[data-ui="claude"] .chat-page #conv-btn svg { display: none; }
+:root[data-ui="claude"] .chat-page #conv-btn::before {
+  content: ""; width: 20px; height: 20px; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='16' rx='3'/%3E%3Cpath d='M9 4v16'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='16' rx='3'/%3E%3Cpath d='M9 4v16'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+/* barre ancrée ou repliée : elle a déjà son bouton, la marque et « Nouvelle conversation » */
+:root[data-ui="claude"] body.conv-docked .topbar #conv-btn, :root[data-ui="claude"] body.conv-rail .topbar #conv-btn,
+:root[data-ui="claude"] body.conv-docked #new-chat, :root[data-ui="claude"] body.conv-rail #new-chat,
+:root[data-ui="claude"] body.conv-docked .topbar > strong, :root[data-ui="claude"] body.conv-rail .topbar > strong {
+  display: none;
+}
+
+/* ----- barre latérale (sidebar.js) : ancrée dès 900 px, repliée en colonne d'icônes, tiroir en dessous ----- */
+:root[data-ui="claude"] .conv-panel {
+  width: min(288px, 86vw); gap: 2px; padding: 10px 8px 8px;
+  background: var(--sidebar, var(--surface)); border-right-color: var(--border);
+}
+:root[data-ui="claude"] .conv-head { display: none; }
+:root[data-ui="claude"] .sb { display: flex; }
+:root[data-ui="claude"] .sb-head { align-items: center; gap: 4px; padding-bottom: 8px; }
+:root[data-ui="claude"] .sb-brand {
+  display: inline-flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap;
+  font-family: var(--font-serif); font-size: 19px; font-weight: 500; letter-spacing: -.01em;
+}
+:root[data-ui="claude"] .sb-brand img { width: 24px; height: auto; }
+:root[data-ui="claude"] .sb-nav { flex-direction: column; gap: 1px; }
+:root[data-ui="claude"] .sb-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 38px; padding: 6px 8px; border: 0;
+  border-radius: 8px; background: none; color: var(--text); font: inherit; font-size: 14px; text-align: left;
+  white-space: nowrap; cursor: pointer;
+}
+:root[data-ui="claude"] .sb-item:hover { background: var(--surface-2); }
+:root[data-ui="claude"] .sb-item:focus-visible, :root[data-ui="claude"] .acct-btn:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: -2px;
+}
+:root[data-ui="claude"] .sb-item .icon { width: 20px; height: 20px; margin: 0 2px; flex: none; color: var(--text-muted); }
+:root[data-ui="claude"] .sb-new { color: var(--accent); font-weight: 550; }
+:root[data-ui="claude"] .sb-plus {
+  width: 24px; height: 24px; flex: none; display: grid; place-items: center; border-radius: 50%;
+  background: var(--accent); color: var(--accent-contrast, #fff);
+}
+:root[data-ui="claude"] .sb-plus svg { width: 15px; height: 15px; }
+:root[data-ui="claude"] .sb-section { margin: 16px 0 4px; padding: 0 8px; font-size: 12px; font-weight: 500; color: var(--text-muted); }
+/* le champ de recherche n'apparaît qu'à la demande (« Rechercher », Ctrl+K) */
+:root[data-ui="claude"] .conv-panel:not(.searching) .conv-search { display: none; }
+:root[data-ui="claude"] .conv-search { margin: 6px 0 2px; background: var(--surface); border-radius: 10px; }
+:root[data-ui="claude"] .conv-item { border-radius: 8px; }
+:root[data-ui="claude"] .conv-item[aria-current="true"] { background: var(--surface-2); }
+:root[data-ui="claude"] .conv-open { padding: 7px 8px; }
+:root[data-ui="claude"] .conv-title { font-size: 13.5px; }
+:root[data-ui="claude"] .conv-date { display: none; }          /* comme Claude : les titres seuls */
+:root[data-ui="claude"] .conv-empty { padding: 8px; }
+
+/* menu du compte, en bas de la barre */
+:root[data-ui="claude"] .sb-account { position: relative; flex-direction: column; margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--border); }
+:root[data-ui="claude"] .acct-btn {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border: 0; border-radius: 10px;
+  background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer;
+}
+:root[data-ui="claude"] .acct-btn:hover, :root[data-ui="claude"] .acct-btn[aria-expanded="true"] { background: var(--surface-2); }
+:root[data-ui="claude"] .acct-avatar {
+  width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 50%;
+  background: var(--text); color: var(--bg); font-size: 14px; font-weight: 600;
+}
+:root[data-ui="claude"] .acct-text { flex: 1; min-width: 0; display: grid; }
+:root[data-ui="claude"] .acct-name { font-size: 14px; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:root[data-ui="claude"] .acct-plan { font-size: 12px; color: var(--text-muted); }
+:root[data-ui="claude"] .acct-chevron { width: 16px; height: 16px; flex: none; color: var(--text-muted); }
+:root[data-ui="claude"] .acct-menu {
+  position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 5; max-height: 70dvh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 1px; padding: 6px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 28px rgb(20 20 19 / .14);
+}
+:root[data-ui="claude"] .acct-menu > .icon-btn, :root[data-ui="claude"] .acct-menu > .btn {
+  display: flex; align-items: center; justify-content: flex-start; gap: 12px; width: 100%; min-height: 38px;
+  height: auto; padding: 8px 10px; margin: 0; border: 0; border-radius: 8px; background: none; color: var(--text);
+  font: inherit; font-size: 14px; font-weight: 400; text-align: left; text-decoration: none;
+}
+:root[data-ui="claude"] .acct-menu > .icon-btn:hover, :root[data-ui="claude"] .acct-menu > .btn:hover { background: var(--surface-2); }
+:root[data-ui="claude"] .acct-menu .drawer-label { display: inline; }
+:root[data-ui="claude"] .acct-menu .icon { width: 18px; height: 18px; flex: none; color: var(--text-muted); }
+:root[data-ui="claude"] .acct-menu > .btn { color: var(--text-muted); border-top: 1px solid var(--border); border-radius: 0 0 8px 8px; }
+:root[data-ui="claude"] .acct-menu > .conv-foot { order: -1; padding: 6px 10px 10px; margin-bottom: 4px; border-top: 0; border-bottom: 1px solid var(--border); }
+
+@media (min-width: 900px) {
+  :root[data-ui="claude"] body.conv-docked { padding-left: 288px; }
+  :root[data-ui="claude"] body.conv-docked .conv-panel { width: 288px; box-shadow: none; }
+  /* repliée : une colonne d'icônes (ouvrir, nouvelle conversation, rechercher, compte) */
+  :root[data-ui="claude"] body.conv-rail { padding-left: 56px; }
+  :root[data-ui="claude"] body.conv-rail .conv-panel { transform: none; visibility: visible; width: 56px; box-shadow: none; }
+  :root[data-ui="claude"] body.conv-rail .conv-panel > :not(.sb-head):not(.sb-nav):not(.sb-account),
+  :root[data-ui="claude"] body.conv-rail .sb-brand, :root[data-ui="claude"] body.conv-rail .sb-label,
+  :root[data-ui="claude"] body.conv-rail .acct-text, :root[data-ui="claude"] body.conv-rail .acct-chevron { display: none; }
+  :root[data-ui="claude"] body.conv-rail .sb-item, :root[data-ui="claude"] body.conv-rail .acct-btn { justify-content: center; padding: 6px 0; }
+  :root[data-ui="claude"] body.conv-rail .acct-menu { right: auto; width: 260px; }
+}
+
+/* ----- accueil : salutation et saisie au milieu de l'écran, suggestions en dessous (comme Claude) ----- */
+:root[data-ui="claude"] body.chat-page:not(.has-messages) { overflow-y: auto; }
+:root[data-ui="claude"] body.chat-page:not(.has-messages) .conversation,
+:root[data-ui="claude"] body.chat-page:not(.has-messages) .welcome { display: contents; }
+:root[data-ui="claude"] body.chat-page:not(.has-messages) .messages { display: none; }
+:root[data-ui="claude"] body.chat-page:not(.has-messages) .welcome h1 { order: 2; margin-top: auto; }
+:root[data-ui="claude"] body.chat-page:not(.has-messages) .composer-wrap { order: 3; background: none; padding-bottom: 0; }
+:root[data-ui="claude"] body.chat-page:not(.has-messages) .disclaimer { display: none; }
+:root[data-ui="claude"] body.chat-page:not(.has-messages) .suggestions { order: 4; margin-bottom: auto; }
+:root[data-ui="claude"] .welcome h1 {
+  font-family: var(--font-serif); font-weight: 400; letter-spacing: -.015em; color: var(--text-muted);
+  text-align: center; font-size: clamp(22px, 3vw, 26px); line-height: 1.3; padding: 0 16px; margin: 0 auto 26px;
+}
+/* « Bonjour » : grand, avec le lézard devant ; la 2e ligne reste plus petite et discrète */
+:root[data-ui="claude"] .welcome h1 .gradient {
+  background: none; color: var(--text); display: inline-flex; align-items: center; gap: 14px;
+  font-size: clamp(34px, 5vw, 44px); line-height: 1.25; margin-bottom: 4px;
+}
+:root[data-ui="claude"] .welcome h1 .gradient::before {
+  content: ""; width: 1em; height: .92em; flex: none;
+  background: url("/static/icons/logo-mark.png") center / contain no-repeat;
+}
+:root[data-ui="claude"] .suggestions {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: 760px; margin: 14px auto 0; padding: 0 16px;
+}
+:root[data-ui="claude"] .suggestion {
+  min-height: 0; max-width: min(340px, calc(100vw - 32px)); padding: 7px 13px; border-radius: 10px; font-size: 13.5px;
+  color: var(--text-muted);   /* petit téléphone (320 px) : jamais plus large que l'écran */
+  background: var(--bg); border: 1px solid var(--border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+:root[data-ui="claude"] .suggestion:hover { background: var(--surface); color: var(--text); transform: none; }
+
+/* ----- messages : réponses en caractères empattés, questions dans une bulle crème ----- */
+:root[data-ui="claude"] .messages { max-width: 740px; gap: 26px; padding-top: 28px; }
+:root[data-ui="claude"] .msg.user .body {
+  background: var(--bubble-user); border-radius: 22px; padding: 10px 16px; font-size: 15.5px;
+}
+:root[data-ui="claude"] .msg.assistant .body {
+  font-family: var(--font-serif); font-size: 16.5px; line-height: 1.7; color: var(--text);
+}
+:root[data-ui="claude"] .msg.assistant .body h1, :root[data-ui="claude"] .msg.assistant .body h2,
+:root[data-ui="claude"] .msg.assistant .body h3, :root[data-ui="claude"] .msg.assistant .body h4 { font-weight: 600; }
+:root[data-ui="claude"] .msg.assistant .body li { margin: 6px 0; }
+:root[data-ui="claude"] .msg.assistant .body table { font-family: var(--font); font-size: 14px; }
+:root[data-ui="claude"] .msg.assistant .body :not(pre) > code { font-size: .82em; }
+:root[data-ui="claude"] .msg.streaming .body::after { width: 9px; height: 9px; border-radius: 50%; vertical-align: middle; }
+:root[data-ui="claude"] .code { border-radius: 10px; }
+:root[data-ui="claude"] .msg-act, :root[data-ui="claude"] .msg-versions button { border-radius: 6px; }
+/* vos messages : le crayon n'apparaît qu'au survol (ou après un appui sur le message, sur écran tactile) ; la place
+   reste réservée, rien ne bouge. Les flèches ‹ 1/2 › d'un message modifié restent visibles. */
+:root[data-ui="claude"] .msg.user .msg-actions { opacity: 0; transition: opacity .15s; }
+:root[data-ui="claude"] .msg.user .msg-actions:focus-within, :root[data-ui="claude"] .msg.user.acts .msg-actions,
+:root[data-ui="claude"] .msg.user .msg-actions:has(.msg-versions) { opacity: 1; }
+@media (hover: hover) { :root[data-ui="claude"] .msg.user:hover .msg-actions { opacity: 1; } }   /* tactile : survol collant */
+/* métriques : seul le nom du modèle reste ; tokens, temps et coût au survol de la réponse ou une fois le détail ouvert
+   (téléphone : un appui sur le nom ouvre le détail complet) */
+:root[data-ui="claude"] .metrics:not([open]) summary .m:not(.m-local):not(.m-cloud) { display: none; }
+:root[data-ui="claude"] .msg:hover .metrics summary .m:not(.m-local):not(.m-cloud),
+:root[data-ui="claude"] .metrics summary:focus-visible .m:not(.m-local):not(.m-cloud) { display: inline; }
+:root[data-ui="claude"] .metrics .m-local, :root[data-ui="claude"] .metrics .m-cloud { font-weight: 500; color: var(--text-muted); }
+
+/* ----- saisie (comme l'application Claude) : le texte sur toute la largeur, puis une rangée « + », modèle, micro,
+   envoi corail rond ----- */
+:root[data-ui="claude"] .composer-wrap { background: linear-gradient(to top, var(--bg) 75%, transparent); padding: 0 16px 8px; }
+:root[data-ui="claude"] .composer {
+  max-width: 740px; border-radius: 26px; padding: 14px 12px 10px 16px; border-color: var(--border); box-shadow: var(--shadow);
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 0;
+  grid-template-areas: "files files files files" "text text text text" "plus tools mic send" "dict dict dict dict";
+}
+:root[data-ui="claude"] .composer:focus-within {
+  border-color: color-mix(in srgb, var(--text) 22%, var(--border)); box-shadow: var(--shadow);
+}
+:root[data-ui="claude"] .composer-input { display: contents; }
+:root[data-ui="claude"] .composer .attachments { grid-area: files; }
+:root[data-ui="claude"] .composer textarea { grid-area: text; font-size: 16px; padding: 4px 4px 12px 0; min-height: 28px; }
+/* texte d'aide sur une ligne : sur téléphone, il passait à la ligne et se faisait couper */
+:root[data-ui="claude"] .composer textarea::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+:root[data-ui="claude"] .composer #attach { grid-area: plus; margin-right: 8px; }
+:root[data-ui="claude"] .composer .toolbar { grid-area: tools; align-self: center; padding: 0; min-width: 0; }
+:root[data-ui="claude"] .composer .mic { grid-area: mic; margin-left: 8px; }
+:root[data-ui="claude"] .composer .send { grid-area: send; margin-left: 8px; }
+:root[data-ui="claude"] .composer .dictation { grid-area: dict; padding-top: 6px; }
+/* boutons ronds ; « + » à la place du trombone */
+:root[data-ui="claude"] .attach, :root[data-ui="claude"] .mic, :root[data-ui="claude"] .send {
+  width: 38px; height: 38px; border-radius: 50%; border: 0;
+}
+:root[data-ui="claude"] .attach, :root[data-ui="claude"] .mic { background: var(--surface-2); color: var(--text); }
+:root[data-ui="claude"] .attach:hover, :root[data-ui="claude"] .mic:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text) 10%, var(--surface-2));
+}
+:root[data-ui="claude"] #attach svg { display: none; }
+:root[data-ui="claude"] #attach::before {
+  content: ""; width: 20px; height: 20px; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M12 5v14M5 12h14'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M12 5v14M5 12h14'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+:root[data-ui="claude"] .mic.recording { background: var(--danger); color: #fff; }
+:root[data-ui="claude"] .send:hover:not(:disabled) { transform: none; filter: brightness(.94); }
+:root[data-ui="claude"] .send:disabled { opacity: .45; }
+/* pastilles de la rangée (Auto · mode, modèle imposé) : comme le sélecteur de modèle de Claude */
+:root[data-ui="claude"] .composer .auto-model:not([hidden]) { display: inline-flex; }
+:root[data-ui="claude"] .composer .forced-x { display: none; }   /* le clic ouvre le sélecteur : pas de ✕ */
+:root[data-ui="claude"] .composer .chip {   /* white-space : « Auto · Équilibré » sur une ligne */
+  border: 0; background: var(--surface-2); color: var(--text); padding: 8px 14px; font-size: 14px; border-radius: 999px;
+  white-space: nowrap;
+}
+:root[data-ui="claude"] .disclaimer { font-size: 11px; margin-top: 6px; }
+:root[data-ui="claude"] .slash-menu { border-radius: 12px; box-shadow: 0 8px 28px rgb(20 20 19 / .12); }
+
+/* ----- tableau de bord, modèles, connexion : cartes plates, bordures fines ----- */
+:root[data-ui="claude"] .card, :root[data-ui="claude"] .panel, :root[data-ui="claude"] .kpi,
+:root[data-ui="claude"] .chart-card, :root[data-ui="claude"] .provider, :root[data-ui="claude"] .reco-card {
+  background: var(--surface); border-color: var(--border); box-shadow: none; border-radius: var(--radius);
+}
+:root[data-ui="claude"] .kpi-value { font-size: 30px; }
+:root[data-ui="claude"] .kpi h2 { font-family: var(--font); font-weight: 600; letter-spacing: .04em; }  /* petits libellés */
+:root[data-ui="claude"] .panel h2 { font-size: 19px; }
+:root[data-ui="claude"] .btn { font-weight: 550; border-radius: 9px; }
+:root[data-ui="claude"] .btn-primary:hover:not([disabled]) { filter: brightness(.94); }
+:root[data-ui="claude"] dialog { border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 16px 48px rgb(20 20 19 / .18); }
+
+/* ----- téléphone : comme l'application Claude (réponses en police normale, barre du haut épurée) ----- */
+@media (max-width: 640px) {
+  :root[data-ui="claude"] .msg.assistant .body { font-family: var(--font); font-size: 16px; line-height: 1.6; }
+  :root[data-ui="claude"] .topbar .pill { display: none; }
+  :root[data-ui="claude"] body.has-messages .conv-current:not(:empty) { max-width: 46vw; font-size: 15.5px; }
+  :root[data-ui="claude"] .composer-wrap { padding: 0 10px 6px; }
+  :root[data-ui="claude"] .composer { padding: 14px 10px 10px 16px; }
+}
+
+/* sélecteur de modèle : titre en police normale et en gras, comme Claude */
+:root[data-ui="claude"] .model-picker h2 { font-family: var(--font); font-weight: 600; letter-spacing: 0; }
+
+/* ----- page, image ou diagramme écrits par l'IA : une carte dans le fil (le code est dans le panneau d'aperçu) ----- */
+:root[data-ui="claude"] .code.previewable { cursor: pointer; background: var(--surface); transition: border-color .15s; }
+:root[data-ui="claude"] .code.previewable:hover { border-color: color-mix(in srgb, var(--text) 25%, var(--border)); }
+:root[data-ui="claude"] .code.previewable pre { display: none; }
+:root[data-ui="claude"] .code.previewable .code-head { background: none; padding: 12px 10px 12px 14px; gap: 12px; }
+:root[data-ui="claude"] .code.previewable .code-head > span:first-child {
+  width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: 8px;
+  background: var(--surface-2); border: 1px solid var(--border); font-size: 0;   /* le langage : remplacé par </> */
+}
+:root[data-ui="claude"] .code.previewable .code-head > span:first-child::before {
+  content: "</>"; font-family: var(--mono); font-size: 12px; color: var(--text-muted);
+}
+:root[data-ui="claude"] .code.previewable .code-kind {
+  display: block; flex: 1; min-width: 0; font-family: var(--font); font-size: 14px; font-weight: 550; color: var(--text);
+}
+:root[data-ui="claude"] .code.previewable .preview-btn {
+  margin-left: 0; padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-weight: 500;
+}
+
+/* ----- projets : la page du projet se place autour de la saisie (accueil en colonne, comme Claude) ----- */
+:root[data-ui="claude"] body.chat-page:not(.has-messages) .project-head { order: 2; margin-top: 32px; }
+:root[data-ui="claude"] body.chat-page:not(.has-messages) .project-home { order: 4; margin-bottom: auto; }
+:root[data-ui="claude"] body.chat-page.projects-mode:not(.has-messages) .projects-list { order: 2; }
+:root[data-ui="claude"] #ph-name { font-size: 28px; }
+:root[data-ui="claude"] .ph-card { background: var(--surface); box-shadow: none; }
+:root[data-ui="claude"] .conv-project { order: 0; }
+:root[data-ui="claude"] .conv-section { padding-left: 8px; font-weight: 500; }

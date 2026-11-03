@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Application Android de Lezard IA : ouvre l'interface web du PC (tunnel, réseau local) dans une WebView, avec ce
+     qu'une page seule ne peut pas faire (micro de la dictée, appareil photo, enregistrement des exports). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          package="fr.lezardia.app"
+          android:versionCode="2"
+          android:versionName="1.1">
+
+  <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35" />
+
+  <uses-permission android:name="android.permission.INTERNET" />
+  <!-- dictée vocale du chat (13.9) : demandée au premier appui sur le micro, jamais au lancement -->
+  <uses-permission android:name="android.permission.RECORD_AUDIO" />
+  <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+  <uses-feature android:name="android.hardware.microphone" android:required="false" />
+
+  <!-- lecture du QR code « Connecter un téléphone » du PC ; demandée au premier scan -->
+  <uses-permission android:name="android.permission.CAMERA" />
+  <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+  <!-- photo d'une pièce jointe : l'application appareil photo du téléphone -->
+  <queries>
+    <intent><action android:name="android.media.action.IMAGE_CAPTURE" /></intent>
+  </queries>
+
+  <!-- allowBackup=false : la clé d'accès (stockage de la WebView) ne part pas dans la sauvegarde Google -->
+  <application
+      android:label="@string/app_name"
+      android:icon="@mipmap/ic_launcher"
+      android:roundIcon="@mipmap/ic_launcher"
+      android:allowBackup="false"
+      android:theme="@style/Theme.Lezard"
+      android:networkSecurityConfig="@xml/network_security_config">
+
+    <activity
+        android:name=".MainActivity"
+        android:exported="true"
+        android:launchMode="singleTask"
+        android:windowSoftInputMode="adjustResize"
+        android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity>
+
+    <activity
+        android:name=".ScanActivity"
+        android:exported="false"
+        android:screenOrientation="portrait" />
+
+    <provider
+        android:name=".PhotoProvider"
+        android:authorities="fr.lezardia.app.photos"
+        android:exported="false"
+        android:grantUriPermissions="true" />
+  </application>
+</manifest>

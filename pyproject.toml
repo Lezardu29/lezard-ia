@@ -1,0 +1,31 @@
+# Qualité de code (15.3) : ruff (lint + formatage) — lancé en CI et par lancer.ps1 -Tests ; couverture : pytest-cov.
+#   python -m ruff check .            python -m ruff format .
+#   python -m pytest --cov            (rapport dans le terminal ; la CI échoue sous le seuil fail_under)
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["data"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "UP", "ASYNC"]
+# Écarts assumés, plutôt que des centaines de « noqa » :
+ignore = [
+  "E501",   # longueur : messages d'erreur en français gardés d'un seul tenant (lisibles, faciles à rechercher)
+  "E702",   # « a; continue » : filtres compacts du routeur et du classifieur
+  "E731",   # petites lambdas nommées, locales à une fonction
+  "E741",   # « l » pour une ligne dans les compréhensions
+  "B904",   # erreurs métier relevées dans un except : message destiné à l'utilisateur, contexte sans intérêt
+  "B905",   # zip() sur des listes de même longueur par construction
+]
+
+[tool.coverage.run]
+source = ["gateway"]  # gateway et serveur central (phase 30)
+# Windows uniquement (ctypes.windll) : la couverture est mesurée en CI sous Linux ; testé sous Windows
+omit = ["gateway/tools/pc.py"]
+
+[tool.coverage.report]
+# niveau mesuré à la mise en place (2026-10-20) : 93,0 % des lignes ; à relever quand la couverture monte
+fail_under = 92.5
+precision = 1
+skip_covered = true
+show_missing = false

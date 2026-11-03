@@ -1,0 +1,7 @@
+# Fins de ligne (15.1) : LF partout, comme les fichiers actuels (Dockerfile, .service et scripts lus sous Linux) ;
+# CRLF pour les scripts Windows seulement.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+*.png binary

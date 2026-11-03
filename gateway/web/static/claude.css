@@ -1,0 +1,50 @@
+/* Lezard IA — direction artistique inspirée de l'interface Claude.
+   Style seulement : aucune couleur, aucun élément, aucune fonction, aucune position n'est changée. Ce fichier règle
+   la forme (rayons, ombres) et la famille des titres (caractères empattés, comme Claude). Il ne touche ni aux graisses
+   ni à l'espacement des lettres : la largeur du texte, donc la place des éléments, reste celle d'avant.
+   Il est chargé en dernier : il l'emporte sur les autres feuilles, sans les remplacer.
+
+   Couleur Claude (corail #d97757) : proposée comme thème « Claude » dans le panneau Thème (theme.js), sans changer
+   le thème par défaut.
+*/
+:root {
+  --font-display: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --shadow: 0 1px 2px rgb(0 0 0 / .03), 0 6px 18px rgb(0 0 0 / .05);
+  --accent-claude: #d97757;
+}
+:root[data-theme="dark"] {
+  --shadow: 0 1px 2px rgb(0 0 0 / .25), 0 6px 18px rgb(0 0 0 / .3);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --shadow: 0 1px 2px rgb(0 0 0 / .25), 0 6px 18px rgb(0 0 0 / .3);
+  }
+}
+
+/* ----- titres en caractères empattés (comme Claude) : même taille, même place ----- */
+h1 { font-family: var(--font-display); font-weight: 500; }  /* titres : trait régulier, comme Claude */
+/* sur téléphone, l'accueil reste en police normale : en caractères empattés, sa dernière ligne passe à la suivante et
+   décale les suggestions (vérifié à 390 px) */
+@media (max-width: 640px) { .welcome h1 { font-family: inherit; } }
+
+/* ----- cartes et panneaux : rayons plus doux ----- */
+.card, .panel, .kpi, .chart-card, .theme-panel, .remote-panel, .opt, .gpu-fs, .alert-rule {
+  border-radius: var(--radius);
+}
+
+/* ----- boutons, icônes, menus, champs : formes douces ----- */
+.btn { border-radius: var(--radius-sm); }
+.icon-btn { border-radius: 10px; }
+.conv-item, .conv-title, .nav a, .menu button { border-radius: 10px; }
+.slash-menu, .conv-panel, .menu, .model-menu { border-radius: 14px; }
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea { border-radius: 10px; }
+#prompt { border-radius: 0; }
+dialog { border-radius: 18px; }
+.code { border-radius: 14px; }
+
+/* ----- saisie de la conversation : grand champ arrondi (comme Claude) ----- */
+.composer { border-radius: 24px; }
+.suggestion { border-radius: 16px; }
+.msg.user .body { border-radius: 18px; }

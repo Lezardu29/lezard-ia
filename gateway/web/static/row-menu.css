@@ -1,0 +1,19 @@
+/* Menus d'actions « ⋯ » (13.7, row-menu.js) : tableau de bord, conversations du chat. */
+.row-menu { position: relative; }
+.row-menu summary { list-style: none; cursor: pointer; padding: 4px 10px; border-radius: 8px; font-size: 18px; line-height: 1; color: var(--text-muted); }
+.row-menu summary::-webkit-details-marker { display: none; }
+.row-menu summary:hover, .row-menu[open] summary { background: var(--surface-2); color: var(--text); }
+.row-menu summary:focus-visible { outline: 2px solid var(--accent); }
+/* position fixed calculée par row-menu.js (13.7) : un .table-wrap à overflow ne rogne plus le menu */
+.menu { position: fixed; z-index: 40; min-width: 190px; max-width: calc(100vw - 16px); padding: 6px;
+        background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); display: grid; }
+.row-menu .menu:not([data-placed]) { visibility: hidden; }          /* pas de saut visible avant le calcul */
+.menu button { text-align: left; border: 0; background: transparent; padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 13.5px; }
+.menu button:hover, .menu button:focus-visible { background: var(--surface-2); outline: none; }
+.menu button.danger { color: var(--danger); }
+@media (max-width: 640px) {                                         /* bottom sheet sur téléphone */
+  .menu-backdrop { position: fixed; inset: 0; z-index: 39; background: rgb(0 0 0 / .35); }   /* row-menu.js */
+  .row-menu .menu { left: 0; right: 0; bottom: 0; top: auto; max-width: none; max-height: 70dvh; overflow-y: auto;
+                    border-radius: 16px 16px 0 0; padding: 10px 10px calc(10px + env(safe-area-inset-bottom)); }
+  .row-menu .menu button { min-height: 44px; font-size: 15px; }
+}

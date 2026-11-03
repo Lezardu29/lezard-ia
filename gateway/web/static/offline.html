@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hors connexion · Lezard IA</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/device.js"></script>
+  <script src="/static/theme.js"></script>
+  <script type="module" src="/static/offline.js"></script>
+</head>
+<body>
+  <!-- Page affichée par le service worker (13.6) quand la gateway est injoignable : aucune donnée. -->
+  <main class="auth">
+    <section class="card" aria-labelledby="title">
+      <div class="brand">
+        <img class="logo" src="/static/icons/icon-192.png" alt="" width="36" height="36">
+        <div>
+          <h1 id="title">Gateway injoignable</h1>
+          <p>Vous êtes hors connexion, ou l'ordinateur qui héberge la gateway est éteint.</p>
+        </div>
+      </div>
+      <p class="hint">Vérifiez la connexion de cet appareil, puis réessayez.</p>
+      <a class="btn btn-primary offline-retry" href="">Réessayer</a>
+      <button class="btn btn-ghost offline-change" type="button" id="change-server" hidden>Changer de serveur</button>
+    </section>
+  </main>
+</body>
+</html>

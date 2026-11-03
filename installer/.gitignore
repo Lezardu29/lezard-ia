@@ -1,0 +1,16 @@
+# Installateur Windows (32.1) : construction et essais jamais versionnés.
+# Téléchargements (Python embarqué, Inno Setup), dossier préparé, installateurs construits
+build/
+*.exe
+# secrets et données d'une installation d'essai
+.env
+.env.*
+data/
+providers.json
+*.key
+*.db
+*.db-shm
+*.db-wal
+*.pem
+*.log
+__pycache__/

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- HTTP en clair autorisé : en Wi-Fi, le PC répond souvent sur http://192.168.x.x:8000 (mode réseau local, 12.1 ;
+     l'interface avertit qu'il n'est pas chiffré). Certificats « utilisateur » acceptés : le mode LAN HTTPS (12.7)
+     repose sur l'autorité locale du PC, que l'on installe à la main sur le téléphone. -->
+<network-security-config>
+  <base-config cleartextTrafficPermitted="true">
+    <trust-anchors>
+      <certificates src="system" />
+      <certificates src="user" />
+    </trust-anchors>
+  </base-config>
+</network-security-config>

@@ -1,0 +1,27 @@
+/* Demande du code de double authentification (20.1) : chargée par totp-prompt.js sur toutes les pages. */
+#totp-prompt { width: min(400px, calc(100vw - 32px)); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 0; background: var(--surface); color: var(--text); }
+#totp-prompt::backdrop { background: rgb(0 0 0 / .45); }
+#totp-prompt form { display: grid; gap: 10px; padding: 18px 20px; }
+#totp-prompt h2 { margin: 0; font-size: 17px; }
+#totp-prompt .tp-text, #totp-prompt .tp-help { margin: 0; font-size: 13.5px; color: var(--text-muted); }
+#totp-prompt .tp-help { font-size: 12px; }
+#totp-prompt input { font: inherit; font-size: 22px; letter-spacing: .25em; text-align: center; padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); }
+#totp-prompt input:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+#totp-prompt .tp-error { margin: 0; min-height: 1.2em; font-size: 13px; color: var(--danger); }
+#totp-prompt .tp-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* Section « Double authentification » de l'administration */
+.tf-setup { display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: start; margin: 12px 0; }
+.tf-setup img { width: 180px; height: 180px; background: #fff; border-radius: var(--radius-sm); padding: 6px; }
+.tf-setup code { word-break: break-all; }
+.tf-codes { display: grid; grid-template-columns: repeat(2, max-content); gap: 4px 24px; margin: 8px 0;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 15px; }
+.tf-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin: 10px 0; }
+.tf-form input { font: inherit; letter-spacing: .15em; width: 10em; padding: 7px 10px; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); }
+.tf-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+@media (max-width: 560px) {
+  .tf-setup { grid-template-columns: 1fr; justify-items: center; }
+}

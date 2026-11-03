@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lecture du QR code affiché par Lezard IA sur le PC (« Connecter un téléphone ») : aperçu de la caméra, cadre de
+     visée, consigne et bouton Annuler par-dessus. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/scan_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/black">
+
+  <TextureView
+      android:id="@+id/preview"
+      android:layout_width="match_parent"
+      android:layout_height="match_parent" />
+
+  <View
+      android:layout_width="260dp"
+      android:layout_height="260dp"
+      android:layout_gravity="center"
+      android:background="@drawable/scan_frame" />
+
+  <TextView
+      android:id="@+id/scan_hint"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_gravity="top"
+      android:background="#99000000"
+      android:gravity="center"
+      android:padding="20dp"
+      android:accessibilityLiveRegion="polite"
+      android:text="@string/scan_hint"
+      android:textColor="@android:color/white"
+      android:textSize="16sp" />
+
+  <Button
+      android:id="@+id/scan_cancel"
+      android:layout_width="match_parent"
+      android:layout_height="52dp"
+      android:layout_gravity="bottom"
+      android:layout_margin="24dp"
+      android:background="@drawable/btn_ghost"
+      android:stateListAnimator="@null"
+      android:text="@string/scan_cancel"
+      android:textAllCaps="false"
+      android:textColor="@android:color/white"
+      android:textSize="16sp" />
+</FrameLayout>

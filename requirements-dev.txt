@@ -1,0 +1,9 @@
+# Développement et tests : dépendances d'exécution + outils de test (jamais embarqués dans l'image Docker).
+#   python -m pip install -r requirements-dev.txt
+-r requirements.txt
+pytest>=8,<10
+# client de test de Starlette (TestClient) : httpx y est déprécié au profit de httpx2 (même auteur, Pydantic)
+httpx2>=2.14,<3
+# qualité de code (15.3) : lint et formatage (ruff), couverture des tests (pytest-cov)
+ruff>=0.15,<0.18
+pytest-cov>=6,<8

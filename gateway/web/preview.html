@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Aperçu du chat (preview-panel.js) : le contenu écrit par l'IA arrive du cadre parent et remplace cette page.
+     Isolée par sa CSP (core.PREVIEW_CSP) : origine opaque, aucune requête vers la gateway. -->
+<script>
+  var shown = false;
+  addEventListener("message", function (e) {
+    if (shown || e.source !== parent || !e.data || e.data.type !== "gw-preview" || typeof e.data.html !== "string") return;
+    shown = true;                                     // une seule fois : le contenu affiché ne peut pas être remplacé
+    document.open();
+    document.write(e.data.html);
+    document.close();
+  });
+  parent.postMessage({ type: "gw-preview-ready" }, "*");
+</script>
+</head>
+<body></body>
+</html>

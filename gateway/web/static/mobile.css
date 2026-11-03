@@ -1,0 +1,102 @@
+/* Interface mobile (13.5), commune à toutes les pages.
+   - Écran étroit (≤ 640 px, @media) : navigation en tiroir, panneaux en feuille en bas de l'écran, tableaux en cartes.
+   - Pointeur grossier (data-input="touch", posé par device.js d'après matchMedia) : cibles tactiles de 44 px. */
+
+/* ---------- tiroir de navigation (mobile.js) ---------- */
+.menu-btn, .drawer-label { display: none; }
+.drawer-backdrop { position: fixed; inset: 0; z-index: 70; background: rgb(0 0 0 / .4); }
+.drawer {
+  position: fixed; top: 0; bottom: 0; left: 0; z-index: 71; width: min(300px, 86vw); overflow-y: auto;
+  background: var(--surface); color: var(--text); border-right: 1px solid var(--border); box-shadow: var(--shadow);
+  padding: 12px 12px calc(16px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 6px;
+  animation: drawer-in .2s ease-out both;
+}
+@keyframes drawer-in { from { transform: translateX(-100%); } to { transform: none; } }
+.drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 0 0 8px 6px;
+  border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+.drawer-body { display: flex; flex-direction: column; gap: 2px; }
+.drawer .drawer-label { display: inline; }
+.drawer .nav { display: flex; flex-direction: column; gap: 2px; margin: 0 0 6px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.drawer .nav a, .drawer-body > .icon-btn {
+  display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 10px 12px; border-radius: 10px;
+  font-size: 15px; color: var(--text); text-decoration: none; justify-content: flex-start;
+}
+.drawer .nav a[aria-current="page"] { background: var(--surface-2); font-weight: 600; }
+.drawer-body > .icon-btn:hover, .drawer .nav a:hover { background: var(--surface-2); }
+.drawer-body > .hide-sm { display: block; padding: 10px 12px 4px; font-size: 13px; }
+.drawer-body > .hide-sm:empty { display: none; }
+.drawer-body > .btn { width: 100%; min-height: 44px; margin-top: 8px; font-size: 14px; }
+body.drawer-open { overflow: hidden; }
+/* page du chat sur grand écran : le tiroir devient un menu déroulant sous ☰, à droite de la barre (mobile.js) */
+body.chat-page .menu-btn:not([hidden]) { display: grid; }
+.drawer.drawer-menu { bottom: auto; left: auto; right: 12px; width: 280px; max-height: calc(100dvh - 80px);
+  border: 1px solid var(--border); border-radius: 14px; animation: none; padding: 6px; }
+.drawer-menu .drawer-head { display: none; }
+.drawer-menu .drawer-body > .icon-btn { min-height: 38px; padding: 8px 10px; font-size: 14px; }
+.drawer-backdrop.clear { background: transparent; }
+@media (prefers-reduced-motion: reduce) { .drawer { animation: none; } }
+
+/* très petit téléphone (320 px) : le logo laisse la place à l'offre et aux boutons de la barre */
+@media (max-width: 360px) { .topbar .logo { display: none; } }
+@media (max-width: 640px) {
+  .menu-btn { display: grid; margin-left: -6px; }
+  .topbar { gap: 8px; padding: 8px 12px; }
+  .topbar .logo { width: 32px; height: 32px; }
+
+  /* panneaux Apparence / Accès distant / Notifications : feuille en bas de l'écran */
+  .theme-panel, .notif-panel {
+    position: fixed; top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: 85dvh; overflow-y: auto;
+    border-radius: 18px 18px 0 0; padding-bottom: calc(14px + env(safe-area-inset-bottom)); z-index: 60;
+  }
+  .notif-list { max-height: none; }
+
+  /* tableau des clés : une carte par clé */
+  table.keys, .keys tbody, .keys tr, .keys td { display: block; }
+  .keys thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .keys tr { position: relative; border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
+  .keys tbody tr:hover { background: transparent; }
+  .keys td { border: 0; padding: 5px 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .keys td[data-label]::before { content: attr(data-label); flex: none; font-size: 12px; color: var(--text-muted); }
+  .keys td:first-child { display: block; padding-right: 52px; }
+  .keys td:last-child { position: absolute; top: 6px; right: 6px; padding: 0; }
+  .keys .gauge-cell { min-width: 0; flex: 0 1 60%; }
+  .audit td:first-child, .audit td:last-child { position: static; display: flex; padding: 5px 0; }   /* 20.2 */
+
+  /* formulaires serrés */
+  .budget-row { grid-template-columns: 1fr 1fr; }
+  .budget-row > label { grid-column: 1 / -1; }
+  .metrics-detail { grid-template-columns: auto minmax(0, 1fr); }
+  .chart-head { flex-wrap: wrap; }
+  .dash { padding: 16px 12px 48px; }
+  .panel { padding: 14px 14px; }
+  dialog { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); }
+  .dlg-head, .dlg-body, .dlg-foot { padding-left: 14px; padding-right: 14px; }
+}
+
+/* ---------- cibles tactiles (44 px minimum) ---------- */
+:root[data-input="touch"] .icon-btn { min-width: 44px; min-height: 44px; }
+:root[data-input="touch"] .btn-inline,
+:root[data-input="touch"] .chip,
+:root[data-input="touch"] .view-toggle,
+:root[data-input="touch"] .copy,
+:root[data-input="touch"] .segmented button,
+:root[data-input="touch"] .nav a,
+:root[data-input="touch"] .row-menu summary,
+:root[data-input="touch"] .menu button,
+:root[data-input="touch"] .metrics summary,
+:root[data-input="touch"] .preset,
+:root[data-input="touch"] .msg-error button,
+:root[data-input="touch"] .notif-head .btn { min-height: 44px; }
+:root[data-input="touch"] .nav a, :root[data-input="touch"] .row-menu summary { display: inline-flex; align-items: center; }
+:root[data-input="touch"] .send { width: 44px; height: 44px; }
+:root[data-input="touch"] .mic { width: 48px; height: 48px; }        /* gros bouton tactile de dictée (13.9) */
+:root[data-input="touch"] .mic .icon { width: 22px; height: 22px; }
+:root[data-input="touch"] .check { min-height: 44px; }
+:root[data-input="touch"] input[type="checkbox"], :root[data-input="touch"] input[type="radio"] { width: 20px; height: 20px; }
+:root[data-input="touch"] input[type="color"] { min-width: 44px; min-height: 44px; }
+:root[data-input="touch"] .effort input[type="range"] { height: 44px; padding: 19px 0; background-clip: content-box; }
+:root[data-input="touch"] .effort input[type="range"]::-webkit-slider-thumb { width: 24px; height: 24px; }
+:root[data-input="touch"] .effort input[type="range"]::-moz-range-thumb { width: 22px; height: 22px; }
+/* Safari iOS zoome sur un champ de moins de 16 px à la mise au point */
+:root[data-input="touch"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+:root[data-input="touch"] select, :root[data-input="touch"] textarea { font-size: 16px; }

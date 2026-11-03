@@ -1,0 +1,55 @@
+/* Interface « Forêt » : pack d'exemple de Lezard IA.
+   Modifiez ce fichier, rezippez le dossier (manifest.json et style.css à la racine), puis importez-le dans
+   Apparence → Interface personnalisée. Tous les connecteurs utilisables : GUIDE.md.
+
+   Rappel : les couleurs du thème se remplacent avec !important (le moteur de thème les pose sur <html>). */
+
+/* ----- couleurs, communes aux deux modes ----- */
+:root {
+  --accent: #2d6a4f !important;
+  --accent-contrast: #ffffff !important;
+  --radius: 18px;
+  --radius-sm: 12px;
+}
+
+/* ----- mode clair ----- */
+html[data-theme="light"] {
+  --bg: #f4f1ea !important;
+  --surface: #fffdf8 !important;
+  --surface-2: #ebe6da !important;
+  --sidebar: #e9e4d8 !important;
+  --border: #d8d0bf !important;
+  --text: #1d2a22 !important;
+  --text-muted: #5b6b60 !important;
+  --accent-soft: #dcefe4 !important;
+  --bubble-user: #e3eee6 !important;
+  --code-bg: #f7f4ec !important;
+  --code-head: #ece6d8 !important;
+}
+
+/* ----- mode sombre ----- */
+html[data-theme="dark"] {
+  --bg: #14201a !important;
+  --surface: #1b2a22 !important;
+  --surface-2: #24382d !important;
+  --sidebar: #101912 !important;
+  --border: #2f4639 !important;
+  --text: #edf3ee !important;
+  --text-muted: #a3b5a8 !important;
+  --accent: #74c69d !important;
+  --accent-contrast: #0e1712 !important;
+  --accent-soft: #23402f !important;
+  --bubble-user: #24382d !important;
+  --code-bg: #101912 !important;
+  --code-head: #1b2a22 !important;
+}
+
+/* ----- fond à motif derrière le chat (image du pack : adresse relative) ----- */
+body.chat-page { background-image: url(assets/motif.svg); background-size: 220px; }
+html[data-theme="dark"] body.chat-page { background-blend-mode: soft-light; }
+
+/* ----- saisie plus ronde ----- */
+#composer { border-radius: 30px; }
+
+/* ----- vos messages : bulle bordée ----- */
+.msg.user .body { border: 1px solid var(--border); }

@@ -1,0 +1,153 @@
+/* Page Modèles : fournisseurs, clés API, modèles locaux Ollama. */
+.models-page #content { display: grid; gap: 18px; }
+.models-page .intro { margin: 0 0 12px; max-width: 80ch; }
+.models-page #msg { margin: 0; }
+
+.providers, .local-models { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.provider { border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; display: grid; gap: 6px; }
+.provider.off { opacity: .7; }
+.pv-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pv-head strong { font-size: 14.5px; }
+.pv-head .grow { flex: 1; }
+.chip-host { font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; padding: 2px 7px;
+  border-radius: 99px; background: var(--surface-2); color: var(--text-muted); }
+.chip-host.local { color: var(--success); }
+.status.off { color: var(--text-muted); }
+.pv-meta { margin: 0; font-size: 12.5px; color: var(--text-muted); overflow-wrap: anywhere; }
+.pv-models summary { cursor: pointer; font-size: 12.5px; color: var(--accent); }
+.pv-models p { margin: 6px 0 0; font-size: 12.5px; font-family: var(--mono); overflow-wrap: anywhere; }
+.pv-key { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pv-key input { flex: 1 1 240px; }
+
+.pv-rules { border-top: 1px dashed var(--border); padding-top: 6px; }
+.pv-rules summary { cursor: pointer; font-size: 12.5px; color: var(--accent); display: flex; gap: 8px; flex-wrap: wrap; }
+.pv-rules-sum { color: var(--text-muted); }
+.pv-rules .alert { margin: 8px 0 0; }
+.rules-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px 12px; margin-top: 10px; }
+.provider > .alert { margin: 0; }
+.budget-pair { display: flex; gap: 6px; }
+.budget-pair input { flex: 1; width: 0; }
+.rules-foot { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rules-foot .grow { flex: 1; }
+
+.models-page input:not([type="checkbox"]), .models-page select {
+  padding: 8px 10px; border-radius: 9px; border: 1px solid var(--border); background: var(--surface-2);
+  color: var(--text); font-weight: 400; min-width: 0; }
+.models-page input:focus-visible, .models-page select:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+.models-page label { display: grid; gap: 5px; font-size: 13px; font-weight: 550; margin: 0; }
+
+/* fenêtre « Ajouter un modèle » */
+#add-open { margin-left: auto; }
+.ad-hint { margin: 0; }
+.ad-hint a { color: var(--accent); }
+.ad-advanced { margin-top: 12px; }
+.ad-advanced summary { cursor: pointer; font-size: 13px; color: var(--accent); margin-bottom: 8px; }
+.ad-sub { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.ad-rules { margin-top: 0; }
+.dlg-body [hidden] { display: none !important; }   /* les champs ont display: grid, qui l'emporterait sur hidden */
+.ad-pick { margin-bottom: 12px; }
+.ad-pick select { font-size: 14.5px; }
+.loc-model { font-family: var(--mono); font-size: 13px; font-weight: 550; overflow-wrap: anywhere; }
+.loc-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.loc-list .empty { padding: 8px 0; text-align: left; }
+.loc-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px;
+  border: 1px solid var(--border); border-radius: 10px; }
+.loc-item.best { border-color: color-mix(in srgb, var(--success) 45%, var(--border)); }
+.loc-item > .btn, .loc-item > .pill, .loc-item > .loc-progress { flex: none; }
+.loc-ollama { margin: 10px 0 0; padding: 10px 12px; border-radius: 10px; font-size: 13px;
+  background: color-mix(in srgb, var(--warn) 12%, transparent); display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.loc-ollama[hidden] { display: none; }
+.loc-ollama a { color: var(--accent); }
+#loc-status { margin: 4px 0 0; }
+
+.row-form { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.row-form input { width: 260px; max-width: 100%; }
+.add-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; align-items: end; }
+.add-form .wide { grid-column: span 2; }
+@media (max-width: 560px) { .add-form .wide { grid-column: auto; } }
+.form-actions { display: flex; justify-content: flex-end; }
+
+.pull-progress { display: grid; gap: 6px; margin-bottom: 12px; max-width: 520px; }
+.pull-progress .bar { height: 8px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.pull-progress .bar span { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+.local-model { display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; font-size: 13px; }
+.local-model > span { font-family: var(--mono); overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) { .pull-progress .bar span { transition: none; } }
+/* recommandation selon le matériel (13.2) */
+.reco { display: grid; gap: 10px; margin-bottom: 14px; }
+.reco[hidden] { display: none; }
+.reco-hw { margin: 0; color: var(--text-muted); }
+.reco-best, .reco-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.reco-best { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.reco-card { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: grid; gap: 4px; align-content: start; }
+.reco-card .use { font-size: 11.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); }
+.reco-card .btn { justify-self: start; margin-top: 4px; }
+.reco-card .fit { justify-self: start; }
+.reco-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+  border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; font-size: 13px; }
+.reco-item.too_big { opacity: .6; }
+.reco-all summary { cursor: pointer; font-size: 13px; color: var(--accent); margin-bottom: 8px; }
+.fit { display: inline-block; font-size: 11.5px; font-weight: 650; padding: 2px 8px; border-radius: 99px; background: var(--surface-2); }
+.fit.vram { color: var(--success); }
+.fit.offload { color: var(--warn); }
+.fit.too_big { color: var(--danger); }
+/* test de performance : vitesse estimée de chaque modèle sur ce PC */
+.bench { display: grid; gap: 8px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); }
+.bench p { margin: 0; }
+.bench-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.speed { display: inline-block; font-size: 11.5px; font-weight: 650; padding: 2px 8px; border-radius: 99px;
+  background: var(--surface-2); }
+.speed.rapide, .speed.confortable { color: var(--success); }
+.speed.lent { color: var(--warn); }
+.speed.tres-lent { color: var(--danger); }
+.reco-meta { color: var(--text-muted); font-size: 12px; }
+/* autres machines du réseau (12.5) */
+.scan-results { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 8px; }
+.scan-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.scan-info { display: grid; gap: 2px; min-width: 0; }
+.scan-info span { overflow-wrap: anywhere; }
+/* modèles utilisés sans tarif connu (10.7) */
+.unknown-prices { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 8px; }
+.unknown-prices:empty { display: none; }
+.unknown-price { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 12px;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.unknown-price strong { font-family: var(--mono); overflow-wrap: anywhere; }
+.price-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.price-form input { width: 9.5em; }
+/* catégorie « Embeddings » */
+.emb-choice { display: grid; gap: 5px; max-width: 460px; font-size: 13px; font-weight: 550; margin: 0 0 6px; }
+.emb-choice select { min-height: 36px; }
+.emb-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+.emb-item { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+.emb-item.chosen { border-color: var(--accent); background: var(--accent-soft); }
+.emb-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.emb-text p { margin: 4px 0 0; overflow-wrap: anywhere; }
+.pill.emb-used { background: var(--accent); color: #fff; }
+.emb-choice.voice-second { margin-top: 18px; }
+#voice-status { margin: 12px 0 0; }
+.voice-reading { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px 14px; margin: 18px 0 0; min-width: 0; }
+.voice-reading legend { font-size: 13px; font-weight: 600; padding: 0 6px; }
+.voice-grid { display: grid; gap: 12px 18px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); }
+.voice-grid label { display: grid; gap: 5px; font-size: 13px; font-weight: 550; min-width: 0; }
+.voice-grid select { min-height: 36px; min-width: 0; }
+.vr-range span { display: flex; align-items: center; gap: 10px; min-height: 36px; }
+.vr-range input[type="range"] {
+  --fill: 0%; flex: 1; min-width: 0; -webkit-appearance: none; appearance: none; height: 4px; border-radius: 99px;
+  cursor: pointer; background: linear-gradient(to right, var(--accent) var(--fill), var(--border) var(--fill));
+}
+.vr-range input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--accent);
+  border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--accent);
+}
+.vr-range input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); border: 2px solid var(--surface); }
+.vr-range input:disabled { opacity: .45; cursor: default; }
+.vr-range output { min-width: 48px; text-align: right; font-weight: 550; }
+#vr-note { margin: 10px 0 0; }
+.vr-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+/* bibliothèque Ollama : tous les modèles, filtrables */
+.library-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 8px 0; }
+.library-tools input[type="search"] { flex: 1 1 220px; }
+.library .reco-item .caps { display: flex; flex-wrap: wrap; gap: 4px; }
+.speed.mesure { font-weight: 800; }

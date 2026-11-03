@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="app_name">Lezard IA</string>
+  <string name="setup_title">Connecter votre IA</string>
+  <string name="setup_intro">Lezard IA tourne sur votre PC. Le plus simple : scannez le QR code qu\'il affiche.</string>
+  <string name="setup_label">Ou saisissez une clé web, un lien d\'accès ou l\'adresse du PC</string>
+  <string name="setup_hint">lz.… ou https://… ou 192.168.1.20:8000</string>
+  <string name="setup_scan">Scanner le QR code</string>
+  <string name="setup_connect">Se connecter</string>
+  <string name="setup_back">Retour</string>
+  <string name="setup_help_title">Où trouver ces informations ?</string>
+  <string name="setup_help">• QR code : sur le PC, dans le chat de Lezard IA, touchez « Connecter un téléphone » (icône de téléphone), puis « Scanner le QR code » ici.\n\n• Clé web (offre Pro) : sur le PC, tableau de bord, « Accès par le site », « Copier ma clé web ».\n\n• Lien d\'accès : à la création d\'une clé, Lezard IA affiche un lien et un QR code, à scanner ici aussi.\n\n• Adresse : celle de l\'accès à distance (https://…) ou, à la maison en Wi-Fi, l\'adresse réseau local affichée par Lezard IA (http://192.168.…:8000). Vous saisirez ensuite votre clé d\'accès.\n\nVotre PC doit être allumé, avec Lezard IA lancé.</string>
+  <string name="error_title">Impossible de joindre votre PC</string>
+  <string name="error_retry">Réessayer</string>
+  <string name="error_change">Changer d\'adresse</string>
+  <string name="logo_description">Lezard IA</string>
+  <string name="scan_hint">Visez le QR code affiché par Lezard IA sur votre PC (bouton « Connecter un téléphone »).</string>
+  <string name="scan_cancel">Annuler</string>
+</resources>

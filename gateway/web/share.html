@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Conversation partagée · Lezard IA</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/chat.css">
+  <link rel="stylesheet" href="/static/share.css">
+  <link rel="stylesheet" href="/static/claude.css">
+  <link rel="stylesheet" href="/static/ui-claude.css">
+  <link rel="icon" href="/static/icons/icon-192.png" type="image/png">
+  <script src="/static/theme.js"></script>
+  <script type="module" src="/static/share.js"></script>
+</head>
+<!-- Conversation partagée par lien (lecture seule) : aucune clé, aucune autre donnée que la copie figée. -->
+<body class="share-page">
+  <header class="share-top">
+    <a class="share-brand" href="/"><img src="/static/icons/logo-mark.png" alt="" width="128" height="117">Lezard IA</a>
+    <span class="share-badge">Conversation partagée · lecture seule</span>
+  </header>
+  <main class="share-main">
+    <h1 class="share-title" id="share-title">Chargement…</h1>
+    <p class="share-date" id="share-date"></p>
+    <div class="messages" id="messages" role="log"></div>
+    <p class="share-foot">Les IA peuvent se tromper. Cette page est une copie figée : la conversation d'origine a pu continuer depuis.</p>
+  </main>
+</body>
+</html>

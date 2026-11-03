@@ -1,0 +1,6 @@
+# Facultatif : IA exécutées DANS la gateway, sur ce PC.
+# Dictée vocale transcrite localement (faster-whisper) : l'audio ne quitte jamais la machine (13.9).
+faster-whisper>=1.1,<2
+# Lecture vocale des réponses par Kokoro (ONNX, sans PyTorch) : le texte ne quitte jamais la machine (19.4).
+# Modèle (~350 Mo) téléchargé seulement à la demande : python -m gateway.providers.local_tts download
+kokoro-onnx>=0.4,<1

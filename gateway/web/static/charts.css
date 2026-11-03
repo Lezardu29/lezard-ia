@@ -1,0 +1,75 @@
+/* Graphiques du tableau de bord (6.4).
+   Palette catégorielle de référence (skill dataviz), validée sur les surfaces du thème
+   (clair #ffffff / sombre #161619) : 5 slots adjacents (donut) et 3 slots toutes-paires (nuage).
+   La couleur suit l'ENTITÉ (Local, OpenAI…), jamais son rang. */
+:root {
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100; --series-5: #e87ba4;
+  --series-other: #a3a29b;
+  --chart-grid: color-mix(in srgb, var(--border) 70%, transparent);
+  --chart-axis: var(--border);
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500; --series-5: #d55181;
+    --series-other: #6d6c66;
+  }
+}
+:root[data-theme="dark"] {
+  --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500; --series-5: #d55181;
+  --series-other: #6d6c66;
+}
+
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 14px; }
+.chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px 12px;
+              display: flex; flex-direction: column; min-width: 0; transition: opacity .2s; }
+.chart-card.loading { opacity: .55; }                        /* rechargement : on garde le rendu précédent */
+.chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.chart-head h2 { margin: 0; font-size: 14.5px; }
+.chart-head p { margin: 2px 0 0; font-size: 12px; color: var(--text-muted); }
+.view-toggle { border: 1px solid var(--border); background: transparent; border-radius: 8px; padding: 3px 9px; font-size: 12px;
+               cursor: pointer; color: var(--text-muted); white-space: nowrap; }
+.view-toggle:hover { color: var(--text); background: var(--surface-2); }
+.view-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chart-body { position: relative; min-height: 220px; }
+.chart-body svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart-empty { color: var(--text-muted); font-size: 13px; text-align: center; padding: 70px 0; margin: 0; }
+.chart-table { display: none; overflow-x: auto; max-height: 300px; overflow-y: auto; }
+.chart-card.show-table .chart-table { display: block; }
+.chart-card.show-table .chart-body { display: none; }
+.chart-table table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.chart-table th, .chart-table td { padding: 5px 8px; border-bottom: 1px solid var(--border); text-align: left; }
+.chart-table td.num, .chart-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* marques & habillage : traits fins, grille en filet plein et discrète */
+.grid-line { stroke: var(--chart-grid); stroke-width: 1; shape-rendering: crispEdges; }
+.axis-line { stroke: var(--chart-axis); stroke-width: 1; shape-rendering: crispEdges; }
+.tick { fill: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.series-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.end-label { fill: var(--text); font-size: 11.5px; font-weight: 600; }
+.crosshair { stroke: var(--text-muted); stroke-width: 1; }
+.dot { stroke: var(--surface); stroke-width: 2; }               /* anneau de surface 2 px */
+.dot.hover { stroke: var(--text); }
+.heat-cell { rx: 3; }
+.heat-cell.hover { stroke: var(--text); stroke-width: 1.5; }
+.donut-seg { stroke: var(--surface); stroke-width: 2; transition: opacity .15s; }   /* espace de surface 2 px */
+.donut-seg.dim { opacity: .35; }
+.donut-hero { fill: var(--text); font-size: 26px; font-weight: 650; }
+.donut-sub { fill: var(--text-muted); font-size: 11.5px; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 8px 0 0; padding: 0; list-style: none; font-size: 12px; color: var(--text); }
+.legend li { display: inline-flex; align-items: center; gap: 6px; }
+.legend .key { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.legend .key.line { height: 2px; width: 14px; border-radius: 1px; }
+.legend .val { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.heat-scale { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-muted); margin-top: 8px; }
+.heat-scale span.sw { width: 14px; height: 10px; border-radius: 3px; display: inline-block; }
+
+.chart-tip { position: fixed; z-index: 60; pointer-events: none; background: var(--surface); color: var(--text);
+             border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); padding: 8px 10px;
+             font-size: 12px; min-width: 120px; max-width: 260px; }
+.chart-tip[hidden] { display: none; }
+.chart-tip .tip-title { color: var(--text-muted); margin-bottom: 4px; }
+.chart-tip .tip-row { display: flex; align-items: center; gap: 8px; }
+.chart-tip .tip-row strong { font-size: 13px; font-variant-numeric: tabular-nums; }
+.chart-tip .tip-key { width: 12px; height: 2px; border-radius: 1px; flex: none; }
+@media (prefers-reduced-motion: reduce) { .chart-card, .donut-seg { transition: none; } }

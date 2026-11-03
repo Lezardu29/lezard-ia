@@ -1,0 +1,715 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tableau de bord · Lezard IA</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/theme.css">
+  <link rel="stylesheet" href="/static/admin.css">
+  <link rel="stylesheet" href="/static/row-menu.css">
+  <link rel="stylesheet" href="/static/charts.css">
+  <link rel="stylesheet" href="/static/totp.css">
+  <link rel="stylesheet" href="/static/mobile.css">
+  <link rel="stylesheet" href="/static/claude.css">
+  <link rel="stylesheet" href="/static/ui-claude.css">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/static/icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  <meta name="theme-color" content="#092f5c">
+  <script src="/static/device.js"></script>
+  <script src="/static/theme.js"></script>
+  <script src="/static/frame.js"></script>
+  <script type="module" src="/static/select-ui.js"></script>
+  <script src="/static/splash.js"></script>
+  <script type="module" src="/static/net-warning.js"></script>
+  <script type="module" src="/static/admin.js"></script>
+</head>
+<body class="admin-page">
+  <header class="topbar">
+    <div class="logo" aria-hidden="true"><img src="/static/icons/logo-mark.png" alt="" width="128" height="117"></div>
+    <strong class="hide-sm">Lezard IA</strong>
+    <small class="muted hide-sm" id="app-version" hidden></small>
+    <span class="pill" id="plan">…</span>
+    <span class="grow"></span>
+    <a class="icon-btn" href="/app" title="Chat" aria-label="Chat" data-drawer>
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h5"/></svg>
+      <span class="drawer-label">Chat</span>
+    </a>
+    <a class="icon-btn" href="/admin" aria-current="page" title="Tableau de bord" aria-label="Tableau de bord" data-drawer>
+    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>
+    <span class="drawer-label">Tableau de bord</span>
+    </a>
+    <a class="icon-btn" href="/models" id="nav-models" title="Modèles" aria-label="Modèles" hidden data-drawer>
+    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg>
+    <span class="drawer-label">Modèles</span>
+    </a>
+    <a class="icon-btn" href="/marketplace" target="_blank" id="nav-market" data-market title="Marketplace" aria-label="Marketplace" data-drawer>
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9 4.5 4h15L21 9"/><path d="M3 9h18v1.5a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z"/><path d="M5 13v7h14v-7M10 20v-4h4v4"/></svg>
+      <span class="drawer-label">Marketplace</span>
+    </a>
+    <button class="icon-btn" type="button" id="remote-btn" title="Accès distant" aria-label="Accès distant" hidden data-drawer>
+    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+    <span class="drawer-label">Accès distant</span>
+    </button>
+    <button class="icon-btn" type="button" id="phone-btn" title="Connecter un téléphone" aria-label="Connecter un téléphone" hidden data-drawer>
+    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/></svg>
+    <span class="drawer-label">Connecter un téléphone</span>
+    </button>
+    <button class="icon-btn" type="button" id="install-btn" title="Installer l'application" aria-label="Installer l'application" hidden data-drawer>
+    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+    <span class="drawer-label">Installer l'application</span>
+    </button>
+    <button class="icon-btn" type="button" id="theme-btn" title="Apparence" aria-label="Personnaliser l'apparence" data-drawer>
+    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22a10 10 0 1 1 10-10c0 2.8-2.2 4-4 4h-2.2a1.8 1.8 0 0 0-1.3 3.1A1.8 1.8 0 0 1 12 22z"/><circle cx="7.5" cy="10.5" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16.5" cy="10.5" r="1"/></svg>
+    <span class="drawer-label">Apparence</span>
+    </button>
+    <div class="notif-wrap">
+      <button class="icon-btn" type="button" id="notif-btn" aria-haspopup="dialog" aria-expanded="false" aria-label="Notifications">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>
+        <span class="notif-badge" id="notif-badge" hidden></span>
+      </button>
+      <div class="notif-panel" id="notif-panel" role="dialog" aria-label="Notifications" hidden>
+        <div class="notif-head"><strong>Notifications</strong><button type="button" class="btn btn-ghost btn-inline" id="notif-read">Tout marquer comme lu</button></div>
+        <ol class="notif-list" id="notif-list"></ol>
+      </div>
+    </div>
+    <span class="muted hide-sm" id="who" data-drawer></span>
+    <button class="btn btn-ghost btn-inline" type="button" id="logout" data-drawer>Se déconnecter</button>
+  </header>
+
+  <main class="dash">
+    <p class="alert show warn-box" id="remote-blocked" hidden></p>
+    <div class="dash-head">
+      <h1>Tableau de bord</h1>
+      <details class="export-menu row-menu">
+        <summary class="btn btn-ghost btn-inline" aria-label="Exporter les données de la période">Exporter ▾</summary>
+        <div class="menu">
+          <button type="button" data-export="csv">CSV (Excel)</button>
+          <button type="button" data-export="json">JSON</button>
+          <button type="button" data-export="pdf">Rapport PDF</button>
+        </div>
+      </details>
+      <div class="segmented period" id="period" role="radiogroup" aria-label="Période">
+        <button type="button" role="radio" data-period="86400">24 h</button>
+        <button type="button" role="radio" data-period="604800" aria-checked="true">7 j</button>
+        <button type="button" role="radio" data-period="2592000">30 j</button>
+        <button type="button" role="radio" data-period="0">Tout</button>
+      </div>
+    </div>
+
+    <section class="panel welcome-guide" id="welcome-section" hidden aria-labelledby="wg-title">
+      <div class="panel-head"><h2 id="wg-title">Bienvenue dans Lezard IA</h2>
+        <span class="pill" id="wg-step">1 / 3</span></div>
+      <div class="wg-step" data-step="1">
+        <h3>Vos modèles conseillés</h3>
+        <p class="small muted" id="wg-hw">Analyse de votre carte graphique…</p>
+        <ul class="eo-list" id="wg-models"></ul>
+        <p><a class="btn btn-primary btn-inline" href="/models#ollama-section">Installer mes modèles</a></p>
+      </div>
+      <div class="wg-step" data-step="2" hidden>
+        <h3>Protéger votre tableau de bord</h3>
+        <ul class="eo-list included">
+          <li>Gardez votre clé d'administration : menu Démarrer, « Lezard IA », « Copier ma clé d'administration ».</li>
+          <li>Activez la double authentification (application de codes sur votre téléphone) : elle est demandée
+            pour administrer Lezard IA depuis un autre appareil.</li>
+        </ul>
+        <p class="small" id="wg-totp" role="status"></p>
+        <p><a class="btn btn-ghost btn-inline" href="#totp-section" id="wg-totp-link">Activer la double authentification</a></p>
+      </div>
+      <div class="wg-step" data-step="3" hidden>
+        <h3>Tout est inclus</h3>
+        <p class="small">Lezard IA est open source et complet : modèles locaux et cloud (avec votre clé), recherche
+          web, accès depuis Internet par votre propre tunnel, clés API pour d'autres logiciels. En option, l'accès par
+          le site lezard-ia.fr, <span id="wg-price">gratuit lui aussi</span>, vous évite de configurer un tunnel.</p>
+        <p><a class="btn btn-ghost btn-inline" href="#edition-section">Voir « Accès par le site »</a></p>
+      </div>
+      <div class="panel-actions">
+        <button type="button" class="btn btn-ghost btn-inline" id="wg-back" hidden>Retour</button>
+        <button type="button" class="btn btn-primary btn-inline" id="wg-next">Suivant</button>
+        <button type="button" class="btn btn-ghost btn-inline" id="wg-skip">Plus tard</button>
+      </div>
+    </section>
+
+    <section class="panel hw-widget" id="hw-widget" hidden></section>
+
+    <section class="kpis" id="kpis" aria-label="Indicateurs clés" aria-live="polite">
+      <article class="kpi"><h2>Dépense totale</h2><p class="kpi-value" data-kpi="spend">–</p><p class="kpi-sub" data-sub="spend"></p></article>
+      <article class="kpi"><h2>Volume de tokens</h2><p class="kpi-value" data-kpi="tokens">–</p><p class="kpi-sub" data-sub="tokens"></p></article>
+      <article class="kpi kpi-good"><h2>Économies réalisées</h2><p class="kpi-value" data-kpi="savings">–</p><p class="kpi-sub" data-sub="savings"></p></article>
+      <article class="kpi"><h2>Latence moyenne</h2><p class="kpi-value" data-kpi="latency">–</p><p class="kpi-sub" data-sub="latency"></p></article>
+    </section>
+
+    <section class="charts" aria-label="Graphiques">
+      <article class="chart-card" data-chart="cost" aria-labelledby="c1-title">
+        <div class="chart-head"><div><h2 id="c1-title">Évolution des coûts (€)</h2>
+          <p>Coût réel comparé à « tout sur un modèle premium »</p></div>
+          <button type="button" class="view-toggle" aria-pressed="false">Tableau</button></div>
+        <div class="chart-body"></div><div class="chart-table"></div>
+      </article>
+      <article class="chart-card" data-chart="split" aria-labelledby="c2-title">
+        <div class="chart-head"><div><h2 id="c2-title">Répartition Cloud vs Local</h2>
+          <p>Part des requêtes par hébergement et fournisseur</p></div>
+          <button type="button" class="view-toggle" aria-pressed="false">Tableau</button></div>
+        <div class="chart-body"></div><div class="chart-table"></div>
+      </article>
+      <article class="chart-card" data-chart="scatter" aria-labelledby="c3-title">
+        <div class="chart-head"><div><h2 id="c3-title">Coût vs latence</h2>
+          <p>Chaque point est une requête (400 plus récentes)</p></div>
+          <button type="button" class="view-toggle" aria-pressed="false">Tableau</button></div>
+        <div class="chart-body"></div><div class="chart-table"></div>
+      </article>
+      <article class="chart-card" data-chart="heat" aria-labelledby="c4-title">
+        <div class="chart-head"><div><h2 id="c4-title">Activité</h2>
+          <p>Requêtes par jour et par heure (heure locale)</p></div>
+          <button type="button" class="view-toggle" aria-pressed="false">Tableau</button></div>
+        <div class="chart-body"></div><div class="chart-table"></div>
+      </article>
+    </section>
+
+    <section class="panel" aria-labelledby="sv-title">
+      <div class="panel-head"><h2 id="sv-title">D'où viennent les économies</h2><span class="muted" id="sv-base"></span></div>
+      <div class="bars" id="savings-bars"></div>
+    </section>
+
+    <section class="panel" id="edition-section" hidden aria-labelledby="eo-title">
+      <div class="panel-head">
+        <h2 id="eo-title">Accès par le site</h2>
+        <span class="pill" id="eo-pill">…</span>
+      </div>
+      <p class="small" id="eo-intro"></p>
+      <div id="eo-body"></div>
+      <div class="eo-state" id="eo-state" hidden>
+        <p class="small" id="eo-license-state" role="status"></p>
+        <button type="button" class="btn btn-ghost btn-inline" id="eo-license-remove" hidden>Retirer la licence</button>
+      </div>
+      <div class="eo-activate" id="eo-webacc">
+        <h3>Utiliser l'IA sur le web</h3>
+        <p class="small muted">Un compte gratuit sur lezard-ia.fr retient l'adresse de ce PC et une clé créée pour le
+          web : ensuite, identifiant et mot de passe suffisent, depuis n'importe quel appareil. La clé est chiffrée
+          avec votre mot de passe, dans votre navigateur.</p>
+        <button type="button" class="btn btn-primary btn-inline" id="eo-webacc-go">Créer mon compte web</button>
+        <div class="eo-webacc-step" id="eo-webacc-2fa" hidden>
+          <p class="small"><b>D'abord : la double authentification de ce PC.</b> Scannez ce QR code avec une application
+            d'authentification (Google Authenticator, Microsoft Authenticator, Aegis…), puis saisissez le code à 6
+            chiffres. Depuis Internet, ce code sera toujours demandé en plus du mot de passe du compte : il est vérifié
+            par ce PC seulement.</p>
+          <img id="eo-webacc-qr" alt="QR code de double authentification" width="180" height="180" hidden>
+          <p class="small muted">Sans appareil photo, saisissez cette clé : <code id="eo-webacc-secret"></code></p>
+          <form class="eo-webacc-form" id="eo-webacc-form" novalidate>
+            <label class="sr-only" for="eo-webacc-code">Code à 6 chiffres</label>
+            <input id="eo-webacc-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456">
+            <button type="submit" class="btn btn-primary btn-inline">Activer</button>
+          </form>
+        </div>
+        <div class="eo-webacc-step" id="eo-webacc-codes" hidden>
+          <p class="small"><b>Codes de secours</b> : notez-les. Chacun remplace une fois le code du téléphone, si vous
+            le perdez.</p>
+          <p class="eo-webacc-list" id="eo-webacc-list"></p>
+          <button type="button" class="btn btn-primary btn-inline" id="eo-webacc-next">J'ai noté mes codes : créer mon compte web</button>
+        </div>
+        <p class="small" id="eo-webacc-msg" role="status" hidden></p>
+      </div>
+      <div class="eo-web" id="eo-web" hidden>
+        <p class="small">Depuis n'importe où : <a href="https://lezard-ia.fr/web.html" target="_blank" rel="noopener">lezard-ia.fr,
+          « Utiliser l'IA sur le web »</a>, avec votre clé web <code id="eo-web-key"></code>.</p>
+        <button type="button" class="btn btn-ghost btn-inline" id="eo-web-copy">Copier ma clé web</button>
+      </div>
+      <div class="eo-activate" id="eo-activate">
+        <h3>Code de licence <span class="muted">(facultatif)</span></h3>
+        <p class="small muted">Rien à faire ici sans code : tout le logiciel est inclus. Si vous avez reçu un code de
+          licence, collez-le pour l'activer sur ce PC.</p>
+        <form class="eo-license-form" id="eo-license-form" novalidate>
+          <label class="sr-only" for="eo-license">Code de licence</label>
+          <div class="eo-field" id="eo-field">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.8-9.8M17 6l3 3M14 9l2 2"/></svg>
+            <input id="eo-license" placeholder="Collez votre code : LZ1.…" autocomplete="off" spellcheck="false"
+              autocapitalize="off" aria-describedby="eo-license-hint">
+            <button type="submit" class="btn btn-primary btn-inline" id="eo-license-go" disabled>Activer</button>
+          </div>
+          <p class="small muted" id="eo-license-hint">Il commence par <code>LZ1.</code> et il est vérifié sur ce
+            PC.</p>
+        </form>
+      </div>
+      <p class="alert" id="eo-msg" role="alert"></p>
+    </section>
+
+    <section class="dash-group dash-access" id="dash-access" aria-labelledby="dash-access-title">
+      <h2 class="group-title" id="dash-access-title">Accès et sécurité</h2>
+
+      <section class="panel" id="accounts-section" hidden aria-labelledby="ac-title">
+        <div class="panel-head"><h2 id="ac-title">Comptes</h2></div>
+        <p class="muted small br-intro">Chaque compte gère ses propres clés, conversations et alertes. Le jeton est créé
+          par la gateway et montré une seule fois : donnez-le à la personne par un canal privé.</p>
+        <form class="br-new" id="ac-form">
+          <label>Nom <input id="ac-name" required maxlength="60" placeholder="Alice" autocomplete="off"></label>
+          <button type="submit" class="btn btn-primary btn-inline">+ Créer un compte</button>
+        </form>
+        <div class="alert" id="ac-token" hidden>
+          <p id="ac-token-text"></p>
+          <div class="secret"><code id="ac-token-value"></code>
+            <button type="button" class="btn btn-ghost btn-inline" id="ac-token-copy">Copier</button></div>
+          <p class="small">Lien de connexion : <code id="ac-token-link"></code></p>
+          <button type="button" class="btn btn-ghost btn-inline" id="ac-token-close">J'ai copié le jeton</button>
+        </div>
+        <ul class="bridges" id="ac-list"></ul>
+        <p class="alert" id="ac-msg" role="status" hidden></p>
+      </section>
+
+      <section class="panel" id="bridges-section" hidden aria-labelledby="br-title">
+        <div class="panel-head">
+          <h2 id="br-title">Ponts vers vos modèles locaux</h2>
+          <span class="pill" id="br-instance">…</span>
+        </div>
+        <p class="muted small br-intro">Reliez cette gateway à l'Ollama ou au LM Studio de votre machine : un petit agent y
+          ouvre une connexion sortante chiffrée, sans port à ouvrir. Vos modèles locaux deviennent utilisables ici,
+          et par vous seul.</p>
+        <p class="alert" id="br-locked" hidden></p>
+        <ul class="bridges" id="br-list"></ul>
+        <form class="br-new" id="br-form">
+          <label>Nom du pont <input id="br-name" required pattern="[a-z][a-z0-9\-]{1,30}" maxlength="31"
+            placeholder="maison" autocomplete="off" spellcheck="false"></label>
+          <button type="submit" class="btn btn-primary btn-inline" id="br-create">+ Créer un pont</button>
+        </form>
+        <p class="alert" id="br-msg" role="status"></p>
+      </section>
+
+      <section class="panel" id="totp-section" hidden aria-labelledby="tf-title">
+        <div class="panel-head">
+          <h2 id="tf-title">Double authentification</h2>
+          <span class="pill" id="tf-state"></span>
+        </div>
+        <p class="muted small br-intro" id="tf-status"></p>
+        <div id="tf-setup" hidden>
+          <div class="tf-setup">
+            <img id="tf-qr" alt="QR code à scanner avec l'application d'authentification">
+            <div>
+              <p class="small">1. Scannez ce QR code avec votre application d'authentification (Google Authenticator,
+                Microsoft Authenticator, Aegis, 1Password…). Sans appareil photo : saisissez la clé
+                <code id="tf-secret"></code>.</p>
+              <p class="small">2. Saisissez le code à 6 chiffres affiché pour terminer.</p>
+            </div>
+          </div>
+        </div>
+        <form class="tf-form" id="tf-form" hidden novalidate>
+          <label class="small">Code <input id="tf-code" inputmode="numeric" autocomplete="one-time-code"
+            spellcheck="false" maxlength="16" placeholder="123456"></label>
+          <button type="submit" class="btn btn-primary btn-inline" id="tf-submit">Valider</button>
+          <button type="button" class="btn btn-ghost btn-inline" id="tf-cancel">Annuler</button>
+        </form>
+        <div class="alert warn-box" id="tf-recovery" hidden>
+          <div>
+            <p><strong>Codes de secours</strong> : notez-les maintenant, ils ne seront plus affichés. Chacun ne sert
+              qu'une fois, si vous n'avez plus votre téléphone.</p>
+            <div class="tf-codes" id="tf-codes"></div>
+            <button type="button" class="btn btn-ghost btn-inline" id="tf-copy">Copier</button>
+            <button type="button" class="btn btn-ghost btn-inline" id="tf-download">Télécharger</button>
+            <button type="button" class="btn btn-primary btn-inline" id="tf-noted">Je les ai notés</button>
+          </div>
+        </div>
+        <div class="tf-actions" id="tf-actions"></div>
+        <ul class="bridges" id="tf-sessions"></ul>
+        <p class="alert" id="tf-msg" role="status"></p>
+      </section>
+
+      <section class="panel" id="keys-section" hidden aria-labelledby="keys-title">
+        <div class="panel-head">
+          <h2 id="keys-title">Clés API virtuelles</h2>
+          <button class="btn btn-primary btn-inline" type="button" id="new-key">+ Créer une clé</button>
+        </div>
+        <div class="table-wrap">
+          <table class="keys">
+            <thead><tr>
+              <th scope="col">Nom</th><th scope="col">Statut</th>
+              <th scope="col">Budget</th><th scope="col">Tokens</th><th scope="col">Dernière utilisation</th>
+              <th scope="col"><span class="sr-only">Actions</span></th>
+            </tr></thead>
+            <tbody id="keys-body"></tbody>
+          </table>
+          <p class="empty" id="keys-empty" hidden>Aucune clé pour l'instant. Créez-en une pour chaque application ou appareil.</p>
+        </div>
+      </section>
+
+      <section class="panel" id="tools-section" hidden aria-labelledby="tl-title">
+        <div class="panel-head"><h2 id="tl-title">Brancher un outil</h2></div>
+        <p class="muted small br-intro" id="tl-intro">Open WebUI, Continue, Cursor, scripts… : tout outil compatible OpenAI se branche sur
+          la gateway. Choisissez l'adresse et collez la clé de l'outil (créée ci-dessus) : les exemples se remplissent.
+          La clé reste dans cette page, elle n'est envoyée nulle part.</p>
+        <div class="tools-form">
+          <label>Adresse <select id="tl-url"></select></label>
+          <label>Clé <input id="tl-key" placeholder="sk-app-… (collez la clé de l'outil)" autocomplete="off"
+            spellcheck="false"></label>
+        </div>
+        <button type="button" class="btn btn-ghost btn-inline" id="tl-own" hidden>Utiliser la clé de cette session</button>
+        <p class="share-note" id="tl-note" hidden></p>
+        <div id="tl-guides"></div>
+      </section>
+    </section>
+    <section class="dash-group dash-machine" id="dash-machine" aria-labelledby="dash-machine-title">
+      <h2 class="group-title" id="dash-machine-title">Machine et modèles</h2>
+
+      <section class="panel" id="gpu-section" hidden aria-labelledby="gpu-title">
+        <div class="panel-head">
+          <h2 id="gpu-title">Carte graphique et modèles locaux</h2>
+          <span class="pill" id="gpu-state">…</span>
+        </div>
+        <p class="muted small br-intro">Mode « PC occupé » : les modèles de ce PC vous sont réservés (jeu, montage…).
+          Les autres utilisateurs basculent sur le cloud, selon le réglage de leur clé (offres gratuites par défaut).</p>
+        <div class="gpu-busy">
+          <label class="small">Durée <select id="gpu-minutes">
+            <option value="60">1 heure</option><option value="120">2 heures</option><option value="240">4 heures</option>
+            <option value="480">8 heures</option><option value="">Jusqu'à nouvel ordre</option></select></label>
+          <button class="btn btn-primary btn-inline" type="button" id="gpu-busy-btn">PC occupé</button>
+        </div>
+        <div class="gpu-eco" id="gpu-eco">
+          <div class="gpu-eco-text">
+            <strong class="small">Mode économie</strong> <span class="pill" id="gpu-eco-state">…</span>
+            <p class="muted small">Les IA locales consomment le moins possible de ressources de ce PC, pour tout le monde :
+              une requête à la fois, modèles légers, réponses plus courtes, carte graphique et processeur bridés,
+              mémoire vidéo libérée vite, Ollama en priorité basse, recherche dans les documents mise à jour plus tard.</p>
+          </div>
+          <label class="small">Durée <select id="gpu-eco-minutes">
+            <option value="30">30 minutes</option><option value="60" selected>1 heure</option>
+            <option value="120">2 heures</option><option value="240">4 heures</option>
+            <option value="">Jusqu'à nouvel ordre</option></select></label>
+          <button class="btn btn-primary btn-inline" type="button" id="gpu-eco-btn">Économiser</button>
+        </div>
+        <ul class="bridges" id="gpu-servers"></ul>
+        <details class="gpu-settings" id="gpu-settings">
+          <summary>Réglages : file d'attente, mémoire, horaires, économie</summary>
+          <form id="gpu-form">
+            <div class="gpu-grid">
+              <label>Garder un modèle chargé après usage
+                <select id="gpu-keep">
+                  <option value="">Réglage d'Ollama (5 min)</option><option value="0">Décharger aussitôt</option>
+                  <option value="60">1 minute</option><option value="300">5 minutes</option>
+                  <option value="1800">30 minutes</option><option value="3600">1 heure</option>
+                  <option value="-1">Toujours chargé</option></select></label>
+              <label>Requêtes simultanées par serveur
+                <input type="number" id="gpu-max" min="1" max="64" inputmode="numeric"></label>
+              <label>Attente maximale dans la file (s)
+                <input type="number" id="gpu-wait" min="1" max="600" inputmode="numeric"></label>
+            </div>
+            <fieldset class="gpu-fs">
+              <legend>Mode PC occupé</legend>
+              <label class="check"><input type="checkbox" id="gpu-unload"> Décharger les modèles au début (libère la mémoire vidéo)</label>
+              <p class="small gpu-sub">Serveurs réservés</p>
+              <div class="inline" id="gpu-reserved"></div>
+              <p class="small gpu-sub">Plages horaires (heure de ce PC)</p>
+              <ul class="gpu-slots" id="gpu-slots"></ul>
+              <button class="btn btn-ghost btn-inline" type="button" id="gpu-add-slot">+ Ajouter une plage</button>
+            </fieldset>
+            <fieldset class="gpu-fs">
+              <legend>Mode économie</legend>
+              <div class="gpu-grid">
+                <label>Requêtes simultanées par serveur
+                  <input type="number" id="eco-max" min="1" max="8" inputmode="numeric"></label>
+                <label>Libérer la mémoire vidéo après
+                  <select id="eco-keep"><option value="0">Aussitôt</option><option value="30">30 secondes</option>
+                    <option value="60">1 minute</option><option value="300">5 minutes</option></select></label>
+                <label>Longueur maximale d'une réponse locale (tokens)
+                  <input type="number" id="eco-tokens" min="0" max="32768" step="256" inputmode="numeric"
+                    title="0 : pas de plafond"></label>
+                <label>Taille des modèles du routage automatique
+                  <select id="eco-params"><option value="4">4 milliards de paramètres au plus</option>
+                    <option value="8">8 milliards au plus</option><option value="14">14 milliards au plus</option>
+                    <option value="0">Tous les modèles</option></select></label>
+                <label>Part du modèle sur la carte graphique (Ollama de ce PC)
+                  <select id="eco-gpu"><option value="100">Pas de limite</option><option value="75">75 %</option>
+                    <option value="50">50 %</option><option value="25">25 %</option>
+                    <option value="0">Aucune : processeur seul</option></select></label>
+                <label>Cœurs du processeur (Ollama de ce PC)
+                  <select id="eco-cpu"><option value="100">Pas de limite</option><option value="75">75 %</option>
+                    <option value="50">50 %</option><option value="25">25 %</option></select></label>
+                <label>Mémoire réservée au contexte (tokens)
+                  <select id="eco-ctx"><option value="0">Réglage d'Ollama</option><option value="2048">2 048</option>
+                    <option value="4096">4 096</option><option value="8192">8 192</option></select></label>
+              </div>
+              <label class="check"><input type="checkbox" id="eco-priority"> Ollama de ce PC et IA intégrées (voix, dictée)
+                en priorité basse</label>
+              <label class="check"><input type="checkbox" id="eco-index"> Mettre en pause la préparation des documents
+                pour la recherche</label>
+              <label class="check"><input type="checkbox" id="eco-unload"> Décharger les modèles au début</label>
+            </fieldset>
+            <button class="btn btn-primary btn-inline" type="submit" id="gpu-save">Enregistrer</button>
+          </form>
+        </details>
+        <p class="alert" id="gpu-msg" role="status" hidden></p>
+      </section>
+
+      <section class="panel" id="supervision-section" hidden aria-labelledby="sv2-title">
+        <div class="panel-head">
+          <h2 id="sv2-title">Supervision</h2>
+          <button class="btn btn-ghost btn-inline" type="button" id="sv2-test">Envoyer une alerte d'essai</button>
+        </div>
+        <p class="muted small br-intro">Alerte (notification et webhook) quand un serveur local tombe ou revient, et
+          quand le disque de la base passe sous le seuil.</p>
+        <ul class="bridges" id="sv2-servers"></ul>
+        <p class="small" id="sv2-disk"></p>
+        <form class="br-new" id="sv2-form">
+          <label>Seuil disque (Go) <input type="number" id="sv2-min" min="0" max="100000" step="0.5" inputmode="decimal"></label>
+          <label>Webhook (Slack, Discord, JSON) <input type="url" id="sv2-hook" placeholder="https://hooks.slack.com/…"
+            autocomplete="off" spellcheck="false"></label>
+          <label class="check"><input type="checkbox" id="sv2-enabled"> Alertes actives</label>
+          <button type="submit" class="btn btn-primary btn-inline">Enregistrer</button>
+        </form>
+        <p class="small" id="sv2-secret" hidden>Secret de signature (en-tête X-Gateway-Signature) :
+          <code id="sv2-secret-value"></code></p>
+        <p class="small">Prometheus : <code id="sv2-scrape"></code> — <span class="muted" id="sv2-token"></span></p>
+        <p class="alert" id="sv2-msg" role="status" hidden></p>
+      </section>
+
+      <section class="panel" id="update-section" hidden aria-labelledby="up-title">
+        <div class="panel-head">
+          <h2 id="up-title">Version et mises à jour</h2>
+          <button class="btn btn-ghost btn-inline" type="button" id="up-check">Vérifier maintenant</button>
+        </div>
+        <p class="small" id="up-installed"></p>
+        <p class="muted small" id="up-status"></p>
+        <div class="alert" id="up-result" role="status" hidden></div>
+      </section>
+
+      <section class="panel" id="backups-section" hidden aria-labelledby="bk-title">
+        <div class="panel-head">
+          <h2 id="bk-title">Sauvegardes</h2>
+          <button class="btn btn-primary btn-inline" type="button" id="bk-now">Sauvegarder maintenant</button>
+        </div>
+        <p class="muted small br-intro" id="bk-status"></p>
+        <p class="alert" id="bk-disk" hidden></p>
+        <p class="alert" id="bk-pending" hidden></p>
+        <div class="alert" id="bk-key" hidden>
+          <p id="bk-key-text"></p>
+          <form class="br-new" id="bk-key-form" hidden>
+            <label>Phrase de passe <input type="password" id="bk-pass" minlength="12" required
+              autocomplete="new-password"></label>
+            <label>Confirmation <input type="password" id="bk-pass2" minlength="12" required
+              autocomplete="new-password"></label>
+            <button type="submit" class="btn btn-primary btn-inline" id="bk-export">Exporter la clé</button>
+          </form>
+        </div>
+        <ul class="bridges" id="bk-list"></ul>
+        <p class="alert" id="bk-msg" role="status"></p>
+      </section>
+    </section>
+    <section class="dash-group dash-watch" id="dash-watch" aria-labelledby="dash-watch-title">
+      <h2 class="group-title" id="dash-watch-title">Suivi</h2>
+
+      <section class="panel" id="alerts-section" hidden aria-labelledby="al-title">
+        <div class="panel-head">
+          <h2 id="al-title">Alertes budgétaires</h2>
+          <button class="btn btn-primary btn-inline" type="button" id="new-alert">+ Nouvelle alerte</button>
+        </div>
+        <div class="alerts" id="alerts-list"></div>
+        <p class="empty" id="alerts-empty" hidden>Aucune alerte. Soyez prévenu (ici et par webhook Slack/Discord) avant de dépasser un budget.</p>
+      </section>
+
+      <section class="panel" id="audit-section" hidden aria-labelledby="au-title">
+        <div class="panel-head">
+          <h2 id="au-title">Journal d'audit</h2>
+          <button class="btn btn-ghost btn-inline" type="button" id="au-export">Exporter (CSV)</button>
+        </div>
+        <p class="muted small br-intro">Actions sensibles : clés, fournisseurs, accès distant, réseau local, modèles,
+          sauvegardes, double authentification… avec l'acteur, l'adresse IP et le résultat. Jamais de secret. Une action
+          réussie depuis une adresse jamais vue déclenche une notification.</p>
+        <div class="audit-filters">
+          <label>Catégorie <select id="au-category"><option value="">Toutes</option></select></label>
+          <label>Résultat <select id="au-result"><option value="">Tous</option><option value="ok">Réussies</option>
+            <option value="fail">Refusées</option></select></label>
+          <label class="audit-search">Recherche <input type="search" id="au-search" placeholder="acteur, IP, cible"
+            autocomplete="off" spellcheck="false"></label>
+          <label>Conservation <select id="au-retention"></select></label>
+          <span class="muted small" id="au-count"></span>
+        </div>
+        <div class="table-wrap">
+          <table class="keys audit">
+            <thead><tr>
+              <th scope="col">Date</th><th scope="col">Acteur</th><th scope="col">Action</th><th scope="col">Cible</th>
+              <th scope="col">Adresse IP</th><th scope="col">Résultat</th>
+            </tr></thead>
+            <tbody id="au-body"></tbody>
+          </table>
+          <p class="empty" id="au-empty" hidden>Aucune action enregistrée pour ces critères.</p>
+        </div>
+        <div class="audit-actions">
+          <button class="btn btn-ghost btn-inline" type="button" id="au-toggle" aria-controls="au-body" hidden>Afficher tout</button>
+          <button class="btn btn-ghost btn-inline" type="button" id="au-more" hidden>Entrées plus anciennes</button>
+        </div>
+        <p class="alert" id="au-msg" role="status"></p>
+      </section>
+    </section>
+  </main>
+
+  <!-- création / édition d'une clé -->
+  <dialog id="key-dialog" aria-labelledby="kd-title">
+    <form id="key-form" method="dialog" novalidate>
+      <header class="dlg-head"><h2 id="kd-title">Nouvelle clé</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Fermer">✕</button></header>
+      <div class="dlg-body">
+        <p class="alert" id="kd-error" role="alert"></p>
+        <div class="grid2">
+          <label>Nom<input id="k-name" required maxlength="100" placeholder="App mobile, bot Slack…"></label>
+          
+          <label class="span2">Description<input id="k-desc" maxlength="300"></label>
+          <label>Projet par défaut<select id="k-project"><option value="">Aucun</option></select></label>
+          <label>Expiration
+            <select id="k-exp"><option value="keep">Inchangée</option><option value="none">Jamais</option>
+              <option value="1h">1 heure</option><option value="1d">24 heures</option><option value="7d">7 jours</option>
+              <option value="30d">30 jours</option><option value="90d">90 jours</option><option value="date">Date précise…</option></select>
+          </label>
+          <label class="span2" id="k-exp-date-wrap" hidden>Date d'expiration<input type="datetime-local" id="k-exp-date"></label>
+        </div>
+
+        <h3>Permissions & restrictions</h3>
+        <fieldset class="opt" data-opt="models"><legend><label class="check"><input type="checkbox" data-toggle> Modèles autorisés / interdits</label></legend>
+          <div class="grid2"><div class="model-field"><label>Autorisés<input id="p-allow" placeholder="ollama/*, openai/gpt-4o-mini"></label>
+            <div class="model-add"><select data-model-pick="p-allow" aria-label="Modèle à autoriser"></select>
+              <button type="button" class="btn btn-ghost btn-inline" data-model-add="p-allow">Ajouter</button></div></div>
+          <div class="model-field"><label>Interdits<input id="p-deny" placeholder="openai/gpt-4o"></label>
+            <div class="model-add"><select data-model-pick="p-deny" aria-label="Modèle à interdire"></select>
+              <button type="button" class="btn btn-ghost btn-inline" data-model-add="p-deny">Ajouter</button></div></div></div>
+          <div class="provider-blocks"><p class="small muted">Fournisseurs entiers bloqués (tous leurs modèles, présents et futurs) :</p>
+            <div class="inline" id="p-providers"><span class="muted small">Chargement…</span></div></div></fieldset>
+        <fieldset class="opt" data-opt="hosting"><legend><label class="check"><input type="checkbox" data-toggle> Hébergement imposé</label></legend>
+          <div class="inline"><label class="check"><input type="radio" name="p-hosting" value="local" checked> Local uniquement (aucune donnée vers le cloud)</label>
+          <label class="check"><input type="radio" name="p-hosting" value="cloud"> Cloud uniquement</label></div></fieldset>
+        <fieldset class="opt" data-opt="network"><legend><label class="check"><input type="checkbox" data-toggle> Restrictions réseau</label></legend>
+          <div class="grid2"><label>IP / plages CIDR<input id="p-ips" placeholder="192.168.1.0/24, 203.0.113.7"></label>
+          <label>Domaines (Origin)<input id="p-origins" placeholder="app.exemple.com, *.exemple.com"
+            title="Bloque les autres sites dans un navigateur seulement : un script ou un serveur peut falsifier l'en-tête Origin."></label></div>
+          <p class="muted small">Les domaines n'arrêtent que les navigateurs : hors navigateur, l'en-tête Origin se falsifie. Ajoutez des limites ou des IP.</p></fieldset>
+        <fieldset class="opt" data-opt="modes"><legend><label class="check"><input type="checkbox" data-toggle> Modes de routage permis</label></legend>
+          <div class="inline"><label class="check"><input type="checkbox" name="p-mode" value="speed"> Vitesse</label>
+          <label class="check"><input type="checkbox" name="p-mode" value="economy" checked> Économique</label>
+          <label class="check"><input type="checkbox" name="p-mode" value="balanced"> Équilibré</label></div></fieldset>
+        <fieldset class="opt" data-opt="effort"><legend><label class="check"><input type="checkbox" data-toggle> Effort de raisonnement maximal</label></legend>
+          <select id="p-effort"><option value="low">Bas</option><option value="medium" selected>Moyen</option><option value="high">Élevé</option></select></fieldset>
+        <fieldset class="opt" data-opt="orchestration"><legend><label class="check"><input type="checkbox" data-toggle> Interdire l'orchestration multi-agents (Pro)</label></legend></fieldset>
+        <fieldset class="opt" data-opt="embeddings"><legend><label class="check"><input type="checkbox" data-toggle> Interdire les embeddings (/v1/embeddings : recherche dans des documents)</label></legend></fieldset>
+        <fieldset class="opt" data-opt="busy"><legend><label class="check"><input type="checkbox" data-toggle> Quand le PC est occupé</label></legend>
+          <div class="inline"><label class="check"><input type="radio" name="p-busy" value="cloud" checked> Basculer sur tout le cloud permis (payant compris)</label>
+          <label class="check"><input type="radio" name="p-busy" value="refuse"> Refuser (erreur 503)</label></div>
+          <p class="muted small">Sans réglage : bascule sur les offres cloud gratuites seulement (aucun coût imprévu).</p></fieldset>
+        <fieldset class="opt" data-opt="tools"><legend><label class="check"><input type="checkbox" data-toggle> Outils (bouton « Outils » du chat)</label></legend>
+          <div class="inline"><label class="check"><input type="radio" name="p-tools" value="basic"> Calcul et date</label>
+          <label class="check"><input type="radio" name="p-tools" value="web" checked> + recherche et lecture web</label>
+          <label class="check"><input type="radio" name="p-tools" value="pc"> + contrôle de ce PC</label></div>
+          <p class="muted small">Sans réglage : aucun outil. « Contrôle de ce PC » : la personne qui a cette clé peut faire agir l'IA sur votre écran (souris, clavier), depuis partout. Ne le donnez qu'à une clé de confiance, de préférence limitée à votre réseau (bloc « Réseau »).</p></fieldset>
+
+        <h3>Plafonds & limites</h3>
+        <div class="grid3">
+          <label>Requêtes / min<input type="number" min="1" id="l-rpm" placeholder="illimité"></label>
+          <label>Tokens / min<input type="number" min="1" id="l-tpm" placeholder="illimité"></label>
+          <label>Tokens / jour<input type="number" min="1" id="l-tpd" placeholder="illimité"></label>
+        </div>
+        <div class="budgets" id="budgets">
+          <div class="budget-row" data-period="day"><label class="check"><input type="checkbox" data-on> Budget quotidien</label><input type="number" min="0.01" step="0.01" data-amount placeholder="montant"><select data-cur><option>EUR</option><option>USD</option></select></div>
+          <div class="budget-row" data-period="week"><label class="check"><input type="checkbox" data-on> Budget hebdomadaire</label><input type="number" min="0.01" step="0.01" data-amount placeholder="montant"><select data-cur><option>EUR</option><option>USD</option></select></div>
+          <div class="budget-row" data-period="month"><label class="check"><input type="checkbox" data-on> Budget mensuel</label><input type="number" min="0.01" step="0.01" data-amount placeholder="montant"><select data-cur><option>EUR</option><option>USD</option></select></div>
+        </div>
+
+        <h3>Métadonnées</h3>
+        <label>Une par ligne, au format clé=valeur<textarea id="k-meta" rows="2" placeholder="equipe=mobile&#10;env=prod"></textarea></label>
+      </div>
+      <footer class="dlg-foot">
+        <button type="button" class="btn btn-ghost btn-inline" data-close>Annuler</button>
+        <button type="submit" class="btn btn-primary btn-inline" id="kd-submit">Créer la clé</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <!-- secret affiché une seule fois -->
+  <dialog id="secret-dialog" aria-labelledby="sd-title">
+    <header class="dlg-head"><h2 id="sd-title">Votre nouvelle clé</h2></header>
+    <div class="dlg-body">
+      <p class="alert show warn-box">Copiez-la maintenant : pour votre sécurité, elle ne sera plus jamais affichée.</p>
+      <div class="secret"><code id="sd-secret"></code><button type="button" class="btn btn-ghost btn-inline" id="sd-copy">Copier</button></div>
+
+      <!-- partage en un clic (12.6) -->
+      <section id="sd-share" hidden>
+        <h3>Partager cet accès</h3>
+        <label>Adresse à donner
+          <select id="sd-url"></select>
+        </label>
+        <p class="share-note" id="sd-url-note" hidden></p>
+        <div class="share-grid">
+          <figure class="share-qr" id="sd-qr-wrap" hidden>
+            <img id="sd-qr" alt="QR code : ouvre le chat déjà connecté avec cette clé" width="168" height="168">
+            <figcaption>Scannez avec un téléphone : le chat s'ouvre déjà connecté.</figcaption>
+          </figure>
+          <div class="share-blocks">
+            <div class="share-block">
+              <div class="share-head"><span>Réglages d'une application compatible OpenAI</span>
+                <button type="button" class="btn btn-ghost btn-inline" data-share-copy="sd-openai">Copier</button></div>
+              <pre id="sd-openai"></pre>
+            </div>
+          </div>
+        </div>
+        <h3>Brancher un outil</h3>
+        <div id="sd-guides"></div>
+        <button type="button" class="btn btn-ghost btn-inline" id="sd-copy-all">Copier un message prêt à envoyer</button>
+        <p class="share-note">Ce message contient la clé : envoyez-le par un canal privé. Vous pourrez la révoquer à tout moment.</p>
+      </section>
+    </div>
+    <footer class="dlg-foot"><button type="button" class="btn btn-primary btn-inline" data-close>J'ai copié la clé</button></footer>
+  </dialog>
+
+  <dialog class="dlg" id="bridge-dialog" aria-labelledby="bd-title">
+    <header class="dlg-head"><h2 id="bd-title">Pont créé : lancez l'agent</h2></header>
+    <div class="dlg-body">
+      <p class="alert show warn-box">Le jeton est inclus ci-dessous et ne sera plus jamais affiché.</p>
+      <p class="small">Sur la machine qui héberge Ollama, depuis le dossier du projet :</p>
+      <div class="secret"><code id="bd-command"></code><button type="button" class="btn btn-ghost btn-inline" data-copy="bd-command">Copier</button></div>
+      <p class="small">Ou en conteneur, relancé automatiquement :</p>
+      <div class="secret"><code id="bd-docker"></code><button type="button" class="btn btn-ghost btn-inline" data-copy="bd-docker">Copier</button></div>
+      <p class="muted small">Autre serveur local : ajoutez <code>--target http://localhost:1234/v1</code> (LM Studio).</p>
+    </div>
+    <footer class="dlg-foot"><button type="button" class="btn btn-primary btn-inline" data-close>J'ai copié la commande</button></footer>
+  </dialog>
+
+  <!-- alerte budgétaire -->
+  <dialog id="alert-dialog" aria-labelledby="ad-title">
+    <form id="alert-form" method="dialog" novalidate>
+      <header class="dlg-head"><h2 id="ad-title">Nouvelle alerte</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Fermer">✕</button></header>
+      <div class="dlg-body">
+        <p class="alert" id="ad-error" role="alert"></p>
+        <div class="grid2">
+          <label class="span2">Nom<input id="a-name" maxlength="100" placeholder="Budget mensuel de l'équipe"></label>
+          <label>Périmètre<select id="a-scope"><option value="">Tout le compte</option></select></label>
+          <label>Période<select id="a-period"><option value="day">Par jour</option><option value="week">Par semaine</option><option value="month" selected>Par mois</option></select></label>
+          <label>Budget<input type="number" id="a-amount" min="0.01" step="0.01" placeholder="50"></label>
+          <label>Devise<select id="a-currency"><option>EUR</option><option>USD</option></select></label>
+        </div>
+        <h3>Prévenir à</h3>
+        <div class="inline" id="a-thresholds">
+          <label class="check"><input type="checkbox" value="50" checked> 50 %</label>
+          <label class="check"><input type="checkbox" value="80" checked> 80 %</label>
+          <label class="check"><input type="checkbox" value="90"> 90 %</label>
+          <label class="check"><input type="checkbox" value="100" checked> 100 %</label>
+          <label class="check"><input type="checkbox" value="120"> 120 %</label>
+        </div>
+        <h3>Webhook (optionnel)</h3>
+        <label>URL Slack, Discord ou HTTPS générique<input id="a-webhook" type="url" placeholder="https://hooks.slack.com/services/…"></label>
+        <p class="muted small">Les envois génériques sont signés : en-tête <code>X-Gateway-Signature</code> (HMAC-SHA256).</p>
+      </div>
+      <footer class="dlg-foot">
+        <button type="button" class="btn btn-ghost btn-inline" data-close>Annuler</button>
+        <button type="submit" class="btn btn-primary btn-inline" id="ad-submit">Créer l'alerte</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <!-- capture d'écran d'une action du contrôle du PC (21.4) -->
+  <dialog id="capture-dialog" class="capture-dialog" aria-labelledby="cd-title">
+    <header class="dlg-head"><h2 id="cd-title">Capture d'écran</h2><button type="button" class="icon-btn" data-close aria-label="Fermer">✕</button></header>
+    <div class="dlg-body"><p class="muted small" id="cd-info"></p><img id="cd-img" alt="Capture d'écran après l'action"></div>
+  </dialog>
+
+  <!-- journal d'audit -->
+  <dialog id="events-dialog" aria-labelledby="ed-title">
+    <header class="dlg-head"><h2 id="ed-title">Journal</h2><button type="button" class="icon-btn" data-close aria-label="Fermer">✕</button></header>
+    <div class="dlg-body"><ol class="events" id="ed-list"></ol></div>
+  </dialog>
+</body>
+</html>

@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Modèles · Lezard IA</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/theme.css">
+  <link rel="stylesheet" href="/static/admin.css">
+  <link rel="stylesheet" href="/static/models.css">
+  <link rel="stylesheet" href="/static/mobile.css">
+  <link rel="stylesheet" href="/static/claude.css">
+  <link rel="stylesheet" href="/static/ui-claude.css">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/static/icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  <meta name="theme-color" content="#092f5c">
+  <script src="/static/device.js"></script>
+  <script src="/static/theme.js"></script>
+  <script src="/static/frame.js"></script>
+  <script type="module" src="/static/select-ui.js"></script>
+  <script src="/static/splash.js"></script>
+  <script type="module" src="/static/net-warning.js"></script>
+  <script type="module" src="/static/models.js"></script>
+</head>
+<body class="admin-page">
+  <header class="topbar">
+    <div class="logo" aria-hidden="true"><img src="/static/icons/logo-mark.png" alt="" width="128" height="117"></div>
+    <strong class="hide-sm">Lezard IA</strong>
+    <span class="pill" id="plan">…</span>
+    <span class="grow"></span>
+    <a class="icon-btn" href="/app" title="Chat" aria-label="Chat" data-drawer>
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h5"/></svg>
+      <span class="drawer-label">Chat</span>
+    </a>
+    <a class="icon-btn" href="/admin" title="Tableau de bord" aria-label="Tableau de bord" data-drawer>
+    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>
+    <span class="drawer-label">Tableau de bord</span>
+    </a>
+    <a class="icon-btn" href="/models" aria-current="page" title="Modèles" aria-label="Modèles" data-drawer>
+    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg>
+    <span class="drawer-label">Modèles</span>
+    </a>
+    <a class="icon-btn" href="/marketplace" target="_blank" data-market title="Marketplace" aria-label="Marketplace" data-drawer>
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9 4.5 4h15L21 9"/><path d="M3 9h18v1.5a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z"/><path d="M5 13v7h14v-7M10 20v-4h4v4"/></svg>
+      <span class="drawer-label">Marketplace</span>
+    </a>
+    <button class="icon-btn" type="button" id="remote-btn" title="Accès distant" aria-label="Accès distant" hidden data-drawer>
+    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+    <span class="drawer-label">Accès distant</span>
+    </button>
+    <button class="icon-btn" type="button" id="phone-btn" title="Connecter un téléphone" aria-label="Connecter un téléphone" hidden data-drawer>
+    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/></svg>
+    <span class="drawer-label">Connecter un téléphone</span>
+    </button>
+    <button class="icon-btn" type="button" id="install-btn" title="Installer l'application" aria-label="Installer l'application" hidden data-drawer>
+    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+    <span class="drawer-label">Installer l'application</span>
+    </button>
+    <button class="icon-btn" type="button" id="theme-btn" title="Apparence" aria-label="Personnaliser l'apparence" data-drawer>
+    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22a10 10 0 1 1 10-10c0 2.8-2.2 4-4 4h-2.2a1.8 1.8 0 0 0-1.3 3.1A1.8 1.8 0 0 1 12 22z"/><circle cx="7.5" cy="10.5" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16.5" cy="10.5" r="1"/></svg>
+    <span class="drawer-label">Apparence</span>
+    </button>
+    <button class="btn btn-ghost btn-inline" type="button" id="logout" data-drawer>Se déconnecter</button>
+  </header>
+
+  <main class="dash models-page">
+    <div class="dash-head">
+      <h1>Modèles</h1>
+      <button type="button" class="btn btn-ghost btn-inline" id="refresh">Actualiser</button>
+    </div>
+    <p class="alert" id="msg" role="status"></p>
+    <p class="alert show warn-box" id="denied" hidden>Cette page est réservée à l'administrateur (clé maître).</p>
+
+    <div id="content" hidden>
+      <section class="panel hw-widget" id="hw-widget" hidden></section>
+
+      <section class="panel" aria-labelledby="pv-title">
+        <div class="panel-head"><h2 id="pv-title">Fournisseurs</h2><span class="muted small" id="pv-count"></span>
+          <button type="button" class="btn btn-primary btn-inline" id="add-open">+ Ajouter un modèle</button></div>
+        <p class="muted small intro">Aucune IA n'est recherchée automatiquement : seules celles que vous ajoutez ici sont
+          utilisées. Chaque fournisseur actif et en ligne participe au routage automatique. Les clés API saisies ici
+          sont chiffrées en base (AES-256) et ne sont plus jamais réaffichées.</p>
+        <ul class="providers" id="providers"></ul>
+      </section>
+
+            <section class="dash-group models-prices" id="models-prices" aria-labelledby="models-prices-title">
+        <h2 class="group-title" id="models-prices-title">Tarifs des modèles cloud</h2>
+  <section class="panel" aria-labelledby="price-title">
+          <div class="panel-head"><h2 id="price-title">Tarifs des modèles cloud</h2>
+            <button type="button" class="btn btn-ghost btn-inline" id="price-import">Mettre à jour les tarifs</button></div>
+          <p class="muted small intro" id="price-info"></p>
+          <p class="alert show warn-box" id="price-warn" hidden></p>
+          <ul class="unknown-prices" id="unknown-prices"></ul>
+        </section>
+      </section>
+
+            <section class="dash-group models-local" id="models-local" aria-labelledby="models-local-title">
+        <h2 class="group-title" id="models-local-title">Modèles locaux</h2>
+  <section class="panel" aria-labelledby="ol-title" id="ollama-section">
+          <div class="panel-head"><h2 id="ol-title">Modèles locaux (Ollama)</h2><span class="pill" id="ol-state">…</span></div>
+          <p class="muted small intro">Téléchargez un modèle pour l'utiliser gratuitement sur votre machine. Les modèles
+            sont classés selon votre carte graphique et votre mémoire : un modèle qui tient en VRAM répond vite.</p>
+          <div class="reco" id="reco" hidden>
+            <div class="bench" id="bench">
+              <p class="small" id="bench-state" aria-live="polite"></p>
+              <div class="bench-actions">
+                <button type="button" class="btn btn-primary btn-inline" id="bench-run">Tester les performances de ce PC</button>
+                <button type="button" class="btn btn-inline" id="ollama-install" hidden>Installer Ollama</button>
+              </div>
+            </div>
+            <p class="reco-hw small" id="reco-hw"></p>
+            <ul class="reco-best" id="reco-best"></ul>
+            <details class="reco-all">
+              <summary>Tout le catalogue selon votre matériel</summary>
+              <ul class="reco-list" id="reco-list"></ul>
+            </details>
+          </div>
+          <details class="reco-all library" id="library">
+            <summary>Tous les modèles d'Ollama (rien n'est installé d'office : vous choisissez)</summary>
+            <div class="library-tools">
+              <label class="check"><input type="checkbox" id="library-missing" checked> Non installés seulement</label>
+              <input id="library-filter" type="search" placeholder="Filtrer : qwen, vision, code, embeddings…" spellcheck="false">
+            </div>
+            <p class="small muted" id="library-state" aria-live="polite"></p>
+            <ul class="reco-list" id="library-list"></ul>
+          </details>
+          <form class="row-form" id="pull-form">
+            <label>Modèle
+              <input id="pull-model" list="pull-suggestions" required placeholder="llama3.1:8b" autocomplete="off" spellcheck="false">
+              <datalist id="pull-suggestions"></datalist>
+            </label>
+            <button type="submit" class="btn btn-primary btn-inline" id="pull-btn">Télécharger</button>
+          </form>
+          <div class="pull-progress" id="pull-progress" hidden>
+            <div class="bar"><span id="pull-bar"></span></div>
+            <span class="small" id="pull-status" aria-live="polite"></span>
+          </div>
+          <ul class="local-models" id="local-models"></ul>
+        </section>
+  <section class="panel" aria-labelledby="emb-title" id="emb-section" hidden>
+          <div class="panel-head"><h2 id="emb-title">Embeddings</h2>
+            <span class="muted small">recherche par le sens dans vos documents</span></div>
+          <p class="muted small intro">Un seul modèle d'embeddings sert à la fois : la recherche dans vos documents et
+            « auto » de /v1/embeddings. Par défaut, la gateway prend le meilleur de ceux installés qui tourne bien sur ce
+            PC (qualité en français, place en mémoire vidéo). Changer de modèle fait recalculer les documents en tâche de
+            fond ; en attendant, la recherche se fait par mots-clés.</p>
+          <p class="alert" id="emb-msg" role="status" hidden></p>
+          <label class="emb-choice">Modèle utilisé <select id="emb-pick"></select></label>
+          <p class="small muted" id="emb-status" aria-live="polite"></p>
+          <ul class="emb-list" id="emb-list"></ul>
+        </section>
+  <section class="panel" aria-labelledby="voice-title" id="voice-section" hidden>
+          <div class="panel-head"><h2 id="voice-title">Voix</h2>
+            <span class="muted small">dictée et lecture à voix haute</span></div>
+          <p class="muted small intro">Comme pour les embeddings, la gateway prend pour la dictée et pour le bouton
+            « Écouter » le meilleur des modèles détectés qui tourne bien sur ce PC (qualité en français, place en mémoire
+            vidéo). Les autres restent des secours ; à qualité voisine, le serveur le moins occupé passe devant.</p>
+          <p class="alert" id="voice-msg" role="status" hidden></p>
+          <label class="emb-choice">Dictée <select id="voice-stt-pick"></select></label>
+          <ul class="emb-list" id="voice-stt-list"></ul>
+          <label class="emb-choice voice-second">Lecture vocale <select id="voice-tts-pick"></select></label>
+          <ul class="emb-list" id="voice-tts-list"></ul>
+          <fieldset class="voice-reading" id="voice-reading" hidden>
+            <legend>Voix de lecture</legend>
+            <div class="voice-grid">
+              <label>Voix <select id="vr-voice"></select></label>
+              <label>Prononciation <select id="vr-pron">
+                <option value="text">Langue du texte : une voix étrangère garde son accent</option>
+                <option value="voice">Langue de la voix</option>
+              </select></label>
+              <label>Mélanger avec <select id="vr-blend"></select></label>
+              <label class="vr-range">Part de la 2e voix
+                <span><input type="range" id="vr-share" min="10" max="90" step="5"><output id="vr-share-out"></output></span></label>
+              <label class="vr-range">Vitesse
+                <span><input type="range" id="vr-speed" min="0.5" max="2" step="0.05"><output id="vr-speed-out"></output></span></label>
+              <label class="vr-range">Pauses entre les phrases
+                <span><input type="range" id="vr-pause" min="0" max="1.5" step="0.05"><output id="vr-pause-out"></output></span></label>
+            </div>
+            <p class="small muted" id="vr-note"></p>
+            <div class="vr-actions">
+              <button type="button" class="btn btn-primary btn-inline" id="vr-try">Écouter un essai</button>
+              <button type="button" class="btn btn-ghost btn-inline" id="vr-reset">Valeurs par défaut</button>
+            </div>
+          </fieldset>
+          <p class="small muted" id="voice-status" aria-live="polite"></p>
+        </section>
+      </section>
+
+      
+      
+            <section class="dash-group models-network" id="models-network" aria-labelledby="models-network-title">
+        <h2 class="group-title" id="models-network-title">Modèles des autres machines du réseau</h2>
+  <section class="panel" aria-labelledby="scan-title">
+          <div class="panel-head"><h2 id="scan-title">Modèles des autres machines du réseau</h2></div>
+          <p class="muted small intro">Trouve Ollama, LM Studio, vLLM… installés sur les autres ordinateurs de votre réseau
+            local et les ajoute comme modèles locaux (0 €). Laissez le champ vide pour chercher sur tout votre réseau.</p>
+          <form class="row-form" id="scan-form">
+            <label>Adresses
+              <input id="scan-hosts" placeholder="vide = tout le réseau · ex. 192.168.1.20, pc-gpu.local" spellcheck="false" autocomplete="off">
+            </label>
+            <button type="submit" class="btn btn-primary btn-inline" id="scan-btn">Rechercher sur le réseau</button>
+          </form>
+          <p class="small muted" id="scan-status" aria-live="polite"></p>
+          <ul class="scan-results" id="scan-results"></ul>
+        </section>
+      </section>
+
+      <section class="dash-group models-tools" id="models-tools" aria-labelledby="models-tools-title">
+        <h2 class="group-title" id="models-tools-title">Outils</h2>
+        <section class="panel" aria-labelledby="mcp-title">
+          <div class="panel-head"><h2 id="mcp-title">Outils MCP connectés</h2><span class="muted small" id="mcp-count"></span>
+            <button type="button" class="btn btn-ghost btn-inline" id="mcp-reload">Recharger</button></div>
+          <p class="muted small intro">Serveurs déclarés dans data/mcp.json. Chaque outil demande votre validation avant
+            d'agir. Un serveur qui ne se connecte pas n'empêche pas les autres.</p>
+          <ul class="providers" id="mcp-list"></ul>
+        </section>
+      </section>
+
+      <section class="dash-group models-keys" id="models-keys" aria-labelledby="models-keys-title">
+        <h2 class="group-title" id="models-keys-title">Clés des services</h2>
+        <section class="panel" aria-labelledby="svc-title">
+          <div class="panel-head"><h2 id="svc-title">Clés des services (outils)</h2></div>
+          <p class="muted small intro">Chiffrées sur ce PC, puis utilisées par les serveurs MCP au lancement. Elles ne
+            sont jamais réaffichées : seul un aperçu masqué apparaît. Une clé peut n'avoir accès qu'à certains dépôts.</p>
+          <form class="row-form" id="svc-form" autocomplete="off">
+            <label>Service <select id="svc-service" required></select></label>
+            <label>Étiquette <input id="svc-label" maxlength="40" required placeholder="GitHub perso"></label>
+            <label>Clé <input id="svc-secret" type="password" required autocomplete="new-password" spellcheck="false"></label>
+            <fieldset class="svc-scope" id="svc-scope" hidden>
+              <legend>Accès</legend>
+              <label class="check"><input type="radio" name="svc-mode" value="all" checked> Tous les dépôts</label>
+              <label class="check"><input type="radio" name="svc-mode" value="repos"> Dépôts précis</label>
+              <label id="svc-repos-wrap" hidden>Dépôts (owner/repo, un par ligne)
+                <textarea id="svc-repos" rows="3" spellcheck="false" placeholder="mon-compte/mon-projet"></textarea></label>
+            </fieldset>
+            <button type="submit" class="btn btn-primary btn-inline" id="svc-add">Ajouter la clé</button>
+          </form>
+          <ul class="providers" id="svc-list"></ul>
+        </section>
+        <section class="panel" aria-labelledby="nc-title">
+          <div class="panel-head"><h2 id="nc-title">Nextcloud (documents, commande /docs)</h2></div>
+          <p class="muted small intro">Lecture seule de vos fichiers. Utilisez un <strong>mot de passe d'application</strong>
+            (Nextcloud : Paramètres &gt; Sécurité), jamais le mot de passe de votre compte. Chiffré sur ce PC.</p>
+          <form class="row-form" id="nc-form" autocomplete="off">
+            <label>Adresse <input id="nc-url" type="url" required placeholder="https://cloud.exemple.fr" spellcheck="false"></label>
+            <label>Utilisateur <input id="nc-user" required placeholder="alice" spellcheck="false" autocomplete="off"></label>
+            <label>Mot de passe d'application <input id="nc-password" type="password" autocomplete="new-password"
+              spellcheck="false" placeholder="laisser vide pour garder le précédent"></label>
+            <button type="submit" class="btn btn-primary btn-inline" id="nc-save">Enregistrer</button>
+            <button type="button" class="btn btn-inline" id="nc-clear">Retirer</button>
+          </form>
+          <p class="small muted" id="nc-state"></p>
+        </section>
+      </section>
+
+    </div>
+  </main>
+
+  <dialog id="add-dialog" aria-labelledby="ad-title">
+    <form id="add-form" method="dialog" novalidate>
+      <header class="dlg-head"><h2 id="ad-title">Ajouter un modèle d'IA</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Fermer">✕</button></header>
+      <div class="dlg-body">
+        <p class="alert" id="ad-error" role="alert"></p>
+        <label class="ad-pick">Quelle IA ajouter ?
+          <select id="add-preset"></select>
+        </label>
+
+        <div id="ad-details" hidden>
+        <div class="grid2">
+          <label>Nom <input id="add-name" required maxlength="31" placeholder="deepseek" spellcheck="false" autocomplete="off"></label>
+          <label id="add-key-field">Clé API (token) <input id="add-key" name="provider-api-key" type="password" autocomplete="new-password"
+            readonly data-secret data-lpignore="true" data-1p-ignore data-bwignore spellcheck="false"></label>
+          <p class="small muted span2 ad-hint" id="add-key-hint"></p>
+        </div>
+
+        <!-- serveur local (Ollama, LM Studio…) : ce qui est déjà sur ce PC, et ce qui peut y être installé -->
+        <div id="ad-local" hidden>
+          <p class="small muted" id="loc-status" role="status" aria-live="polite"></p>
+          <div class="loc-ollama" id="loc-ollama" hidden></div>
+          <h3 id="loc-have-title">Modèles déjà sur ce PC</h3>
+          <ul class="loc-list" id="loc-have"></ul>
+          <div id="loc-install" hidden>
+            <h3>Modèles à installer <span class="muted ad-sub">— classés selon votre matériel</span></h3>
+            <p class="small muted" id="loc-hw"></p>
+            <ul class="loc-list" id="loc-catalog"></ul>
+          </div>
+        </div>
+        <details class="ad-advanced" id="add-advanced">
+          <summary>Connexion (URL, type, hébergement)</summary>
+          <div class="grid2">
+            <label class="span2">URL de l'API <input id="add-url" required type="url" placeholder="https://api.exemple.com/v1" spellcheck="false"></label>
+            <label>Type
+              <select id="add-kind"><option value="openai">Compatible OpenAI</option><option value="anthropic">Anthropic</option></select>
+            </label>
+            <label>Hébergement
+              <select id="add-hosting"><option value="cloud">Cloud</option><option value="local">Local</option></select>
+            </label>
+          </div>
+        </details>
+        <h3>Restrictions <span class="muted ad-sub">— facultatives, modifiables ensuite</span></h3>
+        <div class="rules-form ad-rules" id="add-rules"></div>
+        </div>
+      </div>
+      <footer class="dlg-foot">
+        <button type="button" class="btn btn-ghost btn-inline" data-close id="add-cancel">Annuler</button>
+        <button type="submit" class="btn btn-primary btn-inline" id="add-btn">Ajouter</button>
+      </footer>
+    </form>
+  </dialog>
+</body>
+</html>

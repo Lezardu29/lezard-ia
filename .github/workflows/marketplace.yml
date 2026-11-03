@@ -1,0 +1,70 @@
+# Marketplace, chaque lundi : étoiles GitHub et copie du site relues (python -m gateway.marketplace_export), puis
+# commitées sur la branche principale si elles ont changé ; et la liste des versions figées à monter
+# (python -m gateway.pins), dans le résumé du run (rien n'est modifié : on monte une version à la main), puis le
+# contrôle des téléchargements figés (python -m gateway.pins --liens) : un lien mort fait échouer le run.
+# Le jeton fourni par GitHub à chaque run sert pour l'API (1 000 lectures par heure) : aucun secret à régler.
+name: Marketplace
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 5 * * 1"          # chaque lundi matin
+
+permissions:
+  contents: write                # commit des étoiles et du catalogue du site
+
+concurrency:
+  group: marketplace
+  cancel-in-progress: false
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PYTHONUTF8: "1"
+
+jobs:
+  releve:
+    name: Étoiles, catalogue du site et versions figées
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - name: Dépendances
+        run: python -m pip install -r requirements.txt
+      - name: Étoiles et catalogue du site
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python -m gateway.marketplace_export
+      - name: Versions figées à monter
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo '## Versions figées de la marketplace'
+            echo '```'
+            python -m gateway.pins
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Commit si quelque chose a changé
+        run: |
+          git add gateway/marketplace_stars.json site/marketplace/
+          if git diff --cached --quiet; then
+            echo "Rien de nouveau."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Marketplace : étoiles GitHub et catalogue du site relus ($(date +%Y-%m-%d))"
+          git push
+      - name: Téléchargements figés (lien mort ou empreinte différente = run en échec)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python -m gateway.pins --liens | tee liens.txt
+          code=${PIPESTATUS[0]}
+          { echo '## Téléchargements figés'; echo '```'; cat liens.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit $code
