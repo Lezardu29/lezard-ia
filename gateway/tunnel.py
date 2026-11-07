@@ -22,10 +22,16 @@ def _pid_file() -> Path:
 def _is_cloudflared(pid: int) -> bool:
     """Le numéro désigne-t-il encore un cloudflared ? (un autre programme peut l'avoir repris)"""
     if sys.platform == "win32":
+        # tasklist écrit dans la page de code de la console (cp850 en français) : en UTF-8 strict (PYTHONUTF8=1),
+        # un accent la rendait illisible, stdout valait None et l'accès à distance ne démarrait plus
         out = subprocess.run(
-            ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"], capture_output=True, text=True, check=False
+            ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            check=False,
         ).stdout
-        return "cloudflared" in out.lower()
+        return "cloudflared" in (out or "").lower()
     try:
         return "cloudflared" in Path(f"/proc/{pid}/comm").read_text()
     except OSError:

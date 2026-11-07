@@ -417,7 +417,10 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
         """Accès à distance automatique : le tunnel gardé, sinon un nouveau demandé à lezard-ia.fr, puis démarré."""
         store, cipher, client = holder["store"], holder["cipher"], holder["gw"].client
         await cloudflared.ensure(client)
+        port = holder["remote"].port
         saved = store.get_setting(auto_tunnel.SETTING) or {}
+        if saved.get("auto") and await auto_tunnel.forget_if_deleted(client, store, cipher, holder["instance"], port):
+            saved = {}  # supprimé par le ménage de lezard-ia.fr : une nouvelle adresse est demandée
         tunnel = None
         if saved.get("auto") and saved.get("token"):
             try:
@@ -425,7 +428,7 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
             except CryptoError:
                 tunnel = None
         if tunnel is None:
-            tunnel = await auto_tunnel.create(client, holder["instance"], socket.gethostname(), holder["remote"].port)
+            tunnel = await auto_tunnel.create(client, holder["instance"], socket.gethostname(), port)
             await asyncio.to_thread(auto_tunnel.save, store, cipher, tunnel)
         await shared.start_remote("cloudflare", None, False, {"hostname": tunnel["hostname"], "token": tunnel["token"]})
         holder["managed_tunnel"] = tunnel["hostname"]

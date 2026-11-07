@@ -8,8 +8,11 @@ import os
 
 import httpx
 
+from .crypto import CryptoError
+
 SETTING = "managed_tunnel"  # même réglage que le tunnel géré par l'ancien serveur central (31.1)
 CONTEXT = "managed-tunnel"
+IDLE_DAYS = 5  # comme functions/api/tunnel/[action].js : tunnel supprimé après 5 jours sans aucune connexion
 
 
 class AutoTunnelError(Exception):
@@ -46,6 +49,24 @@ async def refresh(client: httpx.AsyncClient, instance: str, proof: str, port: in
     """Tunnel existant (jeton perdu, autre port) : {hostname, token}."""
     data = await _call(client, "jeton", {"instance": instance, "proof": proof, "port": port})
     return {"hostname": data.get("hostname"), "token": data.get("token")}
+
+
+async def forget_if_deleted(client: httpx.AsyncClient, store, cipher, instance: str, port: int) -> bool:
+    """Tunnel gardé supprimé par lezard-ia.fr (ménage des tunnels sans connexion depuis 5 jours) : oublié, True.
+    Site injoignable ou autre refus : False, le tunnel gardé est démarré comme avant."""
+    saved = store.get_setting(SETTING) or {}
+    try:
+        proof = cipher.decrypt(saved["proof"], CONTEXT)
+    except (KeyError, TypeError, CryptoError):  # pas de preuve gardée, ou clé de chiffrement changée
+        return False
+    try:
+        await refresh(client, instance, proof, port)
+    except AutoTunnelError as e:
+        if e.status != 404:
+            return False
+        store.set_setting(SETTING, {})
+        return True
+    return False
 
 
 def save(store, cipher, tunnel: dict) -> None:

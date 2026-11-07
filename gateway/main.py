@@ -18,7 +18,7 @@ from fastapi.responses import RedirectResponse
 
 from . import __version__
 from .alerts import AlertEngine
-from . import cloudflared, edition, mcp, services, sources
+from . import auto_tunnel, cloudflared, edition, mcp, services, sources
 from .license import LicenseError
 from . import audit
 from .backup import BackupManager, apply_pending_restore, auto_enabled as backup_auto
@@ -449,6 +449,15 @@ def create_app(
                     await cloudflared.ensure(holder["gw"].client)
                 except cloudflared.CloudflaredError as e:
                     log.error("Accès à distance automatique non démarré : %s", e)
+                    return
+                if await auto_tunnel.forget_if_deleted(
+                    holder["gw"].client, holder["store"], holder["cipher"], holder["instance"], remote.port
+                ):
+                    log.warning(
+                        "Adresse fixe supprimée par lezard-ia.fr (aucune connexion depuis %d jours) : « Créer mon "
+                        "compte web » en crée une nouvelle.",
+                        auto_tunnel.IDLE_DAYS,
+                    )
                     return
             if not remote.available().get("cloudflare"):
                 return

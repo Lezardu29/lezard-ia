@@ -42,6 +42,9 @@ class FakeRemote(StubRemote):
         return self.status.to_dict()
 
 
+REFRESH: list[int] = []  # réponse de lezard-ia.fr à « jeton » : [404] = tunnel supprimé par le ménage
+
+
 @pytest.fixture
 def env(monkeypatch):
     created = []
@@ -53,6 +56,13 @@ def env(monkeypatch):
     async def fake_ensure(client):
         return "cloudflared.exe"
 
+    async def fake_refresh(client, instance, proof, port):
+        if REFRESH:
+            raise auto_tunnel.AutoTunnelError(REFRESH[0], "refus")
+        return {"hostname": "mon-pc-7f3a1c.lezard-ia.fr", "token": "JETON-TUNNEL-SECRET"}
+
+    REFRESH.clear()
+    monkeypatch.setattr(auto_tunnel, "refresh", fake_refresh)
     monkeypatch.setattr(auto_tunnel, "create", fake_create)
     monkeypatch.setattr(cloudflared, "ensure", fake_ensure)
     monkeypatch.delenv("REMOTE_ACCESS", raising=False)
@@ -108,6 +118,48 @@ def test_saved_tunnel_is_reused_not_recreated(env):
     asyncio.run(remote.stop())
     assert c.post("/v1/admin/web-account", headers=ADMIN).status_code == 200
     assert len(created) == 1 and len(remote.started) == 2  # même tunnel, relancé
+
+
+def test_tunnel_deleted_after_5_idle_days_is_forgotten_then_recreated(env):
+    """Le ménage de lezard-ia.fr a supprimé le tunnel (5 jours sans connexion) : le PC l'apprend (404) et en
+    demande un nouveau au lieu de relancer sans fin cloudflared avec un jeton mort ; un site injoignable ne fait
+    rien oublier."""
+    c, remote, store, created = env
+    enable_totp(c)
+    assert c.post("/v1/admin/web-account", headers=ADMIN).status_code == 200
+    import asyncio
+
+    asyncio.run(remote.stop())
+    REFRESH.append(502)  # lezard-ia.fr injoignable : le tunnel gardé sert
+    assert c.post("/v1/admin/web-account", headers=ADMIN).status_code == 200
+    assert len(created) == 1
+    asyncio.run(remote.stop())
+    REFRESH[:] = [404]
+    assert c.post("/v1/admin/web-account", headers=ADMIN).status_code == 200
+    assert len(created) == 2 and store.get_setting("managed_tunnel")["auto"] is True
+
+
+def test_forget_if_deleted_clears_only_on_404():
+    import asyncio
+
+    from gateway.crypto import Cipher
+
+    store, cipher = DocumentStore(":memory:"), Cipher()
+    tunnel = {"hostname": "pc-1.lezard-ia.fr", "token": "t", "proof": "p" * 64}
+    for status, forgotten in ((None, False), (403, False), (404, True)):
+        auto_tunnel.save(store, cipher, tunnel)
+
+        async def answer(client, instance, proof, port, status=status):
+            assert proof == "p" * 64
+            if status:
+                raise auto_tunnel.AutoTunnelError(status, "x")
+            return {}
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(auto_tunnel, "refresh", answer)
+            assert asyncio.run(auto_tunnel.forget_if_deleted(None, store, cipher, "0" * 24, 8000)) is forgotten
+        assert bool(store.get_setting("managed_tunnel")) is not forgotten
+    assert asyncio.run(auto_tunnel.forget_if_deleted(None, store, cipher, "0" * 24, 8000)) is False  # rien de gardé
 
 
 def test_errors_are_explained(env, monkeypatch):
@@ -175,3 +227,20 @@ def test_orphan_cloudflared_is_stopped_only_if_it_is_cloudflared(tmp_path, monke
     monkeypatch.setattr(tunnel, "_is_cloudflared", lambda pid: True)
     tunnel._stop_orphan()
     assert killed == [4243]
+
+
+def test_tasklist_output_in_console_codepage_does_not_crash(monkeypatch):
+    """tasklist écrit en cp850 (Windows français) : en UTF-8 strict, stdout valait None et l'accès à distance ne
+    démarrait plus dès qu'un cloudflared.pid restait d'un tunnel précédent."""
+    from gateway import tunnel
+
+    seen = {}
+
+    def run(args, **kw):
+        seen.update(kw)
+        return tunnel.subprocess.CompletedProcess(args, 0, stdout=None)
+
+    monkeypatch.setattr(tunnel.sys, "platform", "win32")
+    monkeypatch.setattr(tunnel.subprocess, "run", run)
+    assert tunnel._is_cloudflared(4242) is False
+    assert seen["errors"] == "replace"
