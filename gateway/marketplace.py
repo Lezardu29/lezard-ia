@@ -272,7 +272,15 @@ def _lic(name: str, holder: str, url: str, commercial: str = "oui", summary: str
     return {"name": name, "copyright": holder, "url": url, "commercial": commercial, "summary": summary}
 
 
-WHERE = {"chat": "Chat de Lezard IA", "claude": "Claude Code", "terminal": "Terminal"}
+WHERE = {
+    "chat": "Chat de Lezard IA",
+    "claude": "Claude Code",
+    "terminal": "Terminal",
+    "app": "Dans l'application",
+    "vscode": "VS Code",
+    "browser": "Navigateur",
+    "python": "Code Python",
+}
 
 
 def _cmd(use: str, what: str, example: str | None = None, where: str = "chat") -> dict:
@@ -303,6 +311,16 @@ COMPONENTS = (
         "size": "~90 Mo, plus les modèles de voix au premier usage",
         "action": ["pack", "install", "voix"],
         "restart": True,
+        "commands": [
+            _cmd(
+                "Bouton micro (à côté de « Envoyer »)",
+                "Dicter un message : appuyer pour commencer, appuyer à nouveau pour terminer (sur téléphone : maintenir "
+                "pour parler).",
+            ),
+            _cmd(
+                "Bouton « Écouter » (sous chaque réponse)", "Lire la réponse à voix haute ; appuyer à nouveau l'arrête."
+            ),
+        ],
         "licenses": [
             _lic("MIT", "SYSTRAN (faster-whisper)", "https://github.com/SYSTRAN/faster-whisper", summary=MIT_NOTE),
             _lic("MIT", "thewh1teagle (kokoro-onnx)", "https://github.com/thewh1teagle/kokoro-onnx", summary=MIT_NOTE),
@@ -379,6 +397,26 @@ COMPONENTS = (
         "size": "~1,5 Go",
         "action": ["ollama-install"],
         "restart": False,
+        "commands": [
+            _cmd("ollama list", "Les modèles téléchargés sur ce PC, avec leur taille.", where="terminal"),
+            _cmd(
+                "ollama pull <modèle>",
+                "Télécharger un modèle (la page Modèles de Lezard IA le fait aussi).",
+                "ollama pull gemma3:12b",
+                "terminal",
+            ),
+            _cmd(
+                "ollama ps",
+                "Les modèles chargés en mémoire en ce moment (carte graphique ou processeur).",
+                where="terminal",
+            ),
+            _cmd(
+                "ollama rm <modèle>",
+                "Supprimer un modèle pour libérer de la place.",
+                "ollama rm gemma3:12b",
+                "terminal",
+            ),
+        ],
         "licenses": [_lic("MIT", "Ollama", "https://github.com/ollama/ollama", summary=MIT_NOTE)],
     },
 )
@@ -901,6 +939,14 @@ APPS = (
         "id": "openwebui",
         "name": "Open WebUI",
         "description": "Interface de chat complète, à installer sur un serveur ou un PC (Docker).",
+        "commands": [
+            _cmd(
+                "http://localhost:3000",
+                "Ouvrir Open WebUI (première fois : créez le compte administrateur).",
+                where="browser",
+            ),
+            _cmd("docker stop open-webui", "L'arrêter ; docker start open-webui le relance.", where="terminal"),
+        ],
         "guide": "openwebui",
         "url": "https://github.com/open-webui/open-webui",
         "license": _lic(
@@ -916,6 +962,10 @@ APPS = (
         "id": "continue",
         "name": "Continue",
         "description": "Assistant de code dans VS Code et JetBrains.",
+        "commands": [
+            _cmd("Ctrl+L", "Envoyer le code sélectionné dans le chat de Continue (Cmd+L sur Mac).", where="vscode"),
+            _cmd("Ctrl+J", "La même chose dans JetBrains (Cmd+J sur Mac).", where="app"),
+        ],
         "guide": "continue",
         "url": "https://github.com/continuedev/continue",
         "license": _lic(
@@ -926,6 +976,10 @@ APPS = (
         "id": "cursor",
         "name": "Cursor",
         "description": "Éditeur de code avec IA ; il appelle la gateway depuis ses serveurs (adresse Internet requise).",
+        "commands": [
+            _cmd("Ctrl+I", "Ouvrir ou fermer le panneau de l'agent (Cmd+I sur Mac).", where="app"),
+            _cmd("Ctrl+L", "Démarrer une discussion avec le code sélectionné (Cmd+L sur Mac).", where="app"),
+        ],
         "guide": "cursor",
         "url": "https://cursor.com",
         "github": "cursor/cursor",  # dépôt public de l'éditeur (suivi des problèmes)
@@ -941,6 +995,17 @@ APPS = (
         "id": "openclaw",
         "name": "OpenClaw",
         "description": "Assistant qui agit depuis votre ordinateur et vos messageries, branché sur Lezard IA.",
+        "commands": [
+            _cmd(
+                "openclaw onboard",
+                "Première fois : réglages guidés (modèle, service local, dossier de travail, messageries).",
+                where="terminal",
+            ),
+            _cmd("openclaw chat", "Discuter avec l'assistant dans le terminal.", where="terminal"),
+            _cmd("openclaw dashboard", "Ouvrir son tableau de bord dans le navigateur.", where="terminal"),
+            _cmd("openclaw status", "État du service, des messageries et des modèles.", where="terminal"),
+            _cmd("openclaw doctor", "Vérifie l'installation et propose des corrections.", where="terminal"),
+        ],
         "guide": "openclaw",
         "url": "https://github.com/openclaw/openclaw",
         "license": _lic("MIT", "OpenClaw contributors", "https://github.com/openclaw/openclaw", summary=MIT_NOTE),
@@ -973,6 +1038,14 @@ APPS = (
         "id": "python",
         "name": "SDK OpenAI pour Python",
         "description": "Appeler Lezard IA depuis vos scripts Python.",
+        "commands": [
+            _cmd(
+                'OpenAI(base_url="<adresse de la gateway>/v1", api_key="<votre clé>")',
+                "Le client branché sur Lezard IA ; ensuite client.chat.completions.create(model=…, messages=[…]).",
+                'client = OpenAI(base_url="http://localhost:8000/v1", api_key="sk-app-…")',
+                "python",
+            )
+        ],
         "guide": "python",
         "url": "https://github.com/openai/openai-python",
         "license": _lic("Apache-2.0", "OpenAI", "https://github.com/openai/openai-python", summary=APACHE_NOTE),
@@ -981,6 +1054,14 @@ APPS = (
         "id": "langchain",
         "name": "LangChain",
         "description": "Bibliothèque pour enchaîner modèles, documents et outils.",
+        "commands": [
+            _cmd(
+                'ChatOpenAI(base_url="<adresse de la gateway>/v1", api_key="<votre clé>", model="<modèle>")',
+                'Un modèle de Lezard IA dans LangChain (paquet langchain-openai) ; ensuite llm.invoke("…").',
+                'llm = ChatOpenAI(base_url="http://localhost:8000/v1", api_key="sk-app-…", model="gemma3:12b")',
+                "python",
+            )
+        ],
         "guide": "langchain",
         "url": "https://github.com/langchain-ai/langchain",
         "license": _lic("MIT", "LangChain, Inc.", "https://github.com/langchain-ai/langchain", summary=MIT_NOTE),
@@ -990,6 +1071,13 @@ APPS = (
         "name": "OpenHuman",
         "description": "Assistant de bureau open source : il se connecte à vos services (mails, agenda, documents…), "
         "garde une mémoire de ce qu'il apprend sur vous et peut utiliser vos modèles locaux d'Ollama.",
+        "commands": [
+            _cmd(
+                "Menu Démarrer → OpenHuman",
+                "Ouvrir l'application, puis connecter les services de votre choix.",
+                where="app",
+            )
+        ],
         "guide": None,
         "url": "https://github.com/tinyhumansai/openhuman",
         "license": _lic(
@@ -1008,6 +1096,13 @@ APPS = (
         "name": "AnythingLLM",
         "description": "Application de bureau pour discuter avec vos documents (PDF, Word, sites) et lancer des "
         "agents ; branchez-la sur Lezard IA comme fournisseur « Generic OpenAI ».",
+        "commands": [
+            _cmd(
+                "Menu Démarrer → AnythingLLM",
+                "Ouvrir l'application ; créez un espace de travail et déposez-y vos documents pour en discuter.",
+                where="app",
+            )
+        ],
         "guide": "anythingllm",
         "url": "https://github.com/Mintplex-Labs/anything-llm",
         "license": _lic("MIT", "Mintplex Labs Inc.", "https://github.com/Mintplex-Labs/anything-llm", summary=MIT_NOTE),
@@ -1017,6 +1112,14 @@ APPS = (
         "name": "LibreChat",
         "description": "Interface de chat complète et multi-utilisateurs (Docker), alternative à Open WebUI : agents, "
         "recherche, fichiers ; Lezard IA s'y ajoute en « custom endpoint ».",
+        "commands": [
+            _cmd("http://localhost:3080", "Ouvrir LibreChat (première fois : créez votre compte).", where="browser"),
+            _cmd(
+                "docker compose --project-directory LibreChat down",
+                "L'arrêter, depuis votre dossier personnel ; up --detach à la place de down le relance.",
+                where="terminal",
+            ),
+        ],
         "guide": "librechat",
         "url": "https://github.com/LibreChat-AI/LibreChat",
         "license": _lic("MIT", "LibreChat", "https://github.com/LibreChat-AI/LibreChat", summary=MIT_NOTE),
@@ -1026,6 +1129,13 @@ APPS = (
         "name": "Jan",
         "description": "Application de chat de bureau, simple et hors ligne ; Lezard IA s'y ajoute comme fournisseur "
         "compatible OpenAI.",
+        "commands": [
+            _cmd(
+                "Menu Démarrer → Jan",
+                "Ouvrir l'application, puis choisir un modèle de Lezard IA en haut de la discussion.",
+                where="app",
+            )
+        ],
         "guide": "jan",
         "url": "https://github.com/janhq/jan",
         "license": _lic(
@@ -1040,6 +1150,13 @@ APPS = (
         "name": "Cline",
         "description": "Agent de code dans VS Code : il lit le projet, modifie les fichiers et lance des commandes, "
         "avec votre accord à chaque étape. Fournisseur « OpenAI Compatible » : Lezard IA.",
+        "commands": [
+            _cmd(
+                "Icône Cline (barre latérale)",
+                "Ouvrir Cline et lui décrire la tâche ; ou Ctrl+Maj+P puis « Cline » pour ses commandes.",
+                where="vscode",
+            )
+        ],
         "guide": "cline",
         "url": "https://github.com/cline/cline",
         "license": _lic("Apache-2.0", "Cline Bot Inc.", "https://github.com/cline/cline", summary=APACHE_NOTE),
@@ -1049,6 +1166,14 @@ APPS = (
         "name": "Kilo Code",
         "description": "Agent de code dans VS Code (modes architecte, code, débogage) ; fournisseur « OpenAI "
         "Compatible » : Lezard IA.",
+        "commands": [
+            _cmd(
+                "Icône Kilo Code (barre latérale)",
+                "Ouvrir Kilo Code, choisir le mode (architecte, code, débogage) et décrire la tâche ; ou Ctrl+Maj+P puis "
+                "« Kilo Code ».",
+                where="vscode",
+            )
+        ],
         "guide": "kilocode",
         "url": "https://github.com/Kilo-Org/kilocode",
         "license": _lic("MIT", "Kilo Code", "https://github.com/Kilo-Org/kilocode", summary=MIT_NOTE),
@@ -1086,6 +1211,13 @@ APPS = (
         "name": "Goose",
         "description": "Agent de bureau qui exécute des tâches (code, fichiers, recherches) et s'étend par serveurs "
         "MCP ; fournisseur « OpenAI Compatible » : Lezard IA.",
+        "commands": [
+            _cmd(
+                "%LOCALAPPDATA%\\Programs\\Goose\\dist-windows\\Goose.exe",
+                "Lancer Goose (Win+R puis cette adresse), puis lui décrire la tâche.",
+                where="app",
+            )
+        ],
         "guide": "goose",
         "url": "https://github.com/aaif-goose/goose",
         "license": _lic("Apache-2.0", "Block, Inc.", "https://github.com/aaif-goose/goose", summary=APACHE_NOTE),
@@ -1095,6 +1227,10 @@ APPS = (
         "name": "Page Assist",
         "description": "Extension de navigateur : discuter de la page ouverte ou de vos documents avec vos modèles "
         "locaux d'Ollama, dans un panneau latéral.",
+        "commands": [
+            _cmd("Ctrl+Maj+Y", "Ouvrir le panneau latéral, pour discuter de la page ouverte.", where="browser"),
+            _cmd("Ctrl+Maj+L", "Ouvrir Page Assist en plein onglet.", where="browser"),
+        ],
         "guide": None,
         "url": "https://github.com/n4ze3m/page-assist",
         "license": _lic("MIT", "Muhammed Nazeem (n4ze3m)", "https://github.com/n4ze3m/page-assist", summary=MIT_NOTE),
@@ -1103,6 +1239,9 @@ APPS = (
         "id": "chatbox",
         "name": "Chatbox (édition communautaire)",
         "description": "Application de chat de bureau ; Lezard IA s'y ajoute comme fournisseur compatible OpenAI.",
+        "commands": [
+            _cmd("Menu Démarrer → Chatbox", "Ouvrir l'application et choisir un modèle de Lezard IA.", where="app")
+        ],
         "guide": "chatbox",
         "url": "https://github.com/chatboxai/chatbox",
         "license": _lic(
@@ -1120,6 +1259,13 @@ APPS = (
         "name": "Meetily",
         "description": "Comptes rendus de réunion : transcription sur ce PC (Whisper) et résumé par un modèle local "
         "d'Ollama. L'audio ne quitte pas la machine.",
+        "commands": [
+            _cmd(
+                "Menu Démarrer → Meetily",
+                "Ouvrir l'application, lancer l'enregistrement de la réunion, puis demander le résumé.",
+                where="app",
+            )
+        ],
         "guide": None,
         "url": "https://github.com/Zackriya-Solutions/meetily",
         "license": _lic("MIT", "Zackriya Solutions", "https://github.com/Zackriya-Solutions/meetily", summary=MIT_NOTE),
@@ -1145,6 +1291,14 @@ APPS = (
         "name": "Zed",
         "description": "Éditeur de code rapide avec un agent intégré ; Lezard IA s'y ajoute comme fournisseur "
         "compatible OpenAI.",
+        "commands": [
+            _cmd(
+                "Icône ✨ (barre d'état)",
+                "Ouvrir le panneau de l'agent ; ou Ctrl+Maj+P puis « agent: new thread ». Ctrl+N y démarre une "
+                "nouvelle discussion.",
+                where="app",
+            )
+        ],
         "guide": "zed",
         "url": "https://github.com/zed-industries/zed",
         "license": _lic(
@@ -1161,6 +1315,13 @@ APPS = (
         "name": "Cherry Studio",
         "description": "Application de bureau de chat : plusieurs fournisseurs côte à côte, assistants, base de "
         "connaissances et serveurs MCP ; Lezard IA s'y ajoute comme fournisseur compatible OpenAI.",
+        "commands": [
+            _cmd(
+                "Menu Démarrer → Cherry Studio",
+                "Ouvrir l'application et choisir un modèle de Lezard IA dans la discussion.",
+                where="app",
+            )
+        ],
         "guide": "cherrystudio",
         "url": "https://github.com/CherryHQ/cherry-studio",
         "license": _lic(
@@ -1251,6 +1412,19 @@ AGENT_TOOLS = (
         "name": "REA (Reverse Engineer Anything)",
         "description": "L'agent analyse une application sans son code source, de son comportement jusqu'aux binaires.",
         "install": "npx rea-agents@latest setup",
+        "commands": [
+            _cmd(
+                "Demandez-le en langage naturel",
+                "Claude Code utilise REA de lui-même (son serveur MCP) quand vous demandez d'analyser une application.",
+                "Comprends comment fonctionne la recherche de l'application Notes et montre-moi les preuves",
+                "claude",
+            ),
+            _cmd(
+                "npx -y rea-agents@latest analyze-javascript-application <dossier> --json",
+                "Analyse directe d'une application JavaScript ou Electron décompressée (ou de son fichier ASAR).",
+                where="terminal",
+            ),
+        ],
         "needs": "Node.js et npm.",
         "lezard": "Outil pour agents de code, à part du chat de Lezard IA.",
         "url": "https://github.com/morluto/rea",
@@ -1323,6 +1497,14 @@ AGENT_TOOLS = (
         "description": "Environnement pour faire travailler plusieurs agents de code en parallèle (Claude Code, Codex…), "
         "chacun dans sa branche, sur ordinateur et téléphone.",
         "install": "https://onorca.dev/download",
+        "commands": [
+            _cmd(
+                "Menu Démarrer → Orca",
+                "Ouvrir Orca, ajouter un projet, puis lancer un agent (en discussion ou dans son terminal) ; chaque agent "
+                "travaille dans sa propre copie du projet.",
+                where="app",
+            )
+        ],
         "needs": "Windows, macOS ou Linux ; vos propres abonnements aux agents.",
         "lezard": "Application à part. Les agents qu'elle lance peuvent utiliser Lezard IA comme fournisseur s'ils "
         "acceptent une adresse compatible OpenAI.",
@@ -1366,6 +1548,16 @@ AGENT_TOOLS = (
         "description": "Mémoire persistante pour les agents de code : ce que l'agent apprend pendant une session est "
         "retrouvé aux suivantes, au lieu d'un fichier de notes limité.",
         "install": "claude mcp add --scope user agentmemory -- cmd /c npx -y @agentmemory/mcp@0.9.30",
+        "commands": [
+            _cmd(
+                "Demandez-le en langage naturel",
+                "Claude Code utilise ses outils de mémoire (memory_save, memory_recall…) : demandez-lui de retenir ou "
+                "de retrouver quelque chose.",
+                "Qu'avions-nous décidé la dernière fois pour la page d'accueil ?",
+                "claude",
+            ),
+            _cmd("/mcp", "Vérifier que agentmemory est bien connecté.", where="claude"),
+        ],
         "needs": "Node.js 20 ou plus et Claude Code. Le serveur complet (visionneuse, API) demande WSL2 sous Windows.",
         "lezard": "Branché sur Claude Code en serveur MCP. Existe aussi pour le chat de Lezard IA (onglet Serveurs MCP).",
         "url": "https://github.com/rohitg00/agentmemory",
@@ -1401,6 +1593,15 @@ AGENT_TOOLS = (
         "tâches en React » et Claude Code commence par préciser le besoin avec vous.",
         "install": "claude plugin marketplace add obra/superpowers-marketplace\n"
         "claude plugin install superpowers@superpowers-marketplace",
+        "commands": [
+            _cmd(
+                "Rien à taper : décrivez ce que vous voulez construire",
+                "Les compétences s'activent seules : Claude Code précise d'abord le besoin avec vous, écrit un plan, "
+                "puis code en testant.",
+                "Faisons une liste de tâches en React",
+                "claude",
+            ),
+        ],
         "needs": "Claude Code.",
         "lezard": "Pour Claude Code. Les compétences « Cadrer », « Plan », « TDD » et « Débogage » du chat de Lezard "
         "IA en reprennent l'esprit.",
@@ -1507,6 +1708,20 @@ AGENT_TOOLS = (
         "au lieu de lire des fichiers entiers : recherches et modifications précises, moins de tokens.",
         "install": "uv tool install -p 3.13 serena-agent==2.1.0\n"
         "claude mcp add --scope user serena -- serena start-mcp-server --context claude-code --project-from-cwd",
+        "commands": [
+            _cmd(
+                "Activate the project <dossier>",
+                "Dans Claude Code, la première fois pour un projet : Serena le découvre (onboarding), puis s'en sert "
+                "pour chercher et modifier le code.",
+                "Activate the project C:\\Projets\\site",
+                "claude",
+            ),
+            _cmd(
+                "serena project index",
+                "Dans le dossier d'un gros projet, une fois : prépare l'index pour des recherches plus rapides.",
+                where="terminal",
+            ),
+        ],
         "needs": "uv (installé avec lui) et Claude Code ; certains langages demandent leur serveur de langage.",
         "lezard": "Branché sur Claude Code en serveur MCP, pour tous vos projets.",
         "url": "https://github.com/oraios/serena",
@@ -1584,6 +1799,17 @@ AGENT_TOOLS = (
         "description": "Mémoire automatique pour Claude Code : il résume ce qu'il fait pendant une session et le "
         "retrouve aux suivantes, sans rien à demander.",
         "install": "npx --yes claude-mem@15.0.1 install --provider claude",
+        "commands": [
+            _cmd(
+                "Rien à taper : la mémoire se remplit seule",
+                "Pour retrouver une décision passée, demandez-la : Claude Code fouille sa mémoire (compétence "
+                "mem-search).",
+                "Comment avions-nous réglé le bug de connexion la semaine dernière ?",
+                "claude",
+            ),
+            _cmd("/learn-codebase", "Facultatif : charger d'un coup la mémoire de tout le projet.", where="claude"),
+            _cmd("npx claude-mem doctor", "Vérifie l'installation et propose des corrections.", where="terminal"),
+        ],
         "needs": "Node.js 20.12 ou plus et Claude Code.",
         "lezard": "Installé en mode local (--provider claude) : les résumés sont faits par votre abonnement Claude et "
         "gardés sur ce PC.",

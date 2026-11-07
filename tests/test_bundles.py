@@ -91,12 +91,12 @@ def test_models_are_picked_for_this_pc():
     assert all("when" not in b and "items" not in b for b in public.values())
 
 
-# commandes : chaque élément qui en ajoute les explique dans « Détails »
+# commandes : chaque élément dit comment s'en servir dans « Détails » (commande, raccourci ou où l'ouvrir)
 ADDS_COMMANDS = {
-    "component": {"web", "pc", "multi"},
+    "component": {c["id"] for c in marketplace.COMPONENTS},
     "mcp": {s["id"] for s in marketplace.MCP_SERVERS},
-    "app": {"comfyui"},
-    "tool": {"hyperframes", "watch", "gws", "findskills", "codegraph"},
+    "app": {a["id"] for a in marketplace.APPS},
+    "tool": {t["id"] for t in marketplace.AGENT_TOOLS},
 }
 
 
@@ -124,7 +124,7 @@ def test_chat_commands_exist_in_the_chat():
         c["use"].split()[0].lstrip("/")
         for e in (*marketplace.COMPONENTS, *marketplace.MCP_SERVERS, *marketplace.APPS)
         for c in e.get("commands", [])
-        if c["where"] == marketplace.WHERE["chat"]
+        if c["where"] == marketplace.WHERE["chat"] and c["use"].startswith("/")  # pas les boutons (micro…)
     }
     assert shown and shown <= real, shown - real
     assert "competence" in real  # compétences : /competence <id>, ajoutée par la page
@@ -162,7 +162,7 @@ SITE_JS = ROOT / "site" / "assets" / "marketplace.js"
 )
 def test_pages_show_bundles_and_commands(path):
     js = path.read_text(encoding="utf-8")
-    assert '"bundle", "Bundles"' in js and "Commandes ajoutées" in js and "Commandes que vous aurez ensuite" in js
+    assert '"bundle", "Bundles"' in js and "Commandes et utilisation" in js and "Commandes que vous aurez ensuite" in js
     assert "/competence " in js  # compétences : la commande qui les active
 
 

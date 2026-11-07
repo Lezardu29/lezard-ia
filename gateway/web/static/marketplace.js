@@ -382,7 +382,7 @@ function commandsOf(it) {
   }
   return entryOf(it)?.commands || [];
 }
-function commandsBlock(cmds, title = "Commandes ajoutées") {
+function commandsBlock(cmds, title = "Commandes et utilisation") {
   const box = el("section", "market-cmds");
   box.append(el("h3", "", title));
   const dl = el("dl");
