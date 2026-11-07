@@ -1,7 +1,7 @@
 // Widget « Matériel & IA locales » (13.3) : jauges VRAM / RAM / CPU, modèles chargés, installation du modèle
 // recommandé. Pages d'administration seulement, jamais dans le chat (14.3) : les routes exigent la clé maître.
 import { api, errorMessage } from "./auth.js";
-import { fmtBytes, pullModel, pulling } from "./ollama-pull.js";
+import { fmtBytes, fmtMem, pullModel, pulling } from "./ollama-pull.js";
 
 const PERIOD_MS = 5000;
 const USE_ORDER = ["chat", "code", "vision", "reasoning"];
@@ -64,26 +64,40 @@ export function initHardwareWidget(section, { onInstalled = () => {}, onAddOllam
   let busy = false, timer = null, stopped = false;
 
   function renderHardware(h) {
-    for (const g of h.gpus) {
+    // cartes dédiées (tout fabricant) : une jauge chacune ; la partie graphique du processeur est citée à part
+    const cards = h.gpus.filter((g) => (g.kind || "dedicated") === "dedicated");
+    const igpus = h.gpus.filter((g) => g.kind === "integrated");
+    for (const g of cards) {
       if (!gpuGauges.has(g.index)) {
-        const gb = gaugeBlock(h.gpus.length > 1 ? `VRAM · GPU ${g.index}` : "VRAM");
+        const gb = gaugeBlock(cards.length > 1 ? `VRAM · GPU ${g.index}` : "VRAM");
         gpuGauges.set(g.index, gb);
         gauges.append(gb.block);
       }
-      const models = h.gpus.length === 1 && h.models_vram ? ` · modèles ${fmtBytes(h.models_vram)}` : "";
-      gpuGauges.get(g.index).set(g.vram_total ? (g.vram_used / g.vram_total) * 100 : null,
-        `${fmtBytes(g.vram_used)} / ${fmtBytes(g.vram_total)}${models} — ${g.name}`);
+      const models = cards.length === 1 && h.models_vram ? ` · modèles ${fmtMem(h.models_vram)}` : "";
+      const used = g.vram_used != null ? `${fmtMem(g.vram_used)} / ` : "";   // AMD hors Windows 10 : total seul
+      gpuGauges.get(g.index).set(g.vram_total && g.vram_used != null ? (g.vram_used / g.vram_total) * 100 : null,
+        `${used}${fmtMem(g.vram_total)}${models} — ${g.name}`);
     }
     if (!ram.block.isConnected) gauges.append(ram.block, cpu.block);
     ram.set(h.ram.total && h.ram.used != null ? (h.ram.used / h.ram.total) * 100 : null,
-      h.ram.total ? `${fmtBytes(h.ram.used)} / ${fmtBytes(h.ram.total)}` : "indisponible");
+      h.ram.total ? `${fmtMem(h.ram.used)} / ${fmtMem(h.ram.total)}` : "indisponible");
     const cores = h.cpu.cores_logical ? `${h.cpu.cores_logical} cœurs logiques` : "";
     cpu.set(h.cpu.usage_pct, h.cpu.usage_pct != null ? `${Math.round(h.cpu.usage_pct)} % · ${cores}`
       : `${cores}${cores ? " · " : ""}charge indisponible (psutil non installé)`);
 
-    note.textContent = h.gpus.length ? ""
-      : h.gpu_error ? `GPU NVIDIA non lu : ${h.gpu_error}`
-      : "Aucun GPU NVIDIA détecté : les modèles locaux tournent sur le processeur et la RAM.";
+    const amd = cards.find((g) => g.vendor === "amd" || g.vendor === "intel");
+    note.textContent = [
+      cards.length ? ""
+        : h.gpu_error ? `Carte graphique non lue : ${h.gpu_error}`
+        : "Aucune carte graphique dédiée : les modèles locaux tournent sur le processeur et la RAM.",
+      igpus.length ? `Partie graphique du processeur (${igpus.map((g) => g.name).join(", ")}) : ignorée, `
+        + (cards.length ? "les modèles sont conseillés pour la carte dédiée." : "elle partage la RAM et calcule lentement.") : "",
+      // Ollama sous Windows : une Radeon RX 9000 passe par Vulkan ; avec une partie graphique intégrée à côté, sa
+      // documentation conseille de lui désigner la carte dédiée
+      amd && igpus.length ? `Ollama et ${amd.name} : si les réponses sont lentes, désignez la carte dédiée à Ollama `
+        + "(variable d'environnement GGML_VK_VISIBLE_DEVICES, numéro de la carte dans le journal d'Ollama), puis "
+        + "relancez Ollama." : "",
+    ].filter(Boolean).join(" ");
     note.hidden = !note.textContent;
 
     loaded.replaceChildren(...h.loaded_models.map((m) => {
@@ -121,7 +135,7 @@ export function initHardwareWidget(section, { onInstalled = () => {}, onAddOllam
       return;
     }
     const text = el("p", "small", `Recommandé pour ${data.uses[use].toLowerCase()} : ${m.label} (${m.model}, ` +
-      `${fmtBytes(m.download)}) — ${m.fit === "vram" ? "tient en VRAM" : "VRAM + RAM, plus lent"}.`);
+      `${fmtBytes(m.download)}) — ${m.fit === "vram" ? "tient en VRAM" : data.budget?.gpu ? "VRAM + RAM, plus lent" : "RAM, sur le processeur (lent)"}.`);
     const status = el("span", "muted small");
     status.setAttribute("aria-live", "polite");
     const b = el("button", "btn btn-primary btn-inline", "Installer le modèle recommandé");

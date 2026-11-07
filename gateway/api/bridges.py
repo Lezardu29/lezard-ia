@@ -21,7 +21,7 @@ from ..bridge import (
     token_hash,
     validate_name,
 )
-from ..config import hosted_instance
+from ..config import hosted_instance, presets
 from ..limits import RateLimited
 from ..store import DocumentStore
 from ..validation import json_object
@@ -69,15 +69,19 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
     @router.post("/v1/bridges", status_code=201)
     async def create_bridge(request: Request):
         ctx = manager(request)
+        if ctx.is_admin:  # ses modèles comptent comme « locaux » (mode privé, clés limitées au local) : comme l'admin
+            shared.admin_session(request)
         data = await json_object(request, empty={})
         store: DocumentStore = holder["store"]
         if len(store.list_bridges(ctx.identity)) >= int(os.getenv("BRIDGE_MAX_PER_ACCOUNT", "5")):
             raise BridgeError(409, "Nombre maximal de ponts atteint pour ce compte : supprimez-en un.")
         gw: Gateway = holder["gw"]
         name = data.get("name")
-        reserved = {n for n in gw.providers if not store.bridge_name_taken(n)} | {
-            p.lower() for p in ("auto", "bridge", "gateway")
-        }
+        reserved = (
+            {n for n in gw.providers if not store.bridge_name_taken(n)}
+            | {p.lower() for p in ("auto", "bridge", "gateway")}
+            | {p.name.lower() for p in presets()}  # fournisseur pas encore ajouté (ollama, openai…) : pas un pont
+        )
         validate_name(name, reserved)
         if store.bridge_name_taken(name):
             raise BridgeError(409, f"Le nom « {name} » est déjà utilisé sur cette instance.")

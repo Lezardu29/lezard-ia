@@ -31,6 +31,21 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
     def _owner(request: Request) -> str:
         return plan_ctx({}, request).identity
 
+    def _creator(request: Request) -> str | None:
+        """Qui crée : « key:<id> » pour une clé virtuelle, None pour le compte lui-même (ou la clé maître)."""
+        ctx = plan_ctx({}, request)
+        return f"key:{ctx.key['id']}" if ctx.key else None
+
+    def _may_change(request: Request, item: dict, what: str) -> None:
+        """Une clé virtuelle (téléphone, application, proche) lit les projets et prompts du compte, mais ne modifie
+        que les siens : avant, elle pouvait réécrire les consignes d'un projet du compte, injectées ensuite dans ses
+        conversations (contrôle du PC compris)."""
+        who = _creator(request)
+        if who is not None and item.get("created_by") != who:
+            raise WorkspaceError(
+                403, f"{what} du compte : modifiable avec la clé du compte, pas avec une clé virtuelle (lecture seule)."
+            )
+
     def _check_refs(owner: str, data: dict) -> None:
         if data.get("prompt_id") and not holder["store"].get_prompt(owner, data["prompt_id"]):
             raise WorkspaceError(404, f"Prompt '{data['prompt_id']}' introuvable.")
@@ -42,7 +57,8 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
 
     @router.post("/v1/prompts", status_code=201)
     async def create_prompt(request: Request):
-        return holder["store"].add_prompt(_owner(request), validate_prompt(await json_object(request)))
+        data = {**validate_prompt(await json_object(request)), "created_by": _creator(request)}
+        return holder["store"].add_prompt(_owner(request), data)
 
     @router.get("/v1/prompts")
     async def list_prompts(request: Request):
@@ -61,7 +77,7 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
     @router.patch("/v1/prompts/{prompt_id}")
     async def update_prompt(prompt_id: str, request: Request):
         owner = _owner(request)
-        _prompt_or_404(owner, prompt_id)
+        _may_change(request, _prompt_or_404(owner, prompt_id), "Prompt")
         return holder["store"].update_prompt(
             owner, prompt_id, validate_prompt(await json_object(request), partial=True)
         )
@@ -75,7 +91,7 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
     @router.delete("/v1/prompts/{prompt_id}")
     async def delete_prompt(prompt_id: str, request: Request):
         owner = _owner(request)
-        _prompt_or_404(owner, prompt_id)
+        _may_change(request, _prompt_or_404(owner, prompt_id), "Prompt")
         users = holder["store"].prompt_users(owner, prompt_id)
         if users:
             raise WorkspaceError(409, f"Prompt utilisé par les projets : {', '.join(users)}.")
@@ -87,7 +103,7 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
         owner = _owner(request)
         data = validate_project(await json_object(request))
         _check_refs(owner, data)
-        return holder["store"].add_project(owner, data)
+        return holder["store"].add_project(owner, {**data, "created_by": _creator(request)})
 
     @router.get("/v1/projects")
     async def list_projects(request: Request):
@@ -107,6 +123,7 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
     async def update_project(project_id: str, request: Request):
         owner = _owner(request)
         current = _project_or_404(owner, project_id)
+        _may_change(request, current, "Projet")
         data = validate_project(await json_object(request), partial=True)
         # choisir l'un remplace l'autre
         if data.get("prompt_id") and "system_prompt" not in data:
@@ -118,7 +135,9 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
 
     @router.delete("/v1/projects/{project_id}")
     async def delete_project(project_id: str, request: Request):
-        if not holder["store"].delete_project(_owner(request), project_id):
+        owner = _owner(request)
+        _may_change(request, _project_or_404(owner, project_id), "Projet")
+        if not holder["store"].delete_project(owner, project_id):
             raise WorkspaceError(404, f"Projet '{project_id}' introuvable.")
         return {"id": project_id, "deleted": True}
 
@@ -126,6 +145,7 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
     async def attach_document(project_id: str, doc_id: str, request: Request):
         owner = _owner(request)
         p = _project_or_404(owner, project_id)
+        _may_change(request, p, "Projet")
         _check_refs(owner, {"documents": [doc_id]})
         return holder["store"].update_project(
             owner, project_id, {"documents": list(dict.fromkeys(p["documents"] + [doc_id]))}
@@ -135,6 +155,7 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
     async def detach_document(project_id: str, doc_id: str, request: Request):
         owner = _owner(request)
         p = _project_or_404(owner, project_id)
+        _may_change(request, p, "Projet")
         return holder["store"].update_project(
             owner, project_id, {"documents": [d for d in p["documents"] if d != doc_id]}
         )

@@ -102,6 +102,13 @@ STEPS: list[Step] = [
     Step(2, "conversations rattachées à un projet", add_columns([("conversations", "project_id", "TEXT")])),
     # favoris du chat : épinglées en tête de la barre latérale
     Step(3, "conversations favorites", add_columns([("conversations", "starred", "INTEGER NOT NULL DEFAULT 0")])),
+    # créateur d'un projet ou d'un prompt : « key:<id> » pour une clé virtuelle, NULL pour le compte lui-même. Une clé
+    # virtuelle ne modifie que ce qu'elle a créé (sinon elle injectait des consignes dans les conversations du compte)
+    Step(
+        4,
+        "créateur des projets et des prompts",
+        add_columns([("projects", "created_by", "TEXT"), ("prompts", "created_by", "TEXT")]),
+    ),
 ]
 LATEST = STEPS[-1].version
 

@@ -9,6 +9,7 @@ import json
 import os
 import re
 import time
+from collections import Counter
 from datetime import datetime
 from types import SimpleNamespace
 from collections.abc import AsyncIterator
@@ -17,7 +18,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from .. import crew, orchestrator, skills, splitter, tools, translate
+from .. import crew, mcp, mcp_help, orchestrator, skills, splitter, tools, translate
 from ..audit import capture_days, describe_actor
 from ..cache import cache_key, normalize_policy, response_ttl
 from ..classifier import _text_and_images, classify
@@ -42,15 +43,22 @@ TIME_QUESTION = re.compile(r"\b(heure|date|jour|aujourd|demain|hier|semaine|toda
 TIMEZONE = os.getenv("GATEWAY_TIMEZONE", "Europe/Paris")  # fuseau de l'utilisateur, pour la date donnée au modèle
 
 
+def user_now() -> tuple[datetime, str]:
+    """Heure dans le fuseau de l'utilisateur, et son nom. Windows n'a pas de base des fuseaux : sans le paquet tzdata
+    (absent du Python de l'installateur), ZoneInfo échouait et toute question sur la date ou l'heure finissait en
+    erreur 500 ; c'est alors l'heure locale de ce PC."""
+    try:
+        return datetime.now(ZoneInfo(TIMEZONE)), TIMEZONE
+    except (ZoneInfoNotFoundError, ValueError):
+        local = datetime.now().astimezone()
+        return local, local.tzname() or "heure de ce PC"
+
+
 def clock_message(now: datetime | None = None) -> dict:
     """Message système : la date et l'heure du jour, dans le fuseau de l'utilisateur."""
     zone = TIMEZONE
     if now is None:
-        try:
-            now = datetime.now(ZoneInfo(TIMEZONE))
-        except (ZoneInfoNotFoundError, ValueError):  # Windows sans tzdata : heure de ce PC, celle de l'utilisateur
-            now = datetime.now().astimezone()
-            zone = "heure de ce PC"
+        now, zone = user_now()
     return {
         "role": "system",
         "content": f"Date et heure actuelles : {DAYS[now.weekday()]} {now:%d/%m/%Y %H:%M} ({zone}). "
@@ -286,9 +294,19 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
     async def providers(request: Request):
         """État des fournisseurs, réservé aux comptes (9.3) : il révèle les adresses internes des serveurs
         locaux. Servi depuis le cache de détection (DETECT_TTL) : ne déclenche pas de sonde à chaque appel."""
-        owner = manager(request).identity
+        ctx = manager(request)
+        owner = ctx.identity
         status = await holder["gw"].detect()
-        return {n: s for n, s in status.items() if holder["gw"].visible(n, owner)}  # ponts d'autrui masqués
+        out = {n: s for n, s in status.items() if holder["gw"].visible(n, owner)}  # ponts d'autrui masqués
+        if not ctx.is_admin:  # autres comptes : ni les adresses du réseau de la maison, ni les erreurs détaillées
+            out = {
+                n: {
+                    **{k: v for k, v in s.items() if k not in ("base_url", "error")},
+                    **({"base_url": s.get("base_url")} if holder["gw"].providers[n].cfg.owner == owner else {}),
+                }
+                for n, s in out.items()
+            }
+        return out
 
     def meta(info) -> dict:
         """Métadonnées d'un modèle ; « chat » : faux pour les embeddings, la voix, la dictée… (liste du chat)."""
@@ -409,13 +427,15 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
         def watched(t: tools.Tool) -> tools.Tool:
             async def run(args: dict) -> tools.ToolResult:
                 result = await t.run(args)
-                if result.image:
+                if result.image or t.local_only:  # écran, document, outil MCP « local_only » : jamais au cloud
                     private["on"] = True
                 return result
 
             return dataclasses.replace(t, run=run)
 
-        allowed = {n: watched(t) if t.level == "pc" else t for n, t in allowed.items()}
+        # avant : seul l'écran capturé passait la suite en privé ; un document lu (Paperless, Nextcloud) partait au
+        # tour suivant vers un modèle cloud si le routage « auto » en choisissait un
+        allowed = {n: watched(t) if t.level == "pc" or t.local_only else t for n, t in allowed.items()}
 
         last_text = next(
             (_text_and_images(m.get("content"))[0] for m in reversed(body["messages"]) if m.get("role") == "user"), ""
@@ -510,13 +530,32 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
         """Outils de la gateway permis pour ce compte (à activer avec « gateway_tools »)."""
         ctx = plan_ctx({}, request)
         allowed = tools.available(ctx)
-        return {
-            "object": "list",
-            "data": [
-                {"name": t.name, "description": t.description, "level": t.level, "confirm": t.confirm}
-                for t in allowed.values()
-            ],
-        }
+
+        def row(t) -> dict:
+            base = {"name": t.name, "description": t.description, "level": t.level, "confirm": t.confirm}
+            origin = mcp.ORIGIN.get(t.name)
+            if not origin:
+                return base
+            return {
+                **base,
+                "server": origin[0],
+                "tool": origin[1],
+                "help": mcp_help.tool_help(origin[1], t.description),
+            }
+
+        rows = [row(t) for t in allowed.values()]
+        count = Counter(r["server"] for r in rows if "server" in r)
+        servers = [  # clé virtuelle : ses serveurs permis seulement, et jamais le détail d'une erreur (chemins de ce PC)
+            {
+                **mcp_help.server_view(s["name"]),
+                "connected": s["ok"],
+                "tools": count[s["name"]],
+                **({"error": s["error"]} if ctx.is_admin and s["error"] else {}),
+            }
+            for s in mcp.overview()
+            if ctx.is_admin or count[s["name"]]
+        ]
+        return {"object": "list", "data": rows, "mcp_servers": servers}
 
     def pc_user(request: Request):
         """Clé maître (double authentification depuis Internet) ou clé virtuelle permise sur le contrôle du PC."""

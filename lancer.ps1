@@ -619,7 +619,7 @@ try {
           Write-Host "                    empreinte SHA-256 à vérifier : $fingerprint"
         }
         # secrets jamais affichés (9.6) : la console finit dans des captures d'écran, des journaux, des partages d'écran
-        Write-Host "   Admin (Pro)    : clé maître = GATEWAY_MASTER_KEY dans $envFile"
+        Write-Host "   Admin          : clé maître = GATEWAY_MASTER_KEY dans $envFile"
         Write-Host "   Compte de test : jetons GATEWAY_KEYS du même fichier (plan Free)"
         Write-Host "   Mode Test      : bouton « Essayer sans clé » sur la page de connexion"
         Write-Host "   API            : http://localhost:$Port/docs  (depuis ce PC uniquement)"

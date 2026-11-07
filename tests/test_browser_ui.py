@@ -12,7 +12,11 @@ import time
 import httpx
 import pytest
 
-sync_api = pytest.importorskip("playwright.sync_api")
+# BROWSER_TESTS=required (job « navigateur » de la CI) : Playwright absent = échec, jamais un test ignoré en silence
+if os.getenv("BROWSER_TESTS") == "required":
+    import playwright.sync_api as sync_api
+else:
+    sync_api = pytest.importorskip("playwright.sync_api")
 uvicorn = pytest.importorskip("uvicorn")
 
 from gateway.config import ProviderConfig  # noqa: E402
@@ -21,6 +25,7 @@ from gateway.plans import PlanResolver  # noqa: E402
 from gateway.store import DocumentStore  # noqa: E402
 
 ANSWER = "Voici le code :\n\n```python\nprint('bonjour')\n```\n"
+PAGE_ANSWER = "Voici la page :\n\n```html\n<!doctype html><title>Compteur</title><h1>Compteur</h1>\n```\n"
 WIDTHS = (320, 375)
 
 
@@ -40,7 +45,9 @@ def fake_llm(request: httpx.Request):
                 "usage": {"prompt_tokens": 5, "completion_tokens": 1, "total_tokens": 6},
             },
         )
-    chunk = {"id": "x", "model": body.get("model"), "choices": [{"index": 0, "delta": {"content": ANSWER}}]}
+    asked = json.dumps(body["messages"][-1], ensure_ascii=False)
+    text = PAGE_ANSWER if "page" in asked.lower() else ANSWER
+    chunk = {"id": "x", "model": body.get("model"), "choices": [{"index": 0, "delta": {"content": text}}]}
     end = {
         "id": "x",
         "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
@@ -81,8 +88,11 @@ def browser():
     with sync_api.sync_playwright() as p:
         try:
             b = p.chromium.launch(channel="chrome")
-        except sync_api.Error as e:
-            pytest.skip(f"Chrome introuvable pour Playwright : {e.message.splitlines()[0]}")
+        except sync_api.Error:
+            try:  # sans Google Chrome : le Chromium de Playwright (CI, Linux) ; avant, tout le fichier était ignoré
+                b = p.chromium.launch()
+            except sync_api.Error as e:
+                pytest.skip(f"Ni Chrome ni Chromium pour Playwright : {e.message.splitlines()[0]}")
         yield b
         b.close()
 
@@ -186,3 +196,89 @@ def test_chat_fits_small_phones(browser, gateway_url, width, ui):
         assert not errors, errors
     finally:
         ctx.close()
+
+
+def ask(frame, text):
+    frame.locator("#prompt").fill(text)
+    frame.locator("#prompt").press("Enter")
+    frame.wait_for_function("() => !document.getElementById('composer').classList.contains('busy')")
+    frame.wait_for_function(SETTLED)
+
+
+@pytest.mark.parametrize("width", WIDTHS)
+def test_preview_card_keeps_its_title_on_phones(browser, gateway_url, width):
+    """Carte « Page HTML » de l'interface Claude : le titre s'écrasait en une lettre par ligne (« P a g e H T M L »)
+    et les boutons se coupaient (« Aperç u »), poussés par « Télécharger » et « Copier »."""
+    ctx, page, frame, errors = open_chat(browser, gateway_url, width, "claude")
+    try:
+        ask(frame, "Fais une page")
+        card = frame.locator(".code.previewable").last
+        card.wait_for()
+        kind = card.locator(".code-kind").bounding_box()
+        assert kind["height"] < 30 and kind["width"] > 60, kind  # une ligne, lisible
+        lines = card.locator(".preview-btn").evaluate(
+            "b => { const r = document.createRange(); r.selectNodeContents(b); return r.getClientRects().length; }"
+        )
+        assert lines == 1, f"« Aperçu » sur {lines} lignes"
+        assert frame.evaluate(FITS, ".code.previewable, .code.previewable .code-head > *")
+        assert not errors, errors
+    finally:
+        ctx.close()
+
+
+def test_retry_menu_stays_open_when_the_phone_keyboard_closes(browser, gateway_url):
+    """Le menu « Réessayer » (feuille en bas de l'écran) se fermait au moment même où on le touchait : la saisie
+    perdait le focus, le clavier se repliait (la hauteur change), ou la fin de la réponse faisait défiler le fil."""
+    ctx, page, frame, errors = open_chat(browser, gateway_url, 375, "claude")
+    try:
+        ask(frame, "Un exemple de code")
+        frame.locator(".msg.assistant .msg-retry summary").last.click()
+        frame.wait_for_selector(".msg-retry[open]")
+        page.set_viewport_size({"width": 375, "height": 420})  # clavier qui s'ouvre ou se ferme : la hauteur seule
+        frame.evaluate("document.getElementById('scroller').scrollTop += 50")  # défilement du fil
+        frame.wait_for_timeout(200)
+        assert frame.locator(".msg-retry[open]").count() == 1, "menu refermé"
+        assert frame.locator(".msg-retry[open] .menu button", has_text="Réessayer").first.is_visible()
+        page.set_viewport_size({"width": 700, "height": 420})  # autre largeur : le menu se replace, donc se ferme
+        frame.wait_for_timeout(200)
+        assert frame.locator(".msg-retry[open]").count() == 0
+        assert not errors, errors
+    finally:
+        ctx.close()
+
+
+def test_new_conversation_starts_without_the_previous_message(browser, gateway_url):
+    ctx, page, frame, errors = open_chat(browser, gateway_url, 375, "claude")
+    try:
+        frame.locator("#prompt").fill("/zorglub")
+        frame.locator("#prompt").press("Escape")
+        frame.locator("#prompt").press("Enter")
+        frame.wait_for_function("() => /Commande inconnue/.test(document.getElementById('chat-notice').textContent)")
+        frame.evaluate("document.getElementById('new-chat').click()")
+        frame.wait_for_function("() => document.getElementById('chat-notice').hidden")
+        assert not errors, errors
+    finally:
+        ctx.close()
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+def test_pages_text_is_readable_in_both_themes(browser, gateway_url, scheme):
+    """Interface Claude : texte en sourdine, accent sur fond doux, « En ligne », « Trop gros »… étaient sous 4,5:1."""
+    from .contrast_check import CONTRAST
+
+    ctx = browser.new_context(color_scheme=scheme, viewport={"width": 1280, "height": 900})
+    page = ctx.new_page()
+    page.goto(gateway_url + "/")
+    page.evaluate("sessionStorage.setItem('gw.apiKey', 'master')")
+    bad = {}
+    try:
+        for path in ("/app", "/admin", "/models"):
+            page.goto(gateway_url + path, wait_until="networkidle")
+            page.wait_for_function("[...document.querySelectorAll('iframe')].some(f => f.contentWindow?.GatewayTheme)")
+            frame = next(f for f in page.frames if "frame=1" in f.url)
+            frame.wait_for_timeout(500)
+            if found := frame.evaluate(CONTRAST):
+                bad[path] = found
+    finally:
+        ctx.close()
+    assert not bad, bad

@@ -37,7 +37,7 @@ from typing import TYPE_CHECKING
 
 from .classifier import classify
 from .crypto import Cipher, CryptoError
-from .providers.base import ProviderError
+from .providers.base import ProviderError, strip_reasoning
 from .router import route
 from .validation import RequestError, check_image_url
 
@@ -496,7 +496,7 @@ class Conversations:
         title = ""
         local = [m for m in gw._routable(ctx) if m.hosting == "local"]
         first_user = next((text_of(m["content"]) for m in messages if m["role"] == "user"), "")
-        first_reply = next((text_of(m["content"]) for m in messages if m["role"] == "assistant"), "")
+        first_reply = strip_reasoning(next((text_of(m["content"]) for m in messages if m["role"] == "assistant"), ""))
         if local and first_user:
             sample = f"Utilisateur : {first_user[:2000]}\n\nAssistant : {first_reply[:1000]}"
             body = {
@@ -514,7 +514,7 @@ class Conversations:
                     resp = await asyncio.wait_for(
                         gw.providers[info.provider].chat(gw.upstream_payload(body, info, "low", "off", None)), 30
                     )
-                    title = clean_title(resp["choices"][0]["message"].get("content"))
+                    title = clean_title(strip_reasoning(resp["choices"][0]["message"].get("content")))
                 except (TimeoutError, ProviderError, KeyError, IndexError, TypeError):
                     continue
                 if title:

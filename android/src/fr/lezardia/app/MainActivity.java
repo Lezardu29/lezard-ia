@@ -74,10 +74,20 @@ public class MainActivity extends Activity {
     private static final Pattern LOCAL_HOST =
             Pattern.compile("^(localhost|\\d{1,3}(\\.\\d{1,3}){3}|[^/:]+\\.local)(:\\d+)?(/.*)?$", Pattern.CASE_INSENSITIVE);
     // navigator.clipboard absent en HTTP (réseau local) et peu fiable dans une WebView : copie par le pont
-    private static final String CLIPBOARD_JS = "(function(){if(!window.LezardApp)return;"
+    // Le pont est visible dans TOUS les cadres de la page, aperçu isolé d'une page écrite par l'IA compris : copyText
+    // exige un jeton tiré au hasard, donné seulement au cadre principal (evaluateJavascript), dans une fermeture.
+    // Avant, une page d'aperçu pouvait remplacer en silence le presse-papiers (ex. une commande piégée).
+    private final String bridgeToken = newToken();
+    private final String clipboardJs = "(function(){if(!window.LezardApp)return;var k='" + bridgeToken + "';"
             + "var c=navigator.clipboard;if(!c){c={};try{Object.defineProperty(navigator,'clipboard',"
             + "{value:c,configurable:true});}catch(e){return;}}"
-            + "c.writeText=function(t){window.LezardApp.copyText(String(t));return Promise.resolve();};})();";
+            + "c.writeText=function(t){window.LezardApp.copyText(String(t),k);return Promise.resolve();};})();";
+
+    private static String newToken() {
+        byte[] b = new byte[24];
+        new java.security.SecureRandom().nextBytes(b);
+        return Base64.encodeToString(b, Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);
+    }
 
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private WebView web;
@@ -340,7 +350,7 @@ public class MainActivity extends Activity {
 
         @Override
         public void onPageFinished(WebView view, String url) {
-            if (isServer(Uri.parse(url))) view.evaluateJavascript(CLIPBOARD_JS, null);
+            if (isServer(Uri.parse(url))) view.evaluateJavascript(clipboardJs, null);
             CookieManager.getInstance().flush();
         }
 
@@ -549,7 +559,8 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
-        public void copyText(String text) {
+        public void copyText(String text, String token) {
+            if (token == null || !java.security.MessageDigest.isEqual(token.getBytes(), bridgeToken.getBytes())) return;
             runOnUiThread(() -> {
                 if (!onServerPage()) return;
                 ((ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE))

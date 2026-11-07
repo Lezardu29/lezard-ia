@@ -3,7 +3,7 @@ import { api, clearKey, errorMessage, getKey } from "./auth.js";
 import { initThemePanel, syncTheme } from "./theme-panel.js";
 import { initRemotePanel } from "./remote-panel.js";
 import { initPhonePanel } from "./phone-panel.js";
-import { ensureOllama, fmtBytes, pullModel as streamPull, pulling } from "./ollama-pull.js";
+import { ensureOllama, fmtBytes, fmtMem, pullModel as streamPull, pulling } from "./ollama-pull.js";
 import { initHardwareWidget } from "./hardware-widget.js";
 import { initMobile } from "./mobile.js";
 import { initPwa } from "./pwa.js";
@@ -581,7 +581,7 @@ function refreshLocal() {
 
 function renderCatalog(catalog, o) {
   const b = catalog.budget;
-  $("loc-hw").textContent = [b.gpu ? `${b.gpu} : ${size(b.vram)} de VRAM utilisable` : "Pas de carte graphique NVIDIA : calcul sur le processeur",
+  $("loc-hw").textContent = [b.gpu ? `${b.gpu} : ${fmtMem(b.vram)} de VRAM utilisable` : "Pas de carte graphique dédiée : calcul sur le processeur",
                              `RAM utilisable ${size(b.ram)}`, `disque libre ${size(b.disk_free)}`].join(" · ");
   const best = new Set(Object.values(catalog.best).filter(Boolean));
   const usable = catalog.models.filter((m) => m.fit !== "too_big" && !m.installed)   // installés : liste du dessus
@@ -913,7 +913,7 @@ function renderReco() {
   renderBench();
   const b = reco.budget;
   $("reco-hw").textContent = [
-    b.gpu ? `${b.gpu} : ${size(b.vram)} de VRAM utilisable` : "Aucun GPU NVIDIA détecté : les modèles tournent sur le processeur",
+    b.gpu ? `${b.gpu} : ${fmtMem(b.vram)} de VRAM utilisable` : "Aucune carte graphique dédiée : les modèles tournent sur le processeur",
     `RAM utilisable ${size(b.ram)}`, `disque libre ${size(b.disk_free)}`, `fenêtre de ${fmt(reco.context)} tokens`,
   ].join(" · ") + (b.vram_busy > 1e9 ? `. En ce moment, ${size(b.vram_busy)} de VRAM sont pris par d'autres ` +
     "applications (navigateur, jeu…) : fermez-les pour que le modèle tienne en VRAM et réponde vite." : "");

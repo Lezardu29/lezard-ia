@@ -4,7 +4,9 @@ Réservé à la clé maître (14.3) : modèle de GPU et mémoire décrivent la m
 Dépendances FACULTATIVES, absentes de requirements.txt :
 - nvidia-ml-py (module `pynvml`) : GPU NVIDIA ; à défaut, ou s'il échoue, `nvidia-smi` s'il est installé.
 - psutil : charge CPU, cœurs physiques ; à défaut, RAM lue par le système (Windows, /proc/meminfo, sysconf).
-Sans GPU NVIDIA (AMD, Apple, conteneur) : RAM et disque seulement, sans erreur.
+Cartes AMD et Intel (gpus.py) : DXGI sous Windows, amdgpu sous Linux, sans rien installer ; chaque carte est
+marquée « dedicated » ou « integrated » (partie graphique du processeur, jamais retenue pour un modèle).
+Sans carte (Apple, conteneur) : RAM et disque seulement, sans erreur.
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from .gpus import other_gpus
 from .local_context import looks_ollama, server_root
 
 TTL = 5.0  # secondes de cache : le widget (13.3) interroge toutes les 5 s
@@ -110,8 +113,8 @@ def smi_gpus(run=subprocess.run) -> list[dict] | None:
     return out
 
 
-def gpu_info(nvml=None, run=subprocess.run) -> dict:
-    """{gpus, source, error} : NVML d'abord, nvidia-smi ensuite ; jamais d'exception."""
+def nvidia_info(nvml=None, run=subprocess.run) -> dict:
+    """{gpus, source, error} des cartes NVIDIA : NVML d'abord, nvidia-smi ensuite ; jamais d'exception."""
     errors = []
     if nvml is not None:
         try:
@@ -125,6 +128,19 @@ def gpu_info(nvml=None, run=subprocess.run) -> dict:
     except (OSError, subprocess.SubprocessError, RuntimeError, ValueError) as e:
         errors.append(f"nvidia-smi : {e}")
     return {"gpus": [], "source": None, "error": " ; ".join(errors) or None}
+
+
+def gpu_info(nvml=None, run=subprocess.run, others=None) -> dict:
+    """{gpus, source, error} : NVIDIA (NVML, nvidia-smi), puis AMD et Intel (gpus.other_gpus : DXGI, amdgpu). Chaque
+    carte porte « vendor » et « kind » (dedicated / integrated) ; jamais d'exception."""
+    nv = nvidia_info(nvml, run)
+    gpus = [{**g, "vendor": "nvidia", "kind": "dedicated", "source": nv["source"]} for g in nv["gpus"]]
+    rest = (others or other_gpus)()
+    for g in rest:
+        gpus.append({**g, "index": len(gpus)})
+    sources = [s for s in (nv["source"], rest[0]["source"] if rest else None) if s]
+    # l'erreur de NVML n'a de sens que si aucune carte n'a été trouvée autrement (pas de pilote NVIDIA sur un PC AMD)
+    return {"gpus": gpus, "source": "+".join(sources) or None, "error": None if gpus else nv["error"]}
 
 
 def _ram_fallback() -> dict:

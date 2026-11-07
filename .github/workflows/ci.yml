@@ -5,6 +5,7 @@
 #   docker         construction de l'image (sans publication) et démarrage jusqu'à « healthy »
 #   qualite        ruff (lint + formatage) et couverture des tests, publiée dans le résumé du run (15.3)
 #   audit          pip-audit : dépendance avec une faille connue ; aussi chaque lundi, sans push (15.3)
+#   navigateur     le chat et le site dans Chromium (Playwright) : téléphone et ordinateur, erreurs, CSP, mise en page
 # Aucun secret n'est utilisé : les tests simulent fournisseurs et tunnels.
 name: CI
 
@@ -146,6 +147,27 @@ jobs:
         run: |
           python -m pip install pip-audit
           python -m pip_audit -r requirements-dev.txt -r requirements-local.txt --progress-spinner off
+
+  navigateur:
+    name: Navigateur (Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - name: Dépendances et Chromium
+        run: |
+          python -m pip install -r requirements-dev.txt -r requirements-browser.txt
+          python -m playwright install --with-deps chromium
+      - name: Tests dans le navigateur
+        # sans Playwright (les autres jobs), ces fichiers sont ignorés : ici, ils doivent tourner pour de bon
+        env:
+          BROWSER_TESTS: required
+        run: python -m pytest -q -rs tests/test_browser_ui.py tests/test_site_browser.py
 
   docker:
     name: Image Docker

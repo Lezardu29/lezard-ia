@@ -9,7 +9,7 @@
 //   transmise par message entre les deux onglets (jamais dans l'adresse), seulement depuis SITE_ORIGINS.
 import { api, clearKey, getKey, saveKey } from "./auth.js";
 import { initThemePanel, syncTheme } from "./theme-panel.js";
-import { ensureOllama, fmtBytes, pullModel, pulling } from "./ollama-pull.js";
+import { ensureOllama, fmtBytes, fmtMem, pullModel, pulling } from "./ollama-pull.js";
 
 const $ = (id) => document.getElementById(id);
 const LOGIN = "/?next=/marketplace";
@@ -19,6 +19,7 @@ const TABS = [["all", "Tout"], ["bundle", "Bundles"], ["component", "Outils"], [
               ["skill", "Compétences"], ["mcp", "Serveurs MCP"], ["tool", "Outils pour agents"], ["app", "Applications"]];
 const KIND_LABELS = { model: "Modèle", skill: "Compétence", component: "Outil", mcp: "Serveur MCP",
                       tool: "Outil pour agents", app: "Application", bundle: "Bundle" };
+const ON_THIS_PC = ["component", "mcp", "tool", "app"];     // clé maître : présent ou non sur ce PC, sur la carte et la fiche
 const COMMERCIAL = {
   oui: ["Usage commercial permis", "ok"],
   conditions: ["Sous conditions", "warn"],
@@ -26,6 +27,8 @@ const COMMERCIAL = {
   inconnu: ["À vérifier", "warn"],
 };
 const FIT = { vram: ["Rapide sur ce PC", "vram"], offload: ["Plus lent (VRAM + RAM)", "offload"], too_big: ["Trop gros pour ce PC", "too_big"] };
+// sans carte graphique, « VRAM + RAM » n'a pas de sens : le modèle tourne sur le processeur
+const fitLabel = (fit) => (fit === "offload" && reco && !reco.budget?.gpu ? "Plus lent (sur le processeur)" : FIT[fit][0]);
 const CAPS = { vision: "images", tools: "outils", thinking: "raisonnement", embedding: "embeddings", cloud: "cloud" };
 
 let admin = false, data = null, library = null, reco = null, chat = null, items = [], tab = "all", shown = PAGE;
@@ -263,10 +266,10 @@ function statusChip(it) {
   }
   if (it.kind === "skill" && admin) return el("span", `pill ${it.installed ? "on-pill" : ""}`, it.installed ? "Active" : "Désactivée");
   if (it.installed) return el("span", "pill on-pill", it.kind === "mcp" ? (it.server.connected ? "Connecté" : "Déclaré") : "Installé");
-  if (it.kind === "model" && it.fit) return el("span", `fit ${FIT[it.fit][1]}`, FIT[it.fit][0]);
+  if (it.kind === "model" && it.fit) return el("span", `fit ${FIT[it.fit][1]}`, fitLabel(it.fit));
   const entry = it.tool || it.app;
   if (admin && entry && !entry.one_click) return el("span", "pill", "À brancher");
-  return el("span", "pill", "Un clic");
+  return el("span", "pill", admin && ON_THIS_PC.includes(it.kind) ? "Non installé" : "Un clic");
 }
 function card(it) {
   const li = el("li", `market-card kind-${it.kind}${it.recommended ? " is-reco" : ""}`);
@@ -315,7 +318,7 @@ function renderReco() {
   if (!reco) { $("mr-hw").textContent = "Matériel non lu : la page Modèles détaille ce PC."; box.replaceChildren(); return; }
   const b = reco.budget;
   $("mr-hw").textContent = [
-    b.gpu ? `${b.gpu} : ${size(b.vram)} de VRAM` : "Pas de GPU NVIDIA : les modèles tournent sur le processeur",
+    b.gpu ? `${b.gpu} : ${fmtMem(b.vram)} de VRAM` : "Pas de carte graphique dédiée : les modèles tournent sur le processeur",
     `RAM ${size(b.ram)}`, `disque libre ${size(b.disk_free)}`,
     reco.benchmark ? "vitesses mesurées par le test de performance" : "vitesses estimées (test de performance : page Modèles)",
   ].join(" · ");
@@ -411,6 +414,11 @@ function openDetail(it, tag = null) {
   $("d-title").textContent = it.name;
   const body = $("d-body"), foot = $("d-foot");
   body.replaceChildren(el("p", "mc-kind", KIND_LABELS[it.kind]), el("p", "", it.description));
+  if (admin && ON_THIS_PC.includes(it.kind)) {
+    const here = el("p", "small", "Sur ce PC : ");
+    here.append(statusChip(it));
+    body.append(here);
+  }
   if (entryOf(it)?.stars) body.append(starsLine(entryOf(it), "small muted", true));
   if (commandsOf(it).length) body.append(commandsBlock(commandsOf(it)));
   foot.replaceChildren(button("Fermer", "btn-ghost", () => $("detail").close()));
@@ -452,7 +460,7 @@ function modelDetail(it, body, foot, focus) {
     tr.append(el("td", "", s.tag.split(":")[1]), el("td", "", size(s.memory)), el("td", "", `~${size(s.download)}`),
               el("td", "", s.speed_label || "–"));
     const fitCell = el("td");
-    fitCell.append(el("span", `fit ${FIT[s.fit][1]}`, FIT[s.fit][0]));
+    fitCell.append(el("span", `fit ${FIT[s.fit][1]}`, fitLabel(s.fit)));
     const act = el("td");
     if (s.installed) {
       act.append(button("Supprimer", "btn-ghost", (b) => removeModel(s.tag, ollama, b)));
@@ -682,7 +690,7 @@ function oneClick(it, entry, body, foot, route) {
   if (entry.installed) uninstallButton(it, entry, body, foot, route);
 }
 
-/** Désinstaller ce que la page a installé : étapes inverses de la recette, ou comment le faire soi-même. */
+/** Désinstaller ce qui est sur ce PC : étapes inverses de la recette, ou comment le faire soi-même. */
 function uninstallButton(it, entry, body, foot, route) {
   if (!entry.uninstall?.length) {
     if (entry.uninstall_hint) body.append(el("p", "small muted", `Pour le désinstaller : ${entry.uninstall_hint}`));
@@ -707,6 +715,9 @@ function mcpDetail(it, body, foot) {
   body.append(licenseBlock(s.license));
   if (!admin) { foot.prepend(loginButton()); return; }
   if (s.installed) {
+    const use = el("p", "small", "Dans le chat : ");
+    use.append(el("code", "", `/mcp ${s.id}`), " explique ses outils ; ", el("code", "", `/mcp ${s.id} <demande>`), " n'utilise que lui.");
+    body.append(use);
     if (s.error) body.append(el("p", "alert show warn-box", `Non connecté : ${s.error}`));
     foot.prepend(button("Retirer", "btn-ghost", (b) => removeMcp(s, b)));
     return;
@@ -742,7 +753,7 @@ async function addMcp(s, fields, btn, dialogBody) {
   btn.disabled = false;
   if (!r.ok) return message(r.data?.error?.message || "Installation impossible.");
   if (r.data.state === "running") { message(""); return follow(r, btn, dialogBody); }   // Node.js d'abord
-  message(r.data.connected ? `${s.name} est connecté : ses outils sont disponibles avec /mcp dans le chat.`
+  message(r.data.connected ? `${s.name} est connecté : dans le chat, /mcp ${s.id} explique ses outils.`
     : `${s.name} est déclaré, mais pas encore connecté${r.data.error ? ` : ${r.data.error}` : ""}.`, r.data.connected);
   $("detail").close();
   await load(false);

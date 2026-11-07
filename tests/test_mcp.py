@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
-from gateway import mcp, tools
+from gateway import mcp, mcp_help, tools
 from gateway.tools import ToolError
 
 FAKE = str(Path(__file__).with_name("fake_mcp_server.py"))
@@ -94,6 +94,23 @@ def test_stdio_server_becomes_validated_tools_without_gateway_secrets(tmp_path, 
     assert status == {"ok": True, "tools": 2}
 
 
+def test_only_tools_keeps_the_listed_tools_for_the_model(tmp_path, monkeypatch):
+    """Serveur aux nombreux outils (REA : 207, ~200 000 jetons) : seuls ceux de la liste partent vers le modèle."""
+    with pytest.raises(ValueError):
+        mcp.parse_config({"servers": {"a": {"command": "x", "only_tools": "lire"}}})
+
+    async def names(servers):
+        write_config(tmp_path, monkeypatch, servers)
+        await mcp.load()
+        return {n for n, t in tools.TOOLS.items() if t.level == "mcp"}
+
+    every = run(names({"tout": {"command": sys.executable, "args": [FAKE]}}))
+    assert len(every) > 1
+    keep = sorted(every)[0].removeprefix("mcp_tout_")
+    kept = run(names({"tout": {"command": sys.executable, "args": [FAKE], "only_tools": [keep]}}))
+    assert kept == {f"mcp_tout_{keep}"}
+
+
 def test_trust_and_local_only_options_and_failing_server(tmp_path, monkeypatch):
     write_config(
         tmp_path,
@@ -176,3 +193,23 @@ def test_only_the_master_key_gets_mcp_tools(monkeypatch):
     friend = SimpleNamespace(is_admin=False, plan="pro", permissions={"tools": "pc"})
     assert "mcp_x_y" in tools.available(admin)
     assert "mcp_x_y" not in tools.available(friend)  # même avec la permission la plus large d'une clé virtuelle
+
+
+def test_tools_are_explained_in_french_or_say_the_text_comes_from_the_server():
+    assert mcp_help.tool_help("open_binary", "[MCP rea] Open a local executable") == mcp_help.TOOLS["open_binary"]
+    other = mcp_help.tool_help("autre", "[MCP x] Does [many] things")
+    assert other == mcp_help.SERVER_TEXT + "Does [many] things"
+    assert "Pas d'explication" in mcp_help.tool_help("autre")
+    assert len(mcp_help.tool_help("autre", "x" * 900)) < 300
+
+
+def test_servers_are_named_from_our_texts_the_catalog_or_their_declared_name():
+    assert mcp_help.server_view("heure")["example"]
+    memoire = mcp_help.server_view("memoire")  # catalogue : l'exemple, sans « /mcp » (la page ajoute la commande)
+    assert memoire["name"].startswith("Mémoire") and not memoire["example"].startswith("/mcp")
+    assert mcp_help.server_view("perso") == {
+        "id": "perso",
+        "name": "perso",
+        "description": "Serveur déclaré dans data/mcp.json.",
+        "example": None,
+    }

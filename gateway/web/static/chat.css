@@ -299,6 +299,11 @@ body.has-messages .export-wrap { display: block; }
                  background: var(--surface); color: var(--text); }
 .tool-approval img { display: block; max-width: 100%; border-radius: 6px; margin-bottom: 8px; }
 .tool-approval p { margin: 0 0 8px; }
+.tool-approval-args { margin: 0 0 8px; display: grid; grid-template-columns: max-content 1fr; gap: 4px 10px; }
+.tool-approval-args dt { font-weight: 600; }
+.tool-approval-args dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--mono, monospace); }
+.tool-approval-args dd.muted { font-family: inherit; }
+@media (max-width: 520px) { .tool-approval-args { grid-template-columns: 1fr; } .tool-approval-args dd { margin-bottom: 6px; } }
 .tool-approval .row { display: flex; gap: 8px; flex-wrap: wrap; }
 .tool-approval .btn { width: auto; flex: 0 1 auto; padding-inline: 18px; }
 

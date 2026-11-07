@@ -20,7 +20,7 @@ async function models() {
     return;
   }
   const { budget, best, uses, models: all } = r.data;
-  const gb = (b) => `${Math.round(b / 1e9)} Go`;
+  const gb = (b) => `${Math.round(b / 1024 ** 3)} Go`;   // Go binaires, comme Windows : 16 Go pour une carte de 16 Go
   $("wg-hw").textContent = budget.gpu
     ? `Carte graphique : ${budget.gpu}${budget.vram ? ` (${gb(budget.vram)} utilisables pour l'IA)` : ""}. Conseillés pour vous :`
     : "Pas de carte graphique reconnue : des modèles légers, sur le processeur. Conseillés pour vous :";

@@ -13,7 +13,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from gateway import installers, marketplace, mcp, skills
+from gateway import installers, marketplace, mcp, mcp_help, skills
 from gateway.api import marketplace as market_api
 from gateway.main import create_app
 from gateway.plans import PlanResolver
@@ -310,6 +310,122 @@ def wait_job(client) -> dict:
     raise AssertionError("installation jamais terminée")
 
 
+def fake_pc(tmp_path, monkeypatch, docker=(0, "open-webui\t\nlibrechat-api\tlibrechat\n"), pip_code=0):
+    """Un PC de test : dossier personnel vide, npm et uv répondent, tous les programmes sont là."""
+    home, npm_root, uv_dir = tmp_path / "home", tmp_path / "npm", tmp_path / "uv"
+    for folder in (home, npm_root, uv_dir):
+        folder.mkdir()
+    monkeypatch.setattr(market_api.detection.Path, "home", lambda: home)
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
+    monkeypatch.setattr(installers, "program", lambda name: name)
+
+    def run(*argv):
+        answers = {"npm": (0, f"{npm_root}\n"), "uv": (0, f"{uv_dir}\n"), "docker": docker}
+        return answers.get(argv[0], (pip_code, ""))
+
+    monkeypatch.setattr(market_api.detection, "_run", run)
+    return home, npm_root, uv_dir
+
+
+def test_detection_reads_each_kind_of_recipe(tmp_path, monkeypatch):
+    home, npm_root, uv_dir = fake_pc(tmp_path, monkeypatch)
+    detection = market_api.detection
+    (home / ".claude" / "plugins").mkdir(parents=True)
+    (home / ".claude" / "plugins" / "installed_plugins.json").write_text(
+        json.dumps({"version": 2, "plugins": {"claude-mem@thedotmack": [], "superpowers@superpowers-marketplace": []}}),
+        encoding="utf-8",
+    )
+    (home / ".claude" / "skills" / "find-skills").mkdir(parents=True)
+    (home / ".claude.json").write_text(json.dumps({"mcpServers": {"rea": {}, "agentmemory": {}}}), encoding="utf-8")
+    (home / ".vscode" / "extensions").mkdir(parents=True)
+    (home / ".vscode" / "extensions" / "extensions.json").write_text(
+        json.dumps([{"identifier": {"id": "continue.continue"}}]), encoding="utf-8"
+    )
+    (npm_root / "ccusage").mkdir()
+    (npm_root / "@googleworkspace" / "cli").mkdir(parents=True)
+    (uv_dir / "markitdown").mkdir()
+    (tmp_path / "local" / "Programs" / "Goose").mkdir(parents=True)
+    facts = detection.Facts()
+    facts.__dict__["windows_apps"] = {"jan 0.8.6", "cursor (user)", "januszek"}  # lecture du registre : Windows seul
+    for key in (
+        "tool:rea", "tool:claudemem", "tool:superpowers", "tool:findskills", "tool:agentmemory", "tool:ccusage",
+        "tool:gws", "tool:markitdown", "app:continue", "app:goose", "app:jan", "app:cursor", "app:openwebui",
+        "app:librechat", "app:python",
+    ):  # fmt: skip
+        assert detection.state(key, facts) is True, key
+    for key in ("tool:hyperframes", "tool:repomix", "tool:speckit", "app:cline", "app:zed", "tool:orca"):
+        assert detection.state(key, facts) is False, key
+    assert detection.state("tool:serena", facts) is False  # ni sa commande, ni son serveur
+
+
+def test_detection_covers_the_whole_catalog_and_says_when_it_cannot_know(tmp_path, monkeypatch):
+    fake_pc(tmp_path, monkeypatch, docker=(1, ""), pip_code=1)
+    detection = market_api.detection
+    facts = detection.Facts()
+    facts.__dict__["windows_apps"] = set()
+    states = {k: detection.state(k, facts) for k in installers.RECIPES if k.startswith(("tool:", "app:"))}
+    # Docker arrêté et extension peut-être dans Firefox : on ne sait pas ; tout le reste a une réponse
+    assert {k for k, v in states.items() if v is None} == {"app:openwebui", "app:librechat", "app:pageassist"}
+    assert not any(states.values())
+
+
+def test_detection_ignores_data_left_behind_and_unreadable_files(tmp_path, monkeypatch):
+    home, _, _ = fake_pc(tmp_path, monkeypatch)
+    detection = market_api.detection
+    (home / ".claude-mem").mkdir()  # sa mémoire reste après une désinstallation
+    (home / "LibreChat").mkdir()
+    assert detection.state("tool:claudemem", detection.Facts()) is False
+    monkeypatch.setattr(detection, "_run", lambda *a: (0, ""))
+    assert detection.state("app:librechat", detection.Facts()) is False
+    (home / ".claude.json").write_text("{cassé", encoding="utf-8")
+    assert detection.state("tool:rea", detection.Facts()) is None
+
+
+def test_detection_tells_the_page_what_is_really_here(client, monkeypatch, install_log):
+    """Présent sans être passé par la page : installé et désinstallable. Noté par la page mais parti : plus installé."""
+    fake_popen(monkeypatch, [])
+    monkeypatch.setattr(
+        market_api.detection,
+        "scan",
+        lambda: {"tool:ccusage": True, "tool:rea": False, "tool:gws": None, "tool:repomix": None},
+    )
+    for tool in ("rea", "gws"):  # notés par la page
+        assert client.post(f"/v1/admin/marketplace/tools/{tool}/install", headers=MASTER).status_code == 202
+        assert wait_job(client)["state"] == "done"
+    tools = {t["id"]: t for t in client.get("/v1/admin/marketplace", headers=MASTER).json()["agent_tools"]}
+    assert tools["ccusage"]["installed"] and tools["ccusage"]["uninstall"] == ["npm uninstall --global ccusage"]
+    assert not tools["rea"]["installed"]
+    assert tools["gws"]["installed"] and not tools["repomix"]["installed"]  # inconnu : ce que la page a noté
+    seen = client.get("/v1/marketplace/installed", headers=MASTER).json()
+    assert seen["tools"] == ["ccusage", "gws"]
+
+
+def test_tools_route_says_which_server_each_mcp_tool_belongs_to(client, tmp_path):
+    """Ce que lit la commande /mcp : le serveur, son état, ses outils expliqués ; la clé maître seule voit l'erreur."""
+    fake = str(Path(__file__).with_name("fake_mcp_server.py"))
+    (tmp_path / "mcp.json").write_text(
+        json.dumps(
+            {"servers": {"heure": {"command": sys.executable, "args": [fake]}, "casse": {"command": "pas-la-xyz"}}}
+        ),
+        encoding="utf-8",
+    )
+    assert client.post("/v1/admin/mcp/reload", headers=MASTER).status_code == 200
+    seen = client.get("/v1/tools", headers=MASTER).json()
+    rows = [t for t in seen["data"] if t["level"] == "mcp"]
+    assert rows and all(t["server"] == "heure" and t["tool"] and t["help"] for t in rows)
+    assert all(t["name"] == mcp.tool_name("heure", t["tool"]) for t in rows)
+    assert "server" not in next(t for t in seen["data"] if t["level"] != "mcp")
+    servers = {s["id"]: s for s in seen["mcp_servers"]}
+    assert servers["heure"]["connected"] and servers["heure"]["tools"] == len(rows)
+    assert servers["heure"]["name"] == mcp_help.SERVERS["heure"]["name"]
+    assert not servers["casse"]["connected"] and servers["casse"]["error"] and servers["casse"]["tools"] == 0
+    other = client.get(
+        "/v1/tools", headers=ACCOUNT
+    ).json()  # pas d'outil MCP pour cette clé : aucun serveur, aucune erreur
+    assert other["mcp_servers"] == [] and not any(t["level"] == "mcp" for t in other["data"])
+
+
 @pytest.fixture
 def install_log(tmp_path, monkeypatch):
     monkeypatch.setenv("MARKETPLACE_LOG", str(tmp_path / "logs" / "marketplace.log"))
@@ -331,7 +447,8 @@ def test_components_install_from_the_code_too(client, monkeypatch, tmp_path, ins
     assert started == [
         [sys.executable, "-m", "pip", "install", "--disable-pip-version-check", "-r", "requirements-local.txt"]
     ]
-    assert job["log"][0].startswith("> python") and "sortie de python" in job["log"] and job["log"][-1] == "Terminé."
+    me = Path(sys.executable).stem  # python sous Windows et en CI, python3 sur d'autres Linux
+    assert job["log"][0].startswith("> python") and f"sortie de {me}" in job["log"] and job["log"][-1] == "Terminé."
     assert str(tmp_path) not in "\n".join(job["log"])  # chemins de ce PC : jamais dans la page
 
 
@@ -361,8 +478,9 @@ def test_agent_tools_and_apps_install_in_one_click(client, monkeypatch, install_
     started = []
     fake_popen(monkeypatch, started)
     r = client.post("/v1/admin/marketplace/tools/rea/install", headers=MASTER)
-    assert r.status_code == 202
-    assert wait_job(client)["state"] == "done"
+    assert r.status_code == 202 and r.json()["restart"]
+    job = wait_job(client)
+    assert job["state"] == "done" and job["restart"]  # la page propose de redémarrer Lezard IA
     assert started == [["C:/bin/npx.cmd", "--yes", "rea-agents@6.7.0", "setup", "--client", "claude_code", "--yes"]]
     cat = client.get("/v1/admin/marketplace", headers=MASTER).json()
     rea = next(t for t in cat["agent_tools"] if t["id"] == "rea")
@@ -483,7 +601,7 @@ def test_mcp_server_with_too_old_node_updates_it_first(client, monkeypatch, tmp_
     monkeypatch.setattr(installers, "refresh_path", lambda: None)
     monkeypatch.setattr(installers, "program", lambda name: f"C:/bin/{name}.cmd")
     monkeypatch.setattr(installers, "_major", lambda exe: major["v"])
-    monkeypatch.setattr(market_api.shutil, "which", lambda name: "C:/node/npx.cmd" if name.startswith("npx") else None)
+    monkeypatch.setattr(installers.shutil, "which", lambda name: "C:/node/npx.cmd" if name.startswith("npx") else None)
     started = []
 
     def popen(args, **kw):
@@ -528,9 +646,6 @@ def test_mcp_server_waits_for_node_then_is_declared(client, monkeypatch, tmp_pat
         "program",
         lambda name: None if name in ("node", "npm", "npx") and not node["ok"] else f"C:/bin/{name}.cmd",
     )
-    monkeypatch.setattr(
-        market_api.shutil, "which", lambda name: "C:/node/npx.cmd" if node["ok"] and name.startswith("npx") else None
-    )
 
     def popen(args, **kw):
         node["ok"] = True
@@ -544,7 +659,7 @@ def test_mcp_server_waits_for_node_then_is_declared(client, monkeypatch, tmp_pat
     job = wait_job(client)
     assert job["state"] == "done", job["log"]
     saved = json.loads((tmp_path / "mcp.json").read_text(encoding="utf-8"))["servers"]["memoire"]
-    assert saved["command"] == "C:/node/npx.cmd"
+    assert saved["command"] == "C:/bin/npx.cmd"  # npx trouvé une fois Node.js installé (PATH relu)
 
 
 def test_one_install_at_a_time(client, monkeypatch, install_log):
@@ -574,6 +689,29 @@ def test_recipes_are_fixed_and_pinned():
         assert "latest" not in " ".join(" ".join(argv) for argv in r.get("steps", ())), key
 
 
+def test_every_installed_item_can_be_removed_or_says_how():
+    """Rien ne reste sans issue : désinstallation depuis la page, ou explication de ce qu'il faut faire."""
+    for key in (k for k in installers.RECIPES if k.startswith(("tool:", "app:"))):
+        assert installers.uninstall_steps(key) or installers.uninstall_hint(key), key
+    assert installers.uninstall_steps("tool:rea") == [
+        ("npx", "--yes", "rea-agents@6.7.0", "uninstall")
+    ]  # sans --purge-data
+    assert installers.uninstall_steps("tool:claudemem") == [("npx", "--yes", "claude-mem@15.0.1", "uninstall")]
+    assert installers.uninstall_steps("tool:codegraph") == [
+        ("codegraph", "uninstall", "--keep-cli", "--yes"),  # d'abord les agents, tant que la commande existe
+        ("npm", "uninstall", "--global", "@colbymchenry/codegraph"),
+    ]
+    assert "find-skills" in installers.uninstall_steps("tool:findskills")[0]
+    assert "pip uninstall openai." in installers.uninstall_hint("app:python")
+    assert "extensions" in installers.uninstall_hint("app:pageassist")
+
+
+def test_claude_mem_recipe_does_not_need_a_running_observer():
+    """« --provider host » finit en échec (code 1) tant qu'aucun service n'écoute sur 37777 : constaté en vrai."""
+    assert installers.recipe("tool:claudemem")["steps"][0][-2:] == ("--provider", "claude")
+    assert "--provider host" not in next(t for t in marketplace.AGENT_TOOLS if t["id"] == "claudemem")["install"]
+
+
 def test_mcp_routes_declare_and_reload(client, monkeypatch):
     reloads = []
 
@@ -586,9 +724,9 @@ def test_mcp_routes_declare_and_reload(client, monkeypatch):
 
     monkeypatch.setattr(market_api.mcp, "load", fake_load)
     monkeypatch.setattr(market_api.mcp, "stop", fake_stop)
-    monkeypatch.setattr(market_api.shutil, "which", lambda name: None)
+    monkeypatch.setattr(installers.shutil, "which", lambda name: None)
     assert client.post("/v1/admin/marketplace/mcp/memoire", headers=MASTER, json={}).status_code == 409  # pas de Node
-    monkeypatch.setattr(market_api.shutil, "which", lambda name: "C:/node/npx.cmd")
+    monkeypatch.setattr(installers.shutil, "which", lambda name: "C:/node/npx.cmd")
     r = client.post("/v1/admin/marketplace/mcp/memoire", headers=MASTER, json={}).json()
     assert r["connected"] and r["declared"]["command"] == "C:/node/npx.cmd"
     bad = client.post("/v1/admin/marketplace/mcp/magic21", headers=MASTER, json={})
@@ -695,6 +833,7 @@ def test_site_marketplace_is_static_and_hands_the_key_only_to_the_chosen_pc():
 
 
 def test_orca_installs_from_its_pinned_and_verified_installer(monkeypatch):
+    monkeypatch.setattr(installers.sys, "platform", "win32")  # installateur Windows : vérifié sur tout système
     monkeypatch.setattr(installers, "program", lambda name: sys.executable if name == installers.PYTHON else None)
     [argv] = installers.commands("tool:orca")
     assert argv[1].endswith("setup_download.py") and argv[2].startswith("https://github.com/stablyai/orca/releases/")
@@ -811,8 +950,11 @@ def test_every_install_shows_size_and_place():
     assert "Confirmer l'installation" in js and "confirm(`Install" not in js  # deux clics dans la page
 
 
-def test_codegraph_agentmemory_and_openhuman_install_in_one_click():
-    assert installers.missing("tool:codegraph") == [] or installers.program("npm") is None  # codegraph : étape 1
+def test_codegraph_agentmemory_and_openhuman_install_in_one_click(monkeypatch):
+    # PC avec Node.js 24 : rien ne manque (la version de Node.js de la machine des tests ne compte pas)
+    monkeypatch.setattr(installers, "program", lambda name: f"C:/bin/{name}.cmd")
+    monkeypatch.setattr(installers, "_major", lambda exe: 24)
+    assert installers.missing("tool:codegraph") == []  # codegraph : étape 1
     assert installers.RECIPES["tool:codegraph"]["steps"][1] == ("codegraph", "install", "--yes")
     am = installers.RECIPES["tool:agentmemory"]["steps"][0]
     assert am[-1] == "@agentmemory/mcp@0.9.30" and "node" in installers.RECIPES["tool:agentmemory"]["requires"]

@@ -1,5 +1,5 @@
 /* Interface d'administration (6.3) — style LiteLLM épuré, entièrement piloté par les variables du thème. */
-:root { --warn: #b45309; }
+:root { --warn: #ad5009; }   /* 4,6:1 sur les fonds clairs (WCAG AA) */
 :root[data-theme="dark"] { --warn: #fbbf24; }
 
 .admin-page { min-height: 100dvh; }

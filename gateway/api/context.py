@@ -11,6 +11,7 @@ import os
 import time
 from datetime import datetime, UTC
 from types import SimpleNamespace
+from urllib.parse import urlsplit
 
 from fastapi import Request
 
@@ -35,6 +36,40 @@ from ..local_net import local_address
 
 # posés par un tunnel ou un proxy, jamais par un navigateur qui joint directement la gateway
 PROXY_HEADERS = ("cf-connecting-ip", "cf-ray", "x-forwarded-for", "x-real-ip", "forwarded", "true-client-ip")
+
+
+# noms qu'un site d'Internet ne peut pas faire pointer vers cette machine (sans résolution DNS : c'est justement elle
+# que trompe un « DNS rebinding »)
+LOCAL_SUFFIXES = (".local", ".localhost", ".lan", ".home", ".internal", ".home.arpa")
+
+
+def local_name(host: str | None) -> bool:
+    """Nom d'hôte ou adresse de ce PC ou de la maison, lu tel quel (en-tête Host ou Origin)."""
+    host = (host or "").strip().lower().rstrip(".")
+    if host.startswith("["):  # [::1]:8000
+        host = host[1:].split("]", 1)[0]
+    elif host.count(":") == 1:  # nom:port, 127.0.0.1:8000
+        host = host.split(":", 1)[0]
+    if not host:
+        return False
+    try:
+        ip = ipaddress.ip_address(host)
+        return ip.is_loopback or ip.is_private or ip.is_link_local
+    except ValueError:
+        pass
+    return "." not in host or host == "localhost" or host.endswith(LOCAL_SUFFIXES)
+
+
+def browser_cross_site(request: Request) -> bool:
+    """Requête sans clé faite par une page d'un autre site (CSRF), ou par un site d'Internet dont le nom pointe
+    maintenant vers ce PC (DNS rebinding) : elle ne vaut pas « cette machine ». Avant, une page web ouverte sur le
+    PC pouvait utiliser la gateway sans clé, avec les clés API cloud de son propriétaire, et lire les réponses."""
+    if not local_name(request.headers.get("host")):
+        return True
+    origin = request.headers.get("origin")
+    if origin is None:  # client hors navigateur (curl, éditeur de code) ou page de même origine en GET
+        return False
+    return origin == "null" or not local_name(urlsplit(origin).netloc)
 
 
 def build(holder: dict) -> SimpleNamespace:
@@ -93,6 +128,12 @@ def build(holder: dict) -> SimpleNamespace:
         if nets is None:
             return True
         if unmanaged_proxy(request):  # relayée par un tunnel inconnu de la gateway : pas « cette machine »
+            return False
+        if not trust_proxy() and any(request.headers.get(h) for h in PROXY_HEADERS):
+            # même hors de 127.0.0.1 : dans Docker, un tunnel lancé sur l'hôte arrive par le pont Docker (réseau
+            # sans clé de docker-compose.yml), avec ses en-têtes ; un navigateur n'en envoie jamais
+            return False
+        if browser_cross_site(request):  # page d'un autre site, ou nom d'Internet qui pointe vers ce PC
             return False
         try:
             peer = ipaddress.ip_address(request.client.host if request.client else "")
@@ -178,6 +219,8 @@ def build(holder: dict) -> SimpleNamespace:
                 perms = {**perms, "tools": "web"}
             if resolver.accounts is not None and resolver.accounts.blocked(owner):
                 raise PlanError(403, "Clé API d'un compte désactivé par l'administrateur.")  # 20.3
+            if not resolver.owner_exists(owner):  # compte retiré de GATEWAY_KEYS ou supprimé : ses clés aussi
+                raise PlanError(401, "Clé API d'un compte qui n'existe plus sur cette gateway.")
             ctx = PlanContext(
                 plan,
                 owner,
@@ -341,6 +384,9 @@ def build(holder: dict) -> SimpleNamespace:
         if not admin_session_required(request):
             return None
         s = holder["totp"].session(session_token(request), holder["gw"].plans.master_key)
+        if s is not None and str(s.get("via") or "").startswith("web-"):
+            # session ouverte par la clé web d'un AUTRE compte (ses seuls droits) : jamais une session d'administration
+            s = None
         if s is None:  # clé maître ou compte du propriétaire (clé web) : le même code de double authentification
             raise AdminSessionRequired()
         request.state.admin_session_id = s["id"]  # journal d'audit (20.2)

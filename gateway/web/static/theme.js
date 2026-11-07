@@ -21,13 +21,14 @@
     "midnight": { label: "Midnight Blue", accent: "#3b82f6", hue: 225, sat: 32 },
     // couleur de l'interface Claude : accent corail, neutres crème chauds ; couleurs fixes, accent ajusté pour le
     // contraste (4,9:1 en clair, 4,9:1 en sombre)
+    // couleurs de texte fixées à 4,5:1 au moins sur leurs fonds (WCAG AA) : sourdine, accent sur fond doux
     "claude":   { label: "Claude",        accent: "#d97757", hue: 40,  sat: 18, fixed: {
       light: { "--bg": "#faf9f5", "--surface": "#ffffff", "--surface-2": "#f0eee6", "--border": "#e3dfd4",
-               "--text": "#141413", "--text-muted": "#6f6d66", "--accent": "#b5532f", "--accent-contrast": "#ffffff",
+               "--text": "#141413", "--text-muted": "#6c6a64", "--accent": "#a94d2c", "--accent-contrast": "#ffffff",
                "--accent-soft": "#f6e7df", "--bubble-user": "#f0eee6", "--code-bg": "#f5f4ee", "--code-head": "#ebe8de",
                "--sidebar": "#f3f1ea" },
       dark:  { "--bg": "#262624", "--surface": "#30302e", "--surface-2": "#3a3936", "--border": "#45443f",
-               "--text": "#faf9f5", "--text-muted": "#a6a39b", "--accent": "#d97757", "--accent-contrast": "#141413",
+               "--text": "#faf9f5", "--text-muted": "#a6a39b", "--accent": "#e09076", "--accent-contrast": "#141413",
                "--accent-soft": "#4a3329", "--bubble-user": "#141413", "--code-bg": "#1f1e1d", "--code-head": "#2b2a27",
                "--sidebar": "#1f1e1d" } } }
   };

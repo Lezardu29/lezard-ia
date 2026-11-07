@@ -8,7 +8,7 @@ from gateway.classifier import classify
 from gateway.config import ProviderConfig
 from gateway.main import create_app
 from gateway.plans import PlanResolver
-from gateway.providers.base import GATEWAY_HEADER
+from gateway.providers.base import GATEWAY_HEADER, instance_tag
 from gateway.registry import ModelRegistry
 from gateway.router import LatencyTracker, route
 from gateway.store import DocumentStore
@@ -105,7 +105,7 @@ def gateway(servers: Servers, store: DocumentStore):
 
 def test_gateway_does_not_detect_itself():
     store, servers = DocumentStore(":memory:"), Servers()
-    servers.gateway_id = store.instance_id()  # :8000 répond avec NOTRE identifiant
+    servers.gateway_id = instance_tag(store.instance_id())  # :8000 répond avec NOTRE empreinte
     with TestClient(gateway(servers, store)) as c:
         r = c.get("/v1/models", headers={"Authorization": f"Bearer {MASTER_KEY}"})
         ids = [m["id"] for m in r.json()["data"]]

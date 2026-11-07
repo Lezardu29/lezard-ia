@@ -42,6 +42,13 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
             raise VirtualKeyError(403, "Permission « pc » (contrôle du PC) : réservée à la clé maître.")
         shared.admin_session(request)
 
+    def _guard_pc_key(ctx: PlanContext, request: Request, key: dict) -> None:
+        """Clé qui contrôle déjà le PC : la régénérer, la réactiver ou la modifier donne ce contrôle comme la créer.
+        Avant, la rotation rendait un secret neuf à la clé maître seule, sans double authentification depuis
+        Internet : la double authentification était contournée. Suspendre ou révoquer reste toujours possible."""
+        if (key.get("permissions") or {}).get("tools") == "pc":
+            _check_pc_grant(ctx, request, {"permissions": {"tools": "pc"}})
+
     @router.post("/v1/keys", status_code=201)
     async def create_key(request: Request):
         ctx = manager(request)
@@ -74,11 +81,16 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
             return key
         return holder["store"].set_key_status(ctx.identity, key["id"], "active", reason)
 
+    def _change_guarded(ctx: PlanContext, request: Request, key: dict, action: str, body: dict) -> dict:
+        if action == "resume" and key["status"] != "active":
+            _guard_pc_key(ctx, request, key)  # réactiver une clé qui contrôle le PC
+        return _change_status(ctx, key, action, body)
+
     for _action in ("revoke", "suspend", "resume"):
 
         async def _status_endpoint(key_id: str, request: Request, _a: str = _action):
             ctx = manager(request)
-            return _change_status(ctx, _key_or_404(ctx.identity, key_id), _a, await _reason(request))
+            return _change_guarded(ctx, request, _key_or_404(ctx.identity, key_id), _a, await _reason(request))
 
         router.post(f"/v1/keys/{{key_id}}/{_action}", name=f"{_action}_key")(_status_endpoint)
 
@@ -98,7 +110,7 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
             if missing:
                 raise VirtualKeyError(404, f"Clés introuvables : {', '.join(sorted(missing))}.")
             keys = [k for k in keys if k["id"] in wanted]
-        done = [_change_status(ctx, k, body["action"], body)["id"] for k in keys if k["status"] != "revoked"]
+        done = [_change_guarded(ctx, request, k, body["action"], body)["id"] for k in keys if k["status"] != "revoked"]
         request.state.audit = {"target": body["action"], "detail": {"ids": done[:50], "count": len(done)}}
         return {"action": body["action"], "updated": done, "count": len(done)}
 
@@ -123,7 +135,7 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
     @router.patch("/v1/keys/{key_id}")
     async def update_key(key_id: str, request: Request):
         ctx = manager(request)
-        _key_or_404(ctx.identity, key_id)
+        _guard_pc_key(ctx, request, _key_or_404(ctx.identity, key_id))
         data = validate_key(await json_object(request), ctx.base_plan or ctx.plan, partial=True)
         _check_key_project(ctx.identity, data)
         _check_pc_grant(ctx, request, data)
@@ -132,7 +144,7 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
     @router.post("/v1/keys/{key_id}/rotate")
     async def rotate_key(key_id: str, request: Request):
         ctx = manager(request)
-        _key_or_404(ctx.identity, key_id)
+        _guard_pc_key(ctx, request, _key_or_404(ctx.identity, key_id))
         secret = generate_secret()
         key = holder["store"].update_key(
             ctx.identity, key_id, {"key_prefix": display_prefix(secret)}, key_hash=hash_secret(secret)

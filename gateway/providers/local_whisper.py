@@ -83,10 +83,11 @@ def auto_plan(gpus: list[dict], cores: int | None, ram_total: int | None, cuda: 
 
 
 def _plan_for_this_pc(wanted_device: str | None) -> tuple[str, str, str]:
-    from ..hardware import _ram_fallback, gpu_info, load_nvml
+    from ..hardware import _ram_fallback, load_nvml, nvidia_info
 
     cuda = wanted_device != "cpu" and cuda_ready()
-    gpus = gpu_info(load_nvml())["gpus"] if wanted_device != "cpu" else []
+    # faster-whisper calcule sur la carte par CUDA : NVIDIA seulement (une Radeon le fait tourner sur le processeur)
+    gpus = nvidia_info(load_nvml())["gpus"] if wanted_device != "cpu" else []
     size, device, why = auto_plan(gpus, os.cpu_count(), _ram_fallback().get("total"), cuda)
     if wanted_device == "cuda" and device != "cuda":  # imposé : on essaie quand même, repli au chargement
         return "large-v3-turbo", "cuda", "carte graphique (WHISPER_DEVICE=cuda)"

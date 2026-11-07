@@ -227,8 +227,9 @@ async function copyLink() {
 export async function refreshConversations() {
   if (!ui.server) return;
   const q = ui.query ? `&in=messages&q=${encodeURIComponent(ui.query)}` : "";
+  const seq = ui.seq = (ui.seq || 0) + 1;
   const r = await api(`/v1/conversations?limit=200${q}`);
-  if (!r.ok) return;
+  if (seq !== ui.seq || !r.ok) return;                   // réponse d'une recherche dépassée : ignorée
   ui.items = r.data.data;
   render();
 }

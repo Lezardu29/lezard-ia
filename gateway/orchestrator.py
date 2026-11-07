@@ -27,7 +27,7 @@ from .classifier import _text_and_images, classify
 from .health import max_attempts
 from .limits import RateLimited
 from .local_context import looks_ollama
-from .providers.base import ProviderError
+from .providers.base import ProviderError, strip_reasoning
 from .registry import ModelInfo, usage_tokens, usd_eur_rate
 from .router import RoutingError, route
 
@@ -178,7 +178,9 @@ async def _call(
 
 
 def _text(resp: dict) -> str:
-    return (resp.get("choices") or [{}])[0].get("message", {}).get("content") or ""
+    """Réponse du découpeur ou d'un expert, sans la réflexion d'un modèle qui raisonne (« <think>… ») : ses
+    accolades faisaient échouer la lecture du plan JSON, et l'IA de synthèse la recevait comme une réponse."""
+    return strip_reasoning((resp.get("choices") or [{}])[0].get("message", {}).get("content"))
 
 
 # ---------- 1. découpage ----------

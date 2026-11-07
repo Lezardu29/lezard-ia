@@ -54,7 +54,7 @@ from .plans import (
     is_placeholder,
 )
 from .provider_rules import ProviderGuard
-from .providers.base import Provider, ProviderError
+from .providers.base import Provider, ProviderError, is_self
 from .providers.openai_compat import OpenAICompatProvider
 from .registry import ModelInfo, ModelRegistry, usage_tokens, usd_eur_rate
 from .remote import lan_addresses
@@ -244,7 +244,7 @@ class Gateway:
                 except (httpx.HTTPError, ProviderError) as e:
                     models = None
                     self.probe_errors[p.name] = probe_error(e)
-                if self.instance_id and p.served_by == self.instance_id:
+                if is_self(p.served_by, self.instance_id):
                     # ce « serveur » est la gateway elle-même (ex. vLLM par défaut sur le port 8000) : l'utiliser
                     # renverrait chaque requête vers soi, en boucle
                     if p.name not in self._self_warned:

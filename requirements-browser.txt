@@ -1,0 +1,5 @@
+# Tests dans un vrai navigateur (tests/test_browser_ui.py, tests/test_site_browser.py) : Playwright et Chromium.
+#   python -m pip install -r requirements-dev.txt -r requirements-browser.txt
+#   python -m playwright install --with-deps chromium
+# Sans eux, ces tests sont ignorés (les autres jobs de la CI ne les installent pas).
+playwright>=1.50,<2

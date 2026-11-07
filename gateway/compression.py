@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING
 from .classifier import _text_and_images, classify
 from .health import is_retryable
 from .permissions import model_allowed
-from .providers.base import ProviderError
+from .providers.base import ProviderError, strip_reasoning
 from .registry import ModelInfo, usage_tokens
 from .router import RoutingError, route
 from .workspaces import message_tokens, trim_to_window
@@ -141,7 +141,8 @@ class Summarizer:
         models = self.gw._routable(self.ctx)
         if forced:
             prov, mid = forced.split("/", 1)
-            p = self.gw.providers.get(prov)
+            # pont d'un autre compte : jamais l'historique de celui-ci (comme le routage normal)
+            p = self.gw.providers.get(prov) if self.gw.visible(prov, self.ctx.identity) else None
             info = self.gw.registry.get(prov, mid, p.hosting) if p else None
             # le résumeur imposé doit aussi respecter les permissions de la clé (ex. local only),
             # et avoir un tarif connu si la clé a un budget (8.3)
@@ -203,7 +204,7 @@ class Summarizer:
             self.calls.append(
                 {"ref": info.ref, "prompt_tokens": i, "completion_tokens": o, "cost_usd": info.usage_cost(usage)}
             )
-            text = (resp["choices"][0]["message"].get("content") or "").strip()
+            text = strip_reasoning(resp["choices"][0]["message"].get("content"))  # sans « <think>… »
             if text:
                 return text
         raise last or ProviderError(502, "Résumé vide.", "compression")

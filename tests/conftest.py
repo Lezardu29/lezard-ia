@@ -29,3 +29,12 @@ def _pro_edition(monkeypatch):
     from gateway import edition
 
     monkeypatch.setattr(edition, "_override", "pro")
+
+
+@pytest.fixture(autouse=True)
+def _nothing_detected(request, monkeypatch):
+    """Ce qui est installé sur le vrai PC ne compte pas : seul ce que la page a noté. Détection : ses propres tests."""
+    if not request.node.name.startswith("test_detection"):
+        from gateway import detection
+
+        monkeypatch.setattr(detection, "scan", lambda: {})

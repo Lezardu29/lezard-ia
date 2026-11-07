@@ -3,11 +3,13 @@
 Avant : l'installateur, lancé par la gateway, appelait « lezard.py stop », qui arrête la gateway avec TOUT son arbre
 (taskkill /T) : l'installateur était arrêté avec elle, sans rien installer ni relancer Lezard IA."""
 
+import ctypes
 import importlib.util
 import json
 import subprocess
 import sys
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -18,9 +20,14 @@ ISS = (ROOT / "installer" / "lezard-ia.iss").read_text(encoding="utf-8-sig")
 
 
 def load_stopper():
+    """Le script d'arrêt de l'installateur, chargé sur tout système : hors Windows, kernel32 est un faux (les
+    tests remplacent is_python et stop_one, seuls à l'appeler), pour vérifier l'ordre d'arrêt dans la CI Linux."""
     spec = importlib.util.spec_from_file_location("arret_maj", ROOT / "installer" / "arret-maj.py")
     mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+    with pytest.MonkeyPatch.context() as mp:
+        if not hasattr(ctypes, "WinDLL"):
+            mp.setattr(ctypes, "WinDLL", lambda *a, **k: mock.MagicMock(), raising=False)
+        spec.loader.exec_module(mod)
     return mod
 
 
@@ -72,6 +79,7 @@ def test_gateway_launches_the_installer_outside_its_tree(tmp_path, monkeypatch):
     argv = calls[0]
     assert argv[:2] == [sys.executable, "-c"] and "0x8 | 0x200 | 0x1000000" in argv[2]  # intermédiaire détaché
     assert argv[3].endswith("LezardIA-Setup-9.9.9.exe") and "/VERYSILENT" in argv
-    monkeypatch.undo()  # le vrai Popen : l'intermédiaire lancé pour de bon
-    out = subprocess.run([sys.executable, "-c", argv[2], sys.executable, "-c", "pass"], timeout=30)
-    assert out.returncode == 0  # l'intermédiaire rend la main aussitôt
+    if sys.platform == "win32":  # drapeaux de création de Windows (DETACHED_PROCESS…) : sans objet ailleurs
+        monkeypatch.undo()  # le vrai Popen : l'intermédiaire lancé pour de bon
+        out = subprocess.run([sys.executable, "-c", argv[2], sys.executable, "-c", "pass"], timeout=30)
+        assert out.returncode == 0  # l'intermédiaire rend la main aussitôt

@@ -343,7 +343,8 @@ RECIPES: dict[str, dict] = {
         "after": "Dans le dossier d'un projet : cct, pour parcourir le catalogue.",
     },
     "tool:claudemem": {
-        "steps": [("npx", "--yes", "claude-mem@15.0.1", "install", "--provider", "host")],
+        # pas « --provider host » : l'installation échoue sans service d'observation déjà lancé (essai réel, 2026-11-06)
+        "steps": [("npx", "--yes", "claude-mem@15.0.1", "install", "--provider", "claude")],
         "requires": ("claude",),
         "size": "~25 Mo",
         "where": "Dans Claude Code (extension et crochets de claude-mem), mémoire gardée sur ce PC",
@@ -776,6 +777,13 @@ def _undo(argv) -> tuple[str, ...] | None | bool:
             if "user" in rest
             else ("claude", "mcp", "remove", name)
         )
+    if head == "npx" and rest[1].startswith(("rea-agents@", "claude-mem@")):
+        return ("npx", "--yes", rest[1], "uninstall")  # leurs données (mémoire, caches) sont gardées
+    if head == "npx" and rest[1].startswith("skills@") and rest[2] == "add":
+        skill = rest[rest.index("--skill") + 1]
+        return ("npx", "--yes", rest[1], "remove", skill, "--global", "--agent", "claude-code", "--yes")
+    if head == "codegraph" and rest[:1] == ["install"]:
+        return ("codegraph", "uninstall", "--keep-cli", "--yes")  # la commande elle-même part avec l'étape npm
     if head == PYTHON and rest[:1] == [LIBRECHAT_SETUP]:
         return False  # le dossier (réglages, conversations) est gardé : l'arrêt des conteneurs suffit
     if head == "docker" and rest[:1] == ["compose"] and rest[-2:] == ["up", "--detach"]:
@@ -804,6 +812,12 @@ def uninstall_hint(key: str) -> str | None:
         if any(a.endswith(".zip") for argv in steps for a in argv):
             return "Supprimez son dossier dans %LOCALAPPDATA%\\Programs."
         return "Désinstallez-le depuis Paramètres > Applications de Windows."
+    if any(argv[:3] == (PYTHON, "-m", "webbrowser") for argv in steps):
+        return "Retirez l'extension depuis la page des extensions de votre navigateur."
+    for argv in steps:
+        if argv[: len(USER_PYTHON)] == USER_PYTHON:  # paquet de votre Python : vos scripts s'en servent peut-être
+            package = argv[-1].split("<")[0]
+            return f"Dans un terminal, si vos scripts n'en ont plus besoin : {' '.join(USER_PYTHON)} -m pip uninstall {package}."
     return None
 
 

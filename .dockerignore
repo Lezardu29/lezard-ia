@@ -21,3 +21,12 @@ requirements-dev.txt
 **/providers.json
 .vscode
 .idea
+
+# l'image ne copie que gateway/ et requirements.txt : le reste ne part plus au moteur Docker à chaque build
+# (rendus vidéo ~95 Mo, site, application Android, installateur Windows, brouillons juridiques, version open source)
+video
+site
+android
+installer
+legal-drafts
+oss

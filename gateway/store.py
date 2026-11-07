@@ -114,6 +114,7 @@ CREATE TABLE IF NOT EXISTS request_metrics (
 );
 CREATE INDEX IF NOT EXISTS metrics_owner_ts ON request_metrics(owner, ts);
 CREATE INDEX IF NOT EXISTS metrics_key_ts ON request_metrics(key_id, ts);
+CREATE INDEX IF NOT EXISTS metrics_ts ON request_metrics(ts);
 CREATE TABLE IF NOT EXISTS preferences (
     owner TEXT NOT NULL, scope TEXT NOT NULL, name TEXT NOT NULL, value TEXT NOT NULL,
     updated_at REAL NOT NULL, PRIMARY KEY (owner, scope, name)
@@ -195,7 +196,7 @@ DOC_COLS = (
     "embed_model",
     "embed_dims",
 )
-PROMPT_COLS = ("id", "name", "description", "content", "variables", "created_at", "updated_at")
+PROMPT_COLS = ("id", "name", "description", "content", "variables", "created_by", "created_at", "updated_at")
 PROJECT_COLS = (
     "id",
     "name",
@@ -210,6 +211,7 @@ PROJECT_COLS = (
     "max_context_tokens",
     "max_output_tokens",
     "compression",
+    "created_by",
     "created_at",
     "updated_at",
 )
@@ -668,6 +670,22 @@ class DocumentStore:
     def purge_audit(self, before: float) -> int:
         with self._lock, self._db:
             return self._db.execute("DELETE FROM audit_log WHERE at < ?", (before,)).rowcount
+
+    def purge_history(self, metrics_before: float | None, notifications_before: float | None) -> dict[str, int]:
+        """Tables qui grandissaient sans fin (une ligne par requête pour les mesures) : mesures et alertes déclenchées
+        plus anciennes que `metrics_before`, notifications DÉJÀ LUES plus anciennes que `notifications_before`."""
+        out = {"metrics": 0, "alerts": 0, "notifications": 0}
+        with self._lock, self._db:
+            if metrics_before is not None:
+                out["metrics"] = self._db.execute(
+                    "DELETE FROM request_metrics WHERE ts < ?", (metrics_before,)
+                ).rowcount
+                out["alerts"] = self._db.execute("DELETE FROM alert_fired WHERE at < ?", (metrics_before,)).rowcount
+            if notifications_before is not None:
+                out["notifications"] = self._db.execute(
+                    "DELETE FROM notifications WHERE read=1 AND ts < ?", (notifications_before,)
+                ).rowcount
+        return out
 
     # ---------- sessions d'administration (20.1) ----------
     # ---------- comptes nommés (20.3) ----------

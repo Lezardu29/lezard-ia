@@ -2,6 +2,7 @@
 // Commandes d'envoi (/pc, /web) : outils activés pour ce message seulement, le texte part sans la commande.
 // Commandes locales (/memoire, /retiens, /oublie, /nouveau, /compacte, /prive, /aide, /modele, /mode, /effort, /multi, /competence) : exécutées dans la page,
 // rien n'est envoyé à l'IA (/compacte fait résumer la conversation par la gateway). /modele choisit l'IA qui répond ; /mode, /effort et /multi règlent le routage. La mémoire du contrôle du PC (préférences, leçons tirées des erreurs) est sur la gateway.
+// /mcp : seul ou avec un nom de serveur, explique (local) ; suivie d'une demande, elle part à l'IA, limitée au serveur nommé.
 import { api } from "./auth.js";
 import { activeSkills, chatModels, forcedModel, routing, setEffort, setForcedModel, setMode, setMulti, setSkill,
          skillCatalog } from "./settings-bar.js";
@@ -18,7 +19,7 @@ const COMMANDS = [
   { name: "modele", args: "[nom | auto]", help: "Choisir l'IA qui répond (sans nom : la liste ; auto : choix automatique)" },
   { name: "mode", args: "[vitesse | eco | equilibre]", help: "Mode de routage (sans nom : le mode actuel)" },
   { name: "effort", args: "[auto | bas | moyen | eleve]", help: "Effort de raisonnement (sans nom : l'effort actuel)" },
-  { name: "mcp", args: "<demande>", help: "L'IA utilise vos serveurs MCP (data/mcp.json) pour cette demande", needs: "mcp", send: true },
+  { name: "mcp", args: "[serveur] [demande]", help: "Serveurs MCP : seul, la liste et les commandes ; avec un serveur, ses outils expliqués ou une demande pour lui seul ; sinon, l'IA choisit parmi tous", needs: "mcp", send: true },
   { name: "docs", args: "<question>", help: "L'IA cherche dans vos documents Paperless-ngx et Nextcloud", needs: "docs", send: true },
   { name: "image", args: "<description>", help: "Générer une image avec votre ComfyUI (COMFYUI_URL dans .env)" },
   { name: "multi", args: "[auto | on | off]", help: "Multi-agents : auto selon la complexité, on toujours, off une IA seule" },
@@ -40,22 +41,39 @@ const SOURCES = { user: "dictée par vous", agent: "notée par l'IA", auto: "app
 const $ = (id) => document.getElementById(id);
 
 let tools = null;                                          // outils permis à cette clé (GET /v1/tools)
+let servers = [];                                          // serveurs MCP de cette clé, connectés ou non
 let numbered = [];                                         // ids des souvenirs, dans l'ordre affiché par /memoire
 
-async function rights() {
-  if (!tools) {
+async function rights(fresh = false) {
+  if (!tools || fresh) {
     const r = await api("/v1/tools");
     tools = r.ok ? r.data.data : [];
+    servers = r.ok ? r.data.mcp_servers || [] : [];
   }
   return tools;
 }
 function allowed(cmd) {
   if (!cmd.needs) return true;
   if (!tools) return false;
+  if (cmd.needs === "mcp" && servers.length) return true;   // même non connecté : /mcp dit pourquoi
   if (["pc", "web", "mcp", "docs"].includes(cmd.needs)) return tools.some((t) => t.level === cmd.needs);
   return tools.length > 0;
 }
 const plain = (s) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();   // « mémoire » → « memoire »
+
+/** Ce que dit /mcp : { server, rest } si le premier mot est le nom d'un serveur (« /mcp rea ouvre… »), sinon la demande
+ *  pour tous les serveurs (« /mcp liste mes fichiers »). */
+function mcpTarget(rest) {
+  const m = /^(\S+)(?:\s+([\s\S]*))?$/.exec(rest);
+  const server = m && servers.find((s) => plain(s.id) === plain(m[1]));
+  return server ? { server, rest: (m[2] || "").trim() } : { server: null, rest };
+}
+
+/** Pour l'affichage d'un appel d'outil MCP : { server, tool, help } ; null pour les autres outils. */
+export function mcpTool(name) {
+  const t = (tools || []).find((x) => x.name === name);
+  return t?.server ? { server: t.server, tool: t.tool, help: t.help } : null;
+}
 
 /** « /pc ouvre… » → { cmd, rest } ; cmd null si la commande est inconnue ; null si le texte n'en est pas une
  *  (« /usr/bin, c'est quoi ? » part normalement : un nom de commande n'a que des lettres). */
@@ -68,16 +86,24 @@ export function parseCommand(text) {
 /** Commande reconnue au début d'un message affiché : { label: "/pc", rest } (bulle de l'utilisateur). */
 export function commandLabel(text) {
   const p = parseCommand(text || "");
+  if (p?.cmd?.name === "mcp") {
+    const target = mcpTarget(p.rest);
+    if (target.server) return { label: `/mcp ${target.server.id}`, rest: target.rest };
+  }
   return p?.cmd ? { label: `/${p.cmd.name}`, rest: p.rest } : null;
 }
 
 /** Options de requête de la commande d'envoi qui ouvre `text` ({} sans commande). */
 export function commandOptions(text) {
-  const cmd = parseCommand(text || "")?.cmd;
+  const parsed = parseCommand(text || "");
+  const cmd = parsed?.cmd;
   if (!cmd?.send) return {};
+  if (cmd.name === "mcp") {                                 // un serveur nommé : ses outils seulement
+    const only = mcpTarget(parsed.rest).server?.id;
+    return { gateway_tools: (tools || []).filter((t) => t.level === "mcp" && (!only || t.server === only)).map((t) => t.name), orchestration: undefined };
+  }
   if (cmd.name === "pc") return { gateway_tools: true, orchestration: undefined };
   if (cmd.name === "docs") return { gateway_tools: (tools || []).filter((t) => t.level === "docs").map((t) => t.name), orchestration: undefined };
-  if (cmd.name === "mcp") return { gateway_tools: (tools || []).filter((t) => t.level === "mcp").map((t) => t.name), orchestration: undefined };
   return { gateway_tools: (tools || []).filter((t) => !["pc", "mcp", "docs"].includes(t.level)).map((t) => t.name), orchestration: undefined };
 }
 
@@ -85,6 +111,7 @@ export function commandOptions(text) {
 export function stripCommand(content) {
   const strip = (s) => {
     const p = parseCommand(s);
+    if (p?.cmd?.name === "mcp") return mcpTarget(p.rest).rest;
     return p?.cmd?.send ? p.rest : s;
   };
   if (typeof content === "string") return strip(content);
@@ -102,7 +129,7 @@ export async function handleCommand(text, ui) {
   const p = parseCommand(text);
   if (!p) return null;
   ui.notice("");
-  await rights();
+  await rights(p.cmd?.name === "mcp");                      // un serveur vient peut-être d'être installé ou retiré
   if (!p.cmd) {
     ui.notice(`Commande inconnue : /${p.name}. Tapez /aide pour la liste.`, true);
     return { send: false, keep: true };
@@ -115,10 +142,24 @@ export async function handleCommand(text, ui) {
       : "Outils non permis pour cette clé.", true);
     return { send: false, keep: true };
   }
+  if (p.cmd.name === "mcp") {
+    const target = mcpTarget(p.rest);
+    if (!p.rest) { mcpList(ui); return { send: false }; }
+    if (target.server && !target.rest) { mcpDetail(target.server, ui); return { send: false }; }
+    if (target.server && !target.server.connected) {
+      ui.notice(`Le serveur ${target.server.id} n'est pas connecté : tapez /mcp pour voir l'état de vos serveurs.`, true);
+      return { send: false, keep: true };
+    }
+    if (!tools.some((t) => t.level === "mcp")) {
+      ui.notice("Aucun serveur MCP connecté : tapez /mcp pour voir l'état de vos serveurs.", true);
+      return { send: false, keep: true };
+    }
+    return { send: true };
+  }
   if (p.cmd.send) {
     if (!p.rest) {
       ui.notice(`Indiquez la demande après la commande, ex. /${p.cmd.name} ${p.cmd.name === "pc"
-        ? "ouvre le bloc-notes" : p.cmd.name === "mcp" ? "liste les fichiers de mon dossier Documents"
+        ? "ouvre le bloc-notes"
         : p.cmd.name === "docs" ? "trouve ma dernière facture d'électricité" : "météo à Brest demain"}`, true);
       return { send: false, keep: true };
     }
@@ -350,6 +391,73 @@ const LOCAL = {
   },
 };
 
+const offline = (s) => `Non connecté${s.error ? ` : ${s.error.replace(/\.+$/, "")}` : ""}.`;
+const ask = (s) => (s.example ? `/mcp ${s.id} ${s.example}` : `/mcp ${s.id} <votre demande>`);
+
+/** /mcp : chaque serveur, ce qu'il fait, et les commandes pour s'en servir. */
+function mcpList(ui) {
+  const box = panel("Serveurs MCP");
+  const list = document.createElement("dl");
+  list.className = "slash-help";
+  for (const s of servers) {
+    const dt = document.createElement("dt");
+    dt.textContent = `${s.connected ? "● " : "○ "}${s.id}`;
+    const dd = document.createElement("dd");
+    const what = document.createElement("div");
+    what.textContent = `${s.name}. ${s.description}`;
+    const how = document.createElement("div");
+    if (s.connected) {
+      const example = document.createElement("code");
+      example.textContent = ask(s);
+      const detail = document.createElement("code");
+      detail.textContent = `/mcp ${s.id}`;
+      how.append("Exemple : ", example, ` · ses ${s.tools} outil${s.tools > 1 ? "s" : ""} expliqué${s.tools > 1 ? "s" : ""} : `, detail);
+    } else {
+      how.textContent = offline(s);
+    }
+    dd.append(what, how);
+    list.append(dt, dd);
+  }
+  const hint = document.createElement("p");
+  hint.className = "small";
+  hint.textContent = "● connecté. /mcp <serveur> <demande> : l'IA n'utilise que ce serveur. /mcp <demande> : elle choisit parmi "
+    + "tous. Chaque appel d'outil affiche le serveur utilisé et attend votre accord, sauf sur un serveur déclaré de confiance.";
+  box.append(list, hint);
+  ui.show(box);
+}
+
+/** /mcp rea : à quoi sert le serveur, comment s'en servir, et chacun de ses outils expliqué. */
+function mcpDetail(s, ui) {
+  const box = panel(`Serveur MCP : ${s.id}`);
+  const what = document.createElement("p");
+  what.textContent = `${s.name}. ${s.description}`;
+  box.append(what);
+  if (!s.connected) {
+    const off = document.createElement("p");
+    off.className = "muted";
+    off.textContent = offline(s);
+    box.append(off);
+    return ui.show(box);
+  }
+  const how = document.createElement("p");
+  const example = document.createElement("code");
+  example.textContent = ask(s);
+  how.append("Pour l'utiliser : ", example);
+  const h = document.createElement("h4");
+  h.textContent = "Ses outils";
+  const list = document.createElement("dl");
+  list.className = "slash-help";
+  for (const t of tools.filter((x) => x.server === s.id)) {
+    const dt = document.createElement("dt");
+    dt.textContent = t.tool;
+    const dd = document.createElement("dd");
+    dd.textContent = t.help;
+    list.append(dt, dd);
+  }
+  box.append(how, h, list);
+  ui.show(box);
+}
+
 function panel(title) {
   const box = document.createElement("div");
   box.className = "slash-panel";
@@ -412,6 +520,7 @@ export function initSlash(prompt) {
   };
   const updateCommands = async (typed) => {
     await rights();
+    if (plain(/^\/(\S*)$/.exec(prompt.value)?.[1] ?? "\u0000") !== typed) return;   // la saisie a changé entre-temps
     const found = COMMANDS.filter((c) => allowed(c) && c.name.startsWith(typed));
     if (!found.length || (found.length === 1 && found[0].name === typed && !found[0].args)) return close();
     models = false;
@@ -440,9 +549,21 @@ export function initSlash(prompt) {
     active = Math.min(active, items.length - 1);
     show();
   };
+  const updateServers = async (typed) => {                // « /mcp r » : les serveurs, pour ne pas devoir retenir leur nom
+    await rights();
+    if (plain(/^\/mcp\s+(\S*)$/i.exec(prompt.value)?.[1] ?? "\u0000") !== typed) return;
+    const found = servers.filter((s) => plain(s.id).startsWith(typed));
+    if (!found.length) return close();
+    models = false;
+    items = found.map((s) => ({ label: `/mcp ${s.id}`, help: s.name, fill: `/mcp ${s.id} ` }));
+    active = Math.min(active, items.length - 1);
+    show();
+  };
   const update = () => {
     const mod = /^\/modele\s(.*)$/i.exec(prompt.value);
     if (mod) return updateModels(mod[1]);
+    const srv = /^\/mcp\s+(\S*)$/i.exec(prompt.value);
+    if (srv) return updateServers(plain(srv[1]));
     const cmd = /^\/(\S*)$/.exec(prompt.value);
     if (!cmd) return close();
     updateCommands(plain(cmd[1]));

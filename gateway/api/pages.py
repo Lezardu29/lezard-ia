@@ -105,4 +105,8 @@ class RevalidatedStatic(StaticFiles):
     def file_response(self, *args, **kwargs):
         response = super().file_response(*args, **kwargs)
         response.headers["Cache-Control"] = "no-cache"
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        if response.media_type and response.media_type.startswith(("text/html", "image/svg")):
+            # page ou image SVG ouverte directement (offline.html, icônes) : mêmes règles que les pages
+            response.headers.setdefault("Content-Security-Policy", CSP)
         return response

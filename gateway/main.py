@@ -37,7 +37,7 @@ from .plans import PlanResolver, account_identity
 from .pricing import PricingEngine, auto_refresh_enabled as pricing_auto_refresh
 from .provider_rules import ProviderGuard
 from .providers import local_tts, local_whisper
-from .providers.base import GATEWAY_HEADER
+from .providers.base import GATEWAY_HEADER, instance_tag
 from .providers.local_tts import LocalTtsProvider
 from .providers.local_whisper import LocalWhisperProvider
 from .remote import RemoteAccess, TunnelError
@@ -84,6 +84,16 @@ from .core import Gateway, _err, lan_urls, load_credentials, log, secret_problem
 
 def rediscover_interval() -> float:
     return max(0.05, float(os.getenv("REDISCOVER_INTERVAL", "15")))
+
+
+def history_days(name: str, default: float) -> float | None:
+    """Durée de conservation (jours) : GATEWAY_METRICS_DAYS (mesures des requêtes, 730), GATEWAY_NOTIFICATION_DAYS
+    (notifications lues, 180) ; 0 = sans limite (None)."""
+    try:
+        days = float(os.getenv(name, str(default)) or default)
+    except ValueError:
+        days = default
+    return days if days > 0 else None
 
 
 def hardware_probe() -> bool:
@@ -376,6 +386,19 @@ def create_app(
                     n = await asyncio.to_thread(holder["store"].purge_captures, time.time() - keep * 86400)
                     if n:
                         log.info("Journal d'audit : %d capture(s) d'écran de plus de %g jours supprimée(s)", n, keep)
+                    # mesures des requêtes, alertes déclenchées, notifications lues : la base ne grossit plus sans fin
+                    metrics, notes = (
+                        history_days("GATEWAY_METRICS_DAYS", 730),
+                        history_days("GATEWAY_NOTIFICATION_DAYS", 180),
+                    )
+                    now = time.time()
+                    done = await asyncio.to_thread(
+                        holder["store"].purge_history,
+                        now - metrics * 86400 if metrics else None,
+                        now - notes * 86400 if notes else None,
+                    )
+                    if any(done.values()):
+                        log.info("Historique allégé : %s", ", ".join(f"{k} {v}" for k, v in done.items() if v))
                 except Exception:
                     log.exception("Purge du journal d'audit impossible")
                 await asyncio.sleep(3600)
@@ -554,7 +577,7 @@ def create_app(
                     }
                 )
         if holder.get("instance"):  # permet de se reconnaître parmi les serveurs détectés
-            response.headers[GATEWAY_HEADER] = holder["instance"]
+            response.headers[GATEWAY_HEADER] = instance_tag(holder["instance"])
         return response
 
     for module in ROUTERS:

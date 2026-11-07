@@ -26,20 +26,34 @@ _TAG = re.compile(r"<[^>]+>")
 _BLOCK = re.compile(r"</?(p|div|br|li|h[1-6]|tr|section|article)\b[^>]*>", re.I)
 
 
+# NAT64 (64:ff9b::/96, 64:ff9b:1::/48) : comptées « globales », elles traduisent vers des adresses IPv4, réseau local
+# compris (64:ff9b::c0a8:101 = 192.168.1.1)
+_NAT64 = (ipaddress.ip_network("64:ff9b::/96"), ipaddress.ip_network("64:ff9b:1::/48"))
+
+
+def _public(ip: str) -> bool:
+    addr = ipaddress.ip_address(ip.split("%")[0])
+    if addr.version == 6 and addr.ipv4_mapped:
+        addr = addr.ipv4_mapped
+    elif addr.version == 6 and any(addr in n for n in _NAT64):
+        addr = ipaddress.ip_address(int(addr) & 0xFFFFFFFF)
+    return addr.is_global
+
+
 async def _public_ip(host: str) -> str:
     try:
         infos = await asyncio.get_running_loop().getaddrinfo(host, None, type=socket.SOCK_STREAM)
     except socket.gaierror:
         raise ToolError(f"Nom de domaine introuvable : {host}") from None
     ips = {i[4][0] for i in infos}
-    if not ips or not all(ipaddress.ip_address(ip.split("%")[0]).is_global for ip in ips):
+    if not ips or not all(_public(ip) for ip in ips):
         raise ToolError("Adresse refusée : seuls les sites publics sont accessibles (pas le réseau local).")
     return sorted(ips, key=lambda ip: ":" in ip)[0]  # IPv4 d'abord
 
 
 async def fetch(url: str, *, method: str = "GET", data: dict | None = None) -> tuple[str, str]:
     """(url finale, texte) d'une page publique ; 3 redirections max, toutes vérifiées."""
-    async with httpx.AsyncClient(timeout=15, follow_redirects=False) as client:
+    async with httpx.AsyncClient(timeout=15, follow_redirects=False, trust_env=False) as client:
         for _ in range(4):
             parts = urlsplit(url)
             if parts.scheme not in ("http", "https") or not parts.hostname:
@@ -114,7 +128,7 @@ async def searxng_search(base: str, query: str) -> ToolResult:
     if urlsplit(base).scheme not in ("http", "https") or not urlsplit(base).hostname:
         raise ToolError("SEARXNG_URL invalide : http(s)://adresse:port attendu.")
     try:
-        async with httpx.AsyncClient(timeout=15, follow_redirects=False) as client:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=False, trust_env=False) as client:
             r = await client.get(
                 f"{base}/search",
                 params={"q": query, "format": "json", "language": "fr"},

@@ -1,6 +1,9 @@
 """Catégories « Dictée » et « Lecture vocale » : comme les embeddings, le meilleur modèle de voix pour ce PC (qualité
 en français, place en mémoire), fixable à la main ; taille du Whisper intégré choisie selon le matériel."""
 
+import sys
+import types
+
 import httpx
 import pytest
 from fastapi.testclient import TestClient
@@ -182,8 +185,8 @@ def test_whisper_model_auto_explicit_and_gpu_fallback(monkeypatch):
                 raise RuntimeError("cudnn64_9.dll introuvable")
             loaded.append((size, device, compute_type))
 
-    faster_whisper = pytest.importorskip("faster_whisper")  # composant « voix », facultatif
-    monkeypatch.setattr(faster_whisper, "WhisperModel", FakeModel)
+    # faster-whisper : pack « voix » facultatif, absent de la CI ; un module factice suffit au choix du matériel
+    monkeypatch.setitem(sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=FakeModel))
     w._load()
     assert loaded == [("small", "cpu", "int8")] and w.device == "cpu" and "cudnn" in w.reason
     monkeypatch.setenv("WHISPER_MODEL", "medium")
@@ -192,9 +195,9 @@ def test_whisper_model_auto_explicit_and_gpu_fallback(monkeypatch):
 
 
 def test_cuda_ready(monkeypatch):
-    ctranslate2 = pytest.importorskip("ctranslate2")  # composant « voix », facultatif
-
-    monkeypatch.setattr(ctranslate2, "get_cuda_device_count", lambda: 0)
+    # ctranslate2 (pack « voix ») : remplacé par un module factice, comme sur un PC sans carte NVIDIA
+    ctranslate2 = types.SimpleNamespace(get_cuda_device_count=lambda: 0)
+    monkeypatch.setitem(sys.modules, "ctranslate2", ctranslate2)
     assert local_whisper.cuda_ready() is False
     monkeypatch.setattr(ctranslate2, "get_cuda_device_count", lambda: 1)
 
@@ -307,9 +310,15 @@ def test_reading_on_other_servers_only_speed():
 def test_builtin_kokoro_preferred_when_its_settings_are_used(monkeypatch):
     from gateway.providers import local_tts
 
+    from gateway.api import audio as audio_api
+
     fake = Kokoro()
     monkeypatch.setattr(local_tts, "enabled", lambda: True)
     monkeypatch.setattr(local_tts.LocalTtsProvider, "_load", lambda self: fake)
+    # matériel fixé (carte de 8 Go) : relevé sur la machine qui lance les tests, le serveur speaches de ce PC
+    # « débordait » de la mémoire sans carte graphique (CI) et perdait sa place pour une autre raison que la lecture
+    gpu = {"gpu": "RTX test", "vram": 8 * GB, "vram_busy": 0, "ram": 16 * GB, "disk_free": None}
+    monkeypatch.setattr(audio_api, "budget", lambda hw: dict(gpu))
 
     def speaches(request):
         if request.url.path.endswith("/models"):

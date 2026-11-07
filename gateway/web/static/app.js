@@ -113,9 +113,10 @@ function initExport() {
 // texte d'aide de la saisie : le plus long qui tient dans le champ (le navigateur le couperait net, sans « … »),
 // mesuré sur la largeur du champ et non de l'écran : barre latérale ouverte, zoom ou grande police comprises
 const HINTS = {
-  normal: ["Posez votre question… (/ pour les commandes)", "Posez votre question…", "Votre question…"],
+  // le plus court tient dans 114 px (téléphone de 320 px, interface classique) : « Votre question… » y était coupé
+  normal: ["Posez votre question… (/ pour les commandes)", "Posez votre question…", "Votre question…", "Question…"],
   private: ["Conversation privée : seules vos IA locales la reçoivent…", "Conversation privée (IA locales)…",
-            "Conversation privée…"],
+            "Conversation privée…", "Privée…"],
 };
 const measure = document.createElement("canvas").getContext("2d");
 let privateShown = false;

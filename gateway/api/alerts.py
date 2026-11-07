@@ -91,15 +91,26 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
         }
         return {"delivered": await holder["alerts"].send(rule["webhook_url"], rule.get("webhook_secret"), event)}
 
+    def account_itself(request: Request):
+        """Notifications du compte (alertes de sécurité comprises, ex. « action d'administration depuis une adresse
+        inconnue ») : au compte lui-même. Avant, une clé virtuelle prêtée pouvait les lire et les marquer lues,
+        effaçant l'alerte que son propriétaire devait voir."""
+        ctx = plan_ctx({}, request)
+        if ctx.key:
+            raise AlertError(
+                "Notifications du compte : avec la clé du compte (ou la clé maître), pas une clé virtuelle.", 403
+            )
+        return ctx
+
     @router.get("/v1/notifications")
     async def notifications(request: Request, limit: int = 50):
-        ctx = plan_ctx({}, request)
+        ctx = account_itself(request)
         items, unread = holder["store"].list_notifications(ctx.identity, max(1, min(limit, 200)))
         return {"object": "list", "data": items, "unread": unread}
 
     @router.post("/v1/notifications/read")
     async def notifications_read(request: Request):
-        ctx = plan_ctx({}, request)
+        ctx = account_itself(request)
         ids = (await json_object(request, empty={})).get("ids")
         if ids is not None and (
             not isinstance(ids, list)

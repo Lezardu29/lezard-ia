@@ -288,6 +288,13 @@
 :root[data-ui="claude"] .code.previewable .preview-btn {
   margin-left: 0; padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-weight: 500;
 }
+/* téléphone : le titre se réduisait à une lettre par ligne (« P a g e H T M L »), poussé par les boutons qui se
+   coupaient eux aussi (« Aperç u ») : libellés sur une ligne, titre tronqué, copier et télécharger dans le panneau */
+:root[data-ui="claude"] .code.previewable .code-head > button { flex: none; white-space: nowrap; }
+:root[data-ui="claude"] .code.previewable .code-kind { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 560px) {
+  :root[data-ui="claude"] .code.previewable .code-dl, :root[data-ui="claude"] .code.previewable .copy { display: none; }
+}
 
 /* ----- projets : la page du projet se place autour de la saisie (accueil en colonne, comme Claude) ----- */
 :root[data-ui="claude"] body.chat-page:not(.has-messages) .project-head { order: 2; margin-top: 32px; }

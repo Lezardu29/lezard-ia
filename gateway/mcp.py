@@ -84,6 +84,10 @@ def parse_config(data) -> dict[str, dict]:
         args = cfg.get("args", [])
         if not isinstance(args, list) or not all(isinstance(a, str) for a in args):
             raise ValueError(f"Serveur « {name} » : « args » doit être une liste de textes.")
+        # « only_tools » : seuls ces outils sont proposés au modèle (REA en a 207, trop lourds pour sa fenêtre)
+        only = cfg.get("only_tools", [])
+        if not isinstance(only, list) or not all(isinstance(a, str) for a in only):
+            raise ValueError(f"Serveur « {name} » : « only_tools » doit être une liste de textes.")
         for field in ("env", "headers"):
             v = cfg.get(field, {})
             if not isinstance(v, dict) or not all(isinstance(k, str) and isinstance(x, str) for k, x in v.items()):
@@ -272,6 +276,9 @@ def _result(msg: dict, what: str) -> dict:
     return res
 
 
+ORIGIN: dict[str, tuple[str, str]] = {}  # nom d'outil pour le modèle -> serveur, nom donné par ce serveur
+
+
 def tool_name(server: str, tool: str) -> str:
     return ("mcp_" + server + "_" + re.sub(r"[^A-Za-z0-9_-]", "_", tool))[:64]
 
@@ -301,6 +308,7 @@ def make_tool(server, cfg: dict, spec: dict) -> Tool:
     desc = f"[MCP {server.name}] " + str(spec.get("description") or raw)[:600]
 
     scope = cfg.get("scope")
+    ORIGIN[tool_name(server.name, raw)] = (server.name, raw)
 
     async def run(args: dict) -> ToolResult:
         if scope and scope.get("mode") == "repos":  # clé restreinte : vérifié à chaque appel
@@ -341,6 +349,8 @@ async def _connect(name: str, cfg: dict) -> int:
         res = _result(await server.request("tools/list", {"cursor": cursor} if cursor else {}, timeout()), "tools/list")
         for spec in res.get("tools") or []:
             if isinstance(spec, dict) and isinstance(spec.get("name"), str):
+                if cfg.get("only_tools") and spec["name"] not in cfg["only_tools"]:
+                    continue
                 tool = make_tool(server, cfg, spec)
                 TOOLS[tool.name] = tool
                 count += 1
@@ -397,6 +407,7 @@ async def stop() -> None:
     STATUS.clear()
     for name in [n for n, t in TOOLS.items() if t.level == "mcp"]:
         TOOLS.pop(name)
+    ORIGIN.clear()
 
 
 def overview() -> list[dict]:

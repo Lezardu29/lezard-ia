@@ -109,7 +109,7 @@ def detect_kind(filename: str, data: bytes) -> tuple[str, str | None]:
         return ext[1:], None
     if ext in LEGACY_OFFICE:
         raise DocumentError(415, f"Format {ext} non pris en charge : enregistrez-le en {LEGACY_OFFICE[ext]}.")
-    if b"\x00" in data[:4096]:
+    if b"\x00" in data[:4096] and not data.startswith(UTF16_BOMS):  # UTF-16 (Bloc-notes « Unicode ») : texte
         raise DocumentError(
             415, f"'{filename}' semble binaire : formats acceptés PDF, DOCX, XLSX, texte, Markdown, HTML, CSV, code."
         )
@@ -124,7 +124,12 @@ def detect_kind(filename: str, data: bytes) -> tuple[str, str | None]:
     return "text", None
 
 
+UTF16_BOMS = (b"\xff\xfe", b"\xfe\xff")
+
+
 def decode(data: bytes) -> str:
+    if data.startswith(UTF16_BOMS):  # Windows : « Unicode » du Bloc-notes, exports de PowerShell
+        return data.decode("utf-16", errors="replace")
     for enc in ("utf-8-sig", "cp1252"):
         try:
             return data.decode(enc)

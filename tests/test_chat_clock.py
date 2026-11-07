@@ -19,15 +19,6 @@ def test_clock_message_defaults_to_now():
     assert str(datetime.now(ZoneInfo("Europe/Paris")).year) in msg["content"]
 
 
-def test_clock_without_timezone_data_uses_this_pc_time(monkeypatch):
-    """Windows sans tzdata (fuseau introuvable) : l'heure de ce PC, jamais une erreur qui casse la réponse."""
-    import gateway.api.chat as chat
-
-    monkeypatch.setattr(chat, "TIMEZONE", "Nulle/Part")
-    msg = clock_message()
-    assert "(heure de ce PC)" in msg["content"] and str(datetime.now().year) in msg["content"]
-
-
 def test_time_questions_are_detected_but_not_words_containing_them():
     from gateway.api.chat import TIME_QUESTION
 
@@ -35,3 +26,17 @@ def test_time_questions_are_detected_but_not_words_containing_them():
     assert TIME_QUESTION.search("Quelle est la date d'aujourd'hui ?")
     assert not TIME_QUESTION.search("Bonjour, peux-tu m'aider avec ma facture ?")
     assert not TIME_QUESTION.search("et maintenant ? liste les numéros de chapitre")  # « maintenant » seul : non
+
+
+def test_clock_without_time_zone_database_uses_this_pc_time(monkeypatch):
+    """Windows sans tzdata : ZoneInfo échoue ; la question sur la date ne doit plus finir en erreur 500."""
+    import zoneinfo
+
+    from gateway.api import chat
+
+    def missing(key):
+        raise zoneinfo.ZoneInfoNotFoundError(f"No time zone found with key {key}")
+
+    monkeypatch.setattr(chat, "ZoneInfo", missing)
+    msg = clock_message()
+    assert str(datetime.now().year) in msg["content"] and "sans les deviner" in msg["content"]

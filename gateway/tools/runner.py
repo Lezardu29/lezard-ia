@@ -234,6 +234,10 @@ async def run(
     pc_run = any(t.level == "pc" for t in tools.values())
     msgs, steps, usage = list(messages), [], {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
     holds_pc, done, seen_image = False, [], False  # done : actions sur le PC exécutées (détection des boucles)
+    # données privées dans le contexte (écran, documents, outil MCP « local_only ») : dès lors, une recherche ou une
+    # page web demandée par le modèle passe par la validation, sinon il pourrait les glisser dans l'adresse ou la
+    # requête et les envoyer à un site (consigne cachée dans un e-mail ou une page affichée)
+    sensitive = False
     nudges = 0  # réponses vides relancées
     tripped = asyncio.get_running_loop().create_future() if pc_run and failsafe else None
     watcher = asyncio.create_task(_watch(failsafe, tripped)) if tripped else None
@@ -313,7 +317,7 @@ async def run(
                             "Refusée : même action déjà faite deux fois de suite. Elle ne mène nulle part : vérifie "
                             "la fenêtre au premier plan, change d'approche (pc_focus, pc_open, autre case) ou réponds."
                         )
-                    if tool.confirm:
+                    if tool.confirm or (tool.level == "web" and sensitive):
                         aid, fut = approvals.open(identity)
                         try:
                             preview = tool.preview(args) if tool.preview else None
@@ -353,6 +357,7 @@ async def run(
                         decision = "sans validation (lecture de l'écran)" if name != "pc_app_guide" else "guide"
                     result = await _guarded(tool.run(args), tripped)
                     ok = True
+                    sensitive = sensitive or tool.local_only or bool(result.image)
                     if decision:
                         audit(name, args, decision, result.text, result.image)
                         decision = None

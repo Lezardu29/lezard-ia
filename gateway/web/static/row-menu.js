@@ -52,9 +52,18 @@ export function initRowMenus() {
     syncBackdrop();
   }, true);
   // défilement de la page ou du tableau (capture : les conteneurs défilants ne remontent pas l'événement)
-  document.addEventListener("scroll", (e) => { if (!e.target.closest?.(".row-menu .menu")) closeAll(); },
+  // sur petit écran, la feuille est fixée en bas de l'écran : le défilement ne la décale pas. Avant, le défilement
+  // automatique de la fin d'une réponse la refermait aussitôt ouverte (« Réessayer » touché juste après la réponse)
+  document.addEventListener("scroll", (e) => { if (!sheet.matches && !e.target.closest?.(".row-menu .menu")) closeAll(); },
                             { capture: true, passive: true });
-  window.addEventListener("resize", () => closeAll());
+  // clavier du téléphone qui s'ouvre ou se ferme : seule la hauteur change, le menu reste (il se fermait au moment
+  // même où on le touchait, la saisie perdant le focus) ; une autre largeur le replace, donc le ferme
+  let width = window.innerWidth;
+  window.addEventListener("resize", () => {
+    if (window.innerWidth === width) return;
+    width = window.innerWidth;
+    closeAll();
+  });
   sheet.addEventListener("change", () => closeAll());
   document.addEventListener("keydown", (e) => {
     const open = document.querySelector(".row-menu[open]");

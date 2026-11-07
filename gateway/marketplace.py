@@ -33,6 +33,7 @@ from collections.abc import Callable
 import httpx
 
 from . import mcp
+from .gpus import usable
 from .model_catalog import USE_LABELS
 
 REGISTRY = "https://registry.ollama.ai/v2/library"
@@ -745,6 +746,19 @@ MCP_SERVERS = (
         ),
     },
 )
+# dans le chat : chaque serveur a sa commande, et /mcp seul explique sans rien envoyer à l'IA
+for _s in MCP_SERVERS:
+    _example = next(c["example"] for c in _s["commands"] if c.get("example")).removeprefix("/mcp ")
+    _s["commands"] = [
+        _cmd(
+            f"/mcp {_s['id']} <demande>",
+            "L'IA n'utilise que ce serveur pour cette demande ; chaque appel d'outil affiche le serveur et attend votre "
+            "accord.",
+            f"/mcp {_s['id']} {_example}",
+        ),
+        _cmd(f"/mcp {_s['id']}", "Explique ce serveur et chacun de ses outils, sans rien envoyer à l'IA."),
+        _cmd("/mcp", "Liste vos serveurs, leur état et la commande de chacun."),
+    ]
 
 # ---------- recherche sur Internet : plusieurs éléments proches, comparés dans leur fenêtre « Détails » ----------
 # (élément « kind:id », coût, ce qui part de ce PC, point fort) ; offres relevées sur le site de chaque service le
@@ -836,6 +850,11 @@ def add_mcp(sid: str, npx: str, folder: str | None = None, secret: str | None = 
     args = ["-y", f"{s['package']}@{s['version']}", *s.get("args", ())]
     if s["needs_folder"]:
         target = Path(folder or "").expanduser()
+        if folder and any(c in folder for c in '&|^%<>"!'):
+            # npx.cmd passe par cmd.exe : un dossier nommé « x&calc » lancerait une commande
+            raise MarketplaceError(
+                400, 'Ce dossier contient un caractère refusé (& | ^ % < > " !) : choisissez-en un autre.'
+            )
         if not folder or not target.is_absolute() or not target.is_dir():
             raise MarketplaceError(
                 400, "Indiquez le chemin complet d'un dossier existant de ce PC (ex. C:\\Users\\…\\Documents)."
@@ -1564,9 +1583,9 @@ AGENT_TOOLS = (
         "name": "claude-mem",
         "description": "Mémoire automatique pour Claude Code : il résume ce qu'il fait pendant une session et le "
         "retrouve aux suivantes, sans rien à demander.",
-        "install": "npx --yes claude-mem@15.0.1 install --provider host",
+        "install": "npx --yes claude-mem@15.0.1 install --provider claude",
         "needs": "Node.js 20.12 ou plus et Claude Code.",
-        "lezard": "Installé en mode local (--provider host) : les résumés sont faits par votre abonnement Claude et "
+        "lezard": "Installé en mode local (--provider claude) : les résumés sont faits par votre abonnement Claude et "
         "gardés sur ce PC.",
         "warning": "Son installateur propose aussi un service en ligne payant (après 30 jours d'essai) : l'installation "
         "depuis Lezard IA ne l'active pas.",
@@ -1764,7 +1783,7 @@ BUNDLES = (
         "description": "ComfyUI pour générer des images sur ce PC (commande /image), et un modèle qui sait les décrire.",
         "for": "Les PC Windows avec une carte graphique NVIDIA d'au moins 6 Go.",
         "items": ("app:comfyui", "component:ollama", "model:vision"),
-        "when": {"vram_gb": 6, "windows": True},
+        "when": {"vram_gb": 6, "windows": True, "nvidia": True},
     },
 )
 PROGRAM_NAMES = {"claude": "Claude Code"}
@@ -1793,7 +1812,9 @@ def bundles_for(reco: dict, hw: dict, found: Callable[[str], str | None], platfo
     `reco` : model_catalog.recommend (meilleur modèle par usage) ; `hw` : relevé du matériel ; `found` : programme
     trouvé sur ce PC (installers.program)."""
     ram = (hw.get("ram") or {}).get("total") or 0
-    vram = max((g.get("vram_total") or 0 for g in hw.get("gpus") or []), default=0)
+    cards = usable(hw.get("gpus") or [])  # carte dédiée, de tout fabricant ; jamais la partie graphique du processeur
+    vram = max((g["vram_total"] for g in cards), default=0)
+    nvidia_vram = max((g["vram_total"] for g in cards if g.get("vendor", "nvidia") == "nvidia"), default=0)
     models = {m["model"]: m for m in reco.get("models") or []}
     out = []
     for b in BUNDLES:
@@ -1806,13 +1827,22 @@ def bundles_for(reco: dict, hw: dict, found: Callable[[str], str | None], platfo
             else:
                 why.append(f"{_gb(ram)} de mémoire vive.")
         if when.get("vram_gb"):
-            if vram < when["vram_gb"] * _GB * 0.95:
+            need = nvidia_vram if when.get("nvidia") else vram  # ComfyUI (CUDA) : carte NVIDIA
+            if need < when["vram_gb"] * _GB * 0.95:
+                other = next((g for g in cards if g.get("vendor", "nvidia") != "nvidia"), None)
                 why_not.append(
-                    f"Il faut une carte graphique NVIDIA d'au moins {when['vram_gb']} Go"
-                    + (f" (ce PC : {_gb(vram)})." if vram else " (aucune sur ce PC).")
+                    f"Il faut une carte graphique {'NVIDIA ' if when.get('nvidia') else ''}d'au moins "
+                    f"{when['vram_gb']} Go"
+                    + (
+                        f" (ce PC : {_gb(need)})."
+                        if need
+                        else f" ({other['name']} : ComfyUI calcule avec CUDA, propre à NVIDIA)."
+                        if when.get("nvidia") and other
+                        else " (aucune sur ce PC)."
+                    )
                 )
             else:
-                why.append(f"Carte graphique de {_gb(vram)}.")
+                why.append(f"Carte graphique de {_gb(need)}.")
         if when.get("programs"):
             names = " ou ".join(PROGRAM_NAMES.get(p, p) for p in when["programs"])
             if any(found(p) for p in when["programs"]):

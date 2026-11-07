@@ -13,8 +13,10 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+import ipaddress
 import os
 import re
+from urllib.parse import urlsplit
 
 OPENAI_ROLES = {"system", "developer", "user", "assistant", "tool", "function"}
 ANTHROPIC_ROLES = {"user", "assistant"}
@@ -37,6 +39,19 @@ def check_image_url(url: str, where: str) -> None:
     """Image en ligne (http/https) ou incluse (data:image/png|jpeg|gif|webp;base64) : autres schémas refusés
     (file:, javascript:…) ; une image incluse doit avoir le contenu de son type et rester sous CHAT_IMAGE_MAX_BYTES."""
     if url.startswith(("http://", "https://")):
+        host = (urlsplit(url).hostname or "").lower().rstrip(".")
+        try:
+            ip = ipaddress.ip_address(host)
+            internal = not ip.is_global
+        except ValueError:
+            internal = (
+                not host
+                or "." not in host
+                or host == "localhost"
+                or host.endswith((".local", ".localhost", ".internal", ".lan", ".home"))
+            )
+        if internal:  # le serveur d'IA qui télécharge l'image joindrait le réseau local (SSRF)
+            raise RequestError(f"{where} : image en ligne refusée (adresse locale) : joignez le fichier à la place.")
         return
     m = _DATA_URL.match(url)
     if not m:

@@ -18,7 +18,6 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import os
-import shutil
 import subprocess
 import sys
 import time
@@ -29,7 +28,19 @@ import httpx
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 
-from .. import benchmark, installers, marketplace, mcp, model_catalog, ollama_library, services, skills, tools, updates
+from .. import (
+    benchmark,
+    detection,
+    installers,
+    marketplace,
+    mcp,
+    model_catalog,
+    ollama_library,
+    services,
+    skills,
+    tools,
+    updates,
+)
 from ..keys import VirtualKeyError
 from ..plans import PlanError
 from ..validation import json_object
@@ -66,7 +77,7 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
         if cid == "pc":
             return tools.pc_enabled()
         if cid == "ollama":
-            return shutil.which("ollama") is not None or (updates.ROOT / "packs" / "ollama.installed").is_file()
+            return installers.program("ollama") is not None or (updates.ROOT / "packs" / "ollama.installed").is_file()
         return False
 
     def manual(c: dict) -> str:
@@ -85,7 +96,13 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
     def done_installs() -> dict:
         return holder["store"].get_setting(INSTALLED_SETTING) or {}
 
-    def one_click(key: str) -> dict:
+    async def present() -> set[str]:
+        """Outils et applications sur ce PC : ce qu'on y lit (detection.py) ; à défaut, ce que la page a noté."""
+        found, done = await asyncio.to_thread(detection.scan), done_installs()
+        keys = [k for k in installers.RECIPES if k.startswith(("tool:", "app:"))]
+        return {k for k in keys if (found[k] if found.get(k) is not None else k in done)}
+
+    def one_click(key: str, here: set[str]) -> dict:
         """Ce que la page affiche pour un élément installable en un clic (vide : pas de recette)."""
         r = installers.RECIPES.get(key)
         if not r:
@@ -98,14 +115,14 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
             "size": r.get("size"),
             "where": r.get("where"),
             "deps": installers.dependencies(key),
-            "installed": key in done_installs(),
+            "installed": key in here,
             "uninstall": [installers.label(a) for a in installers.uninstall_steps(key) or ()],
             "uninstall_hint": installers.uninstall_hint(key),
         }
 
     def npx() -> str | None:
         """npx utilisable : Node.js trop ancien (moins de 24) compte comme absent, winget le met alors à jour."""
-        found = shutil.which("npx") or shutil.which("npx.cmd")
+        found = installers.program("npx")  # comme partout ailleurs (npx.cmd sous Windows)
         return None if found and installers.too_old("npx") else found
 
     def public() -> dict:
@@ -197,14 +214,14 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
             }
         )
         chat = holder["store"].get_pref(ctx.identity, "key:" + ctx.key["id"] if ctx.key else "account", "chat")
-        done = done_installs()
+        here = await present()
         body = {
             "models": models,
             "skills": list(((chat or [{}])[0] or {}).get("skills") or []),
             "components": [c["id"] for c in marketplace.COMPONENTS if await asyncio.to_thread(installed, c["id"])],
             "mcp": sorted(marketplace.installed_mcp()),
-            "tools": sorted(k.split(":", 1)[1] for k in done if k.startswith("tool:")),
-            "apps": sorted(k.split(":", 1)[1] for k in done if k.startswith("app:")),
+            "tools": sorted(k.split(":", 1)[1] for k in here if k.startswith("tool:")),
+            "apps": sorted(k.split(":", 1)[1] for k in here if k.startswith("app:")),
         }
         return JSONResponse(body, headers=headers)
 
@@ -280,6 +297,7 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
             else []
         )
         declared = marketplace.installed_mcp()
+        here = await present()
         servers = [
             {
                 **marketplace.with_stars(s, snap),
@@ -296,9 +314,12 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
             "components": comps,
             "mcp": servers,
             "agent_tools": [
-                {**marketplace.with_stars(t, snap), **one_click(f"tool:{t['id']}")} for t in marketplace.AGENT_TOOLS
+                {**marketplace.with_stars(t, snap), **one_click(f"tool:{t['id']}", here)}
+                for t in marketplace.AGENT_TOOLS
             ],
-            "apps": [{**marketplace.with_stars(a, snap), **one_click(f"app:{a['id']}")} for a in marketplace.APPS],
+            "apps": [
+                {**marketplace.with_stars(a, snap), **one_click(f"app:{a['id']}", here)} for a in marketplace.APPS
+            ],
             "mcp_services": [{"id": k, "name": v["label"], "url": v["url"]} for k, v in services.SERVICES.items()],
             "node": bool(npx()),
             "installer_mode": mode,
@@ -394,6 +415,7 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
             else:
                 done[key] = {"at": int(time.time())}
             holder["store"].set_setting(INSTALLED_SETTING, done)
+        detection.forget()  # même après un échec : une partie des étapes a peut-être abouti
         job.update(state="done" if code == 0 else "error", code=code, proc=None)
 
     def start(
@@ -462,11 +484,11 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
             steps = installers.plan(key)
         except marketplace.MarketplaceError as e:
             fail(e)
-        return start(key, steps, Path.home(), False, r.get("after"), True)
+        return start(key, steps, Path.home(), True, r.get("after"), True)  # la page propose de redémarrer, sans forcer
 
     @router.post("/v1/admin/marketplace/{kind}/{item}/uninstall", status_code=202)
     async def uninstall_item(kind: str, item: str, request: Request):
-        """Outil ou application installé depuis la page : les étapes inverses de sa recette, s'il en a."""
+        """Outil ou application : les étapes inverses de sa recette, s'il en a."""
         admin(request)
         if kind not in ("tools", "apps"):
             raise VirtualKeyError(404, "Rien à désinstaller ici.")

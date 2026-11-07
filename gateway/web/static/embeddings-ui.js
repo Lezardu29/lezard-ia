@@ -27,7 +27,8 @@ function item(m) {
   const head = el("div", "emb-head");
   head.append(el("strong", "", m.label));
   if (m.chosen) head.append(el("span", "pill emb-used", "utilisé"));
-  head.append(el("span", `fit ${m.fit === "cloud" || m.fit === "unknown" ? "" : m.fit}`, FIT[m.fit] || m.fit));
+  const fit = m.fit === "offload" && !data?.gpu ? "RAM, sur le processeur (lent)" : FIT[m.fit] || m.fit;   // sans carte graphique : pas de VRAM
+  head.append(el("span", `fit ${m.fit === "cloud" || m.fit === "unknown" ? "" : m.fit}`, fit));
   text.append(head);
   const facts = [m.ref, `qualité ${Math.round(m.quality * 100)} / 100`,
                  m.multilingual === true ? "multilingue" : m.multilingual === false ? "surtout anglais" : "",

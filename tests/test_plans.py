@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from gateway.config import ProviderConfig
 from gateway.main import create_app
-from gateway.plans import PlanError, PlanResolver, normalize_plan
+from gateway.plans import PlanError, PlanResolver, account_identity, normalize_plan
 from gateway.router import LatencyTracker
 
 MODELS = {
@@ -142,7 +142,8 @@ def test_old_trial_keys_and_rules_never_gain_access():
     with TestClient(app) as c:
         r = c.get("/v1/me", headers=key("sandbox:0123abcd"))  # session anonyme, pas encore expirée
         assert r.status_code == 401 and "expirée" in r.json()["error"]["message"]
-        assert c.get("/v1/me", headers=key("acct:ancien")).json()["plan"] == "free"
+        owner = account_identity("compte-0123456789abcdefghijk")  # compte existant, clé réglée sur l'ancienne offre
+        assert c.get("/v1/me", headers=key(owner)).json()["plan"] == "free"
     assert validate_rules({"plans": ["sandbox"]})["plans"] == ["pro"]
     assert validate_rules({"plans": ["sandbox", "free"]})["plans"] == ["free"]
 

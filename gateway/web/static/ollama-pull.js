@@ -3,6 +3,10 @@ import { api, errorMessage, getKey } from "./auth.js";
 
 export const fmtBytes = (n) => n == null ? "?"
   : n >= 1e9 ? `${(n / 1e9).toFixed(1).replace(".", ",")} Go` : `${Math.round(n / 1e6)} Mo`;
+// mémoire (RAM, carte graphique) en Go binaires, comme le Gestionnaire des tâches de Windows : une carte de 16 Go
+// s'affichait « 17,2 Go » ; les téléchargements restent en Go décimaux (fmtBytes, comme Ollama)
+export const fmtMem = (n) => n == null ? "?"
+  : n >= 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(1).replace(".", ",")} Go` : `${Math.round(n / 1024 ** 2)} Mo`;
 
 let running = false;
 export const pulling = () => running;          // un seul téléchargement à la fois, toutes vues confondues
@@ -23,24 +27,27 @@ export async function pullModel(model, provider, onProgress = () => {}) {
       throw new Error(errorMessage({ status: res.status, data }));
     }
     const reader = res.body.getReader(), decoder = new TextDecoder();
-    let buf = "";
+    let buf = "", finished = false;
     for (;;) {
       const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
+      buf += done ? `${decoder.decode()}\n` : decoder.decode(value, { stream: true });
       const lines = buf.split("\n");
       buf = lines.pop();
       for (const line of lines) {
         if (!line.trim()) continue;
         const ev = JSON.parse(line);
         if (ev.error) { failed = ev.error; continue; }
+        if (ev.status === "done") finished = true;      // dernière ligne de la gateway : modèle installé
         if (ev.total && ev.completed !== undefined) {
           onProgress({ pct: Math.min(100, Math.round((ev.completed / ev.total) * 100)), completed: ev.completed, total: ev.total });
         } else if (ev.status) {
           onProgress({ status: ev.status });
         }
       }
+      if (done) break;
     }
+    // flux coupé sans « done » (tunnel, Wi-Fi, gateway redémarrée) : ce n'est pas une réussite
+    if (!failed && !finished) failed = "Téléchargement interrompu avant la fin : relancez-le (Ollama reprend où il s'était arrêté).";
   } catch (err) {
     failed = err.message || "Téléchargement interrompu.";
   } finally {

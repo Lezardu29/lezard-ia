@@ -17,6 +17,7 @@ from pathlib import Path
 import httpx
 
 from .network_scan import KNOWN_PORTS, scan
+from .providers.base import is_self
 
 LABELS = {
     "ollama": "Ollama",
@@ -51,7 +52,7 @@ async def find_servers(client: httpx.AsyncClient, instance_id: str | None) -> li
     found = await scan([host], client, KNOWN_PORTS)
     out = []
     for f in found:
-        if instance_id and f.get("served_by") == instance_id:
+        if is_self(f.get("served_by"), instance_id):
             continue  # la gateway elle-même
         out.append(
             {

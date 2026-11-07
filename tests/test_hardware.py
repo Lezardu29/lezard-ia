@@ -59,11 +59,13 @@ def smi_run(stdout: str, code: int = 0):
 @pytest.fixture
 def no_smi(monkeypatch):
     monkeypatch.setattr(hardware.shutil, "which", lambda name: None)
+    monkeypatch.setattr(hardware, "other_gpus", lambda: [])
 
 
 @pytest.fixture
 def with_smi(monkeypatch):
     monkeypatch.setattr(hardware.shutil, "which", lambda name: "/usr/bin/nvidia-smi")
+    monkeypatch.setattr(hardware, "other_gpus", lambda: [])  # cartes AMD / Intel de la machine des tests : à part
 
 
 def test_nvml_simulated(no_smi):
@@ -78,6 +80,9 @@ def test_nvml_simulated(no_smi):
             "vram_used": 3 * GIB,
             "vram_free": 9 * GIB,
             "utilization_pct": 37,
+            "vendor": "nvidia",
+            "kind": "dedicated",
+            "source": "nvml",
         }
     ]
     assert nvml.calls == ["init", "shutdown"]
@@ -98,6 +103,9 @@ def test_nvml_error_falls_back_to_smi(with_smi):
         "vram_used": GIB,
         "vram_free": 11 * GIB,
         "utilization_pct": 5,
+        "vendor": "nvidia",
+        "kind": "dedicated",
+        "source": "nvidia-smi",
     }
     assert g["gpus"][1]["vram_used"] is None and g["gpus"][1]["utilization_pct"] is None
     assert "--format=csv,noheader,nounits" in run.seen[0]

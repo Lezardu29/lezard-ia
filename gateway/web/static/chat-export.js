@@ -4,6 +4,7 @@ import { saveBlob } from "./save-file.js";
 
 const textOf = (content) => (typeof content === "string" ? content
   : (content || []).filter((p) => p.type === "text").map((p) => p.text).join("\n"));
+const THINK = /^\s*<think>[\s\S]*?(<\/think>|$)/i;      // comme chat.js
 const imageCount = (content) => (typeof content === "string" ? 0
   : (content || []).filter((p) => p.type === "image_url").length);
 
@@ -20,7 +21,8 @@ export function toMarkdown(title, messages, when = new Date()) {
     const model = m.meta?.model ? ` · ${m.meta.provider ? `${m.meta.provider}/` : ""}${m.meta.model}` : "";
     const variant = m.versions ? ` · version ${m.active + 1}/${m.versions.length}` : "";
     lines.push(`## ${who}${model}${variant}`, "");
-    const text = textOf(m.content).trim();
+    const raw = textOf(m.content);
+    const text = (m.role === "assistant" ? raw.replace(THINK, "") : raw).trim();   // sans la réflexion du modèle
     if (text) lines.push(text, "");
     const images = imageCount(m.content);
     if (images) lines.push(`_${images} image${images > 1 ? "s" : ""} jointe${images > 1 ? "s" : ""}_`, "");

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 from contextlib import nullcontext
 from collections.abc import AsyncIterator
 
@@ -8,7 +10,29 @@ import httpx
 
 from ..config import ProviderConfig
 
-GATEWAY_HEADER = "X-Smart-Gateway"  # identifiant d'installation ajouté à chaque réponse de la gateway
+GATEWAY_HEADER = "X-Smart-Gateway"  # empreinte de l'installation, ajoutée à chaque réponse de la gateway
+
+
+def instance_tag(instance: str) -> str:
+    """Ce que l'en-tête GATEWAY_HEADER montre de l'installation : une empreinte, pas l'identifiant. Envoyé à tout
+    visiteur (tunnel public compris), l'identifiant suffisait à réserver le tunnel de ce PC sur lezard-ia.fr avant lui
+    (son nom en dépend), qui recevait ensuite un refus définitif. L'empreinte suffit à se reconnaître soi-même."""
+    return hashlib.sha256(f"lezard-instance:{instance}".encode()).hexdigest()[:24]
+
+
+def is_self(served_by: str | None, instance: str | None) -> bool:
+    """Ce serveur est-il cette gateway ? (empreinte, ou identifiant envoyé par une version précédente)"""
+    return bool(served_by and instance) and served_by in (instance_tag(instance), instance)
+
+
+# réflexion des modèles qui raisonnent (DeepSeek-R1, Qwen3… servis par LM Studio, llama.cpp, vLLM) : « <think>…</think> »
+# en tête du contenu, parfois sans balise fermante quand la réponse est coupée par max_tokens
+_THINK = re.compile(r"^\s*<think>.*?(?:</think>|$)", re.S | re.I)
+
+
+def strip_reasoning(text: str | None) -> str:
+    """Contenu d'une réponse sans le bloc de réflexion du début (titres, résumés, plans : la réponse seule)."""
+    return _THINK.sub("", text or "", count=1).strip()
 
 
 class ProviderError(Exception):

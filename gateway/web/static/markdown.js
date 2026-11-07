@@ -68,7 +68,7 @@ function safeUrl(url) {
 function inline(text) {
   const slots = [];
   const keep = (html) => `\u0000${slots.push(html) - 1}\u0000`;
-  let s = escapeHtml(text);
+  let s = escapeHtml(text.replace(/\u0000/g, "\uFFFD"));   // NUL : réservé aux emplacements ci-dessous
   s = s.replace(/`([^`\n]+)`/g, (_, c) => keep(`<code>${c}</code>`));
   s = s.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, (m, label, url) => {
     const u = safeUrl(url);

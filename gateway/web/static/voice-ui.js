@@ -40,7 +40,8 @@ function item(m) {
   const head = el("div", "emb-head");
   head.append(el("strong", "", m.label));
   if (m.chosen) head.append(el("span", "pill emb-used", "utilisé"));
-  head.append(el("span", `fit ${["vram", "offload", "too_big"].includes(m.fit) ? m.fit : ""}`, FIT[m.fit] || m.fit));
+  const fit = m.fit === "offload" && !gpu ? "RAM, sur le processeur (lent)" : FIT[m.fit] || m.fit;   // sans carte graphique : pas de VRAM
+  head.append(el("span", `fit ${["vram", "offload", "too_big"].includes(m.fit) ? m.fit : ""}`, fit));
   text.append(head);
   const facts = [m.ref, `qualité en français ${Math.round(m.score * 100)} / 100`,
                  m.multilingual === false ? "surtout anglais" : "",
@@ -51,7 +52,9 @@ function item(m) {
   return li;
 }
 
+let gpu = null;
 function render(d) {
+  gpu = d.gpu;
   $("voice-section").hidden = false;
   for (const [kind, k] of Object.entries(KINDS)) {
     const part = d[kind];

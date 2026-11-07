@@ -11,9 +11,10 @@ import { saveCode } from "./save-file.js";
 import { renderMarkdown } from "./markdown.js";
 import { renderMetrics } from "./metrics.js";
 import { attachmentsReady, hasAttachments, sizeLabel, takeAttachments } from "./attachments.js";
-import { commandLabel, commandOptions, handleCommand, initSlash, stripCommand } from "./slash-commands.js";
+import { commandLabel, commandOptions, handleCommand, initSlash, mcpTool, stripCommand } from "./slash-commands.js";
 import { AUTO_COMPACT, contextRatio, mountContextRing, updateContextRing } from "./context-ring.js";
 import { initRowMenus } from "./row-menu.js";
+import { sse } from "./sse.js";
 
 const $ = (id) => document.getElementById(id);
 // attente de la réponse : le lézard de l'avatar s'anime (chat.css), le texte l'annonce
@@ -499,28 +500,6 @@ function updateSend() {
   $("send").disabled = !busy && (!attachmentsReady() || (!$("prompt").value.trim() && !hasAttachments()));
 }
 
-async function* sse(response) {
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let idx;
-    while ((idx = buffer.indexOf("\n\n")) >= 0) {
-      const event = buffer.slice(0, idx);
-      buffer = buffer.slice(idx + 2);
-      for (const line of event.split("\n")) {
-        if (!line.startsWith("data:")) continue;
-        const data = line.slice(5).trim();
-        if (data === "[DONE]") return;
-        try { yield JSON.parse(data); } catch { /* fragment ignoré */ }
-      }
-    }
-  }
-}
-
 async function generate({ model = null, before = null } = {}) {
   const el = addMessage("assistant");
   el.classList.add("streaming");
@@ -649,7 +628,9 @@ function toolEvent(el, ev) {
     row.className = "tool-step running";
     row.dataset.id = ev.id;
     const name = document.createElement("code");
-    name.textContent = ev.name;
+    const viaMcp = mcpTool(ev.name);                        // quel serveur MCP agit, plutôt que le nom technique
+    name.textContent = viaMcp ? `MCP ${viaMcp.server} · ${viaMcp.tool}` : ev.name;
+    if (viaMcp) name.title = viaMcp.help;
     const args = document.createElement("span");
     args.className = "tool-args";
     args.textContent = argsLabel(ev.args);
@@ -666,10 +647,27 @@ function toolEvent(el, ev) {
   if (nearBottom()) scrollToBottom(true);
 }
 
+const argText = (v) => (typeof v === "string" ? v : JSON.stringify(v));
+// « reason » (écrite par le modèle, souvent longue) en dernier : elle ne pousse plus hors de vue ce qui sera fait
+const actionFirst = (args) => Object.entries(args || {}).sort(([a], [b]) => (a === "reason") - (b === "reason"));
 function argsLabel(args) {
-  const text = Object.entries(args || {})
-    .map(([k, v]) => `${k} : ${typeof v === "string" ? v : JSON.stringify(v)}`).join(", ");
+  const text = actionFirst(args).map(([k, v]) => `${k} : ${argText(v)}`).join(", ");
   return text.length > 140 ? `${text.slice(0, 139)}…` : text;
+}
+// ce que l'action fera, en entier : c'est cela que la personne autorise (texte tapé, adresse, application…)
+const ARG_LABELS = { text: "Texte qui sera tapé", url: "Adresse", name: "Application", keys: "Touches", key: "Touche",
+                     query: "Recherche", path: "Fichier", element: "Élément", x: "x", y: "y" };
+function approvalDetails(args) {
+  const list = document.createElement("dl");
+  list.className = "tool-approval-args";
+  for (const [k, v] of actionFirst(args)) {
+    const dt = document.createElement("dt"), dd = document.createElement("dd");
+    dt.textContent = k === "reason" ? "Raison donnée par l'IA (à vérifier)" : ARG_LABELS[k] || k;
+    dd.textContent = argText(v);                           // texte brut, jamais tronqué
+    if (k === "reason") dd.className = "muted";
+    list.append(dt, dd);
+  }
+  return list;
 }
 
 function approvalCard(ev) {
@@ -684,7 +682,12 @@ function approvalCard(ev) {
     box.append(img);
   }
   const p = document.createElement("p");
-  p.textContent = "L'IA veut agir sur ce PC. Autoriser cette action ?";
+  const viaMcp = mcpTool(ev.name);
+  p.textContent = viaMcp
+    ? `L'IA veut utiliser le serveur MCP ${viaMcp.server}, outil ${viaMcp.tool}. ${viaMcp.help} Autoriser cette action ?`
+    : String(ev.name || "").startsWith("web_")
+    ? "L'IA veut consulter Internet alors qu'elle a lu votre écran ou vos documents. Vérifiez l'adresse : autoriser ?"
+    : "L'IA veut agir sur ce PC. Vérifiez ce qui sera fait : autoriser cette action ?";
   const row = document.createElement("div");
   row.className = "row";
   const decide = async (approve) => {
@@ -700,7 +703,7 @@ function approvalCard(ev) {
     b.addEventListener("click", () => decide(approve));
     row.append(b);
   }
-  box.append(p, row);
+  box.append(approvalDetails(ev.args), p, row);
   return box;
 }
 
@@ -731,7 +734,11 @@ function showError(el, message, partial) {
   const retry = document.createElement("button");
   retry.type = "button";
   retry.textContent = "Réessayer";
-  retry.addEventListener("click", () => { el.remove(); generate(); });
+  retry.addEventListener("click", () => {
+    if (state.controller) return;                          // une autre réponse est en cours
+    el.remove();
+    generate();
+  });
   box.append(span, retry);
   body.appendChild(box);
 }
@@ -867,6 +874,7 @@ function showSuggestions() {
 export function newConversation(project = null) {
   state.controller?.abort();
   state.generation++;
+  notice("");                                               // le message de l'ancienne conversation ne la suit pas
   state.messages = [];
   state.project = state.server && typeof project === "string" ? project : null;
   if (state.server) {
@@ -976,13 +984,16 @@ export async function initChat({ onMeta, onAuthError, getOptions, onStart, onRes
   initSlash($("prompt"));                                  // ses touches passent avant l'envoi par Entrée
   $("prompt").addEventListener("input", autosize);
   $("prompt").addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) submit(e);
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      if (!state.controller) submit(e);                  // pendant une réponse, Entrée ne l'arrête pas (bouton, Échap)
+    }
     if (e.key === "Escape" && state.controller) state.controller.abort();
   });
   showSuggestions();
   $("suggestions").addEventListener("click", (e) => {
     const s = e.target.closest(".suggestion");
-    if (!s) return;
+    if (!s || state.controller) return;
     $("prompt").value = s.textContent.trim();
     submit();
   });

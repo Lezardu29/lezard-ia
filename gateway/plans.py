@@ -23,6 +23,8 @@ from dataclasses import dataclass
 PLANS = ("free", "pro")
 MIN_TOKEN_LENGTH = 24  # en dessous, un identifiant de compte est devinable (ex. « compte-test »)
 ACCOUNT_PREFIX = "sk-acct-"  # jeton d'un compte nommé créé depuis l'interface (20.3)
+# préfixes des jetons que la gateway génère : clé maître (installateur, lancer.ps1), compte de test, compte nommé
+ISSUED_PREFIXES = ("gw-", "ct-", ACCOUNT_PREFIX)
 PLACEHOLDERS = ("change-moi", "changez-moi", "changeme", "change-me", "change_me")  # valeurs d'exemple (9.2)
 
 
@@ -134,6 +136,13 @@ class PlanResolver:
             if len(t) < MIN_TOKEN_LENGTH or is_placeholder(t)
         )
 
+    def owner_exists(self, identity: str) -> bool:
+        """Compte qui peut encore posséder des clés virtuelles : clé maître ou GATEWAY_KEYS actuels, compte nommé
+        en base. Un compte retiré de GATEWAY_KEYS emporte ses clés."""
+        if identity in self.identity_plans:
+            return True
+        return self.accounts is not None and self.accounts.store.account_by_identity(identity) is not None
+
     def configured_plan(self, identity: str) -> str | None:
         """Plan donné par l'administrateur : GATEWAY_KEYS, ou compte nommé en base (20.3)."""
         found = self.identity_plans.get(identity)
@@ -169,7 +178,11 @@ class PlanResolver:
                 account["identity"],
                 can_manage=True,
             )
-        elif token and (self.require_key or not allow_anonymous):
+        elif token and (self.require_key or not allow_anonymous or token.startswith(ISSUED_PREFIXES)):
+            # jeton émis par la gateway mais inconnu (clé maître changée, compte retiré de GATEWAY_KEYS ou supprimé) :
+            # refusé, même là où l'accès sans clé est permis ; avant, il gardait l'accès aux données de son ancien
+            # compte (conversations, documents). Un autre jeton (« ollama », clé d'un client OpenAI) reste un simple
+            # nom d'espace dans l'accès sans clé.
             raise InvalidCredentials()
         elif self.require_key:
             raise PlanError(401, "Clé API requise (Authorization: Bearer sk-app-…).")

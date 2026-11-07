@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from . import benchmark
+from .gpus import usable
 from .local_context import ollama_server_default
 
 GB = 1e9
@@ -129,8 +130,10 @@ def disk_needed(name: str) -> float:
 def budget(hw: dict) -> dict:
     """Mémoire disponible pour un modèle : VRAM TOTALE du plus gros GPU moins la réserve de l'affichage (ce que le
     PC peut faire, pas ce qu'un navigateur ou un jeu ouvert laisse à l'instant), et part de la RAM disponible.
-    `vram_busy` : VRAM prise en ce moment par d'autres applications que les modèles (à libérer pour la vitesse)."""
-    gpus = [g for g in hw.get("gpus") or [] if g.get("vram_total")]
+    `vram_busy` : VRAM prise en ce moment par d'autres applications que les modèles (à libérer pour la vitesse).
+    Carte DÉDIÉE seulement, de tout fabricant (NVIDIA, AMD, Intel Arc) : la partie graphique intégrée au processeur
+    partage la RAM et calcule bien moins vite, elle n'est jamais la carte des modèles."""
+    gpus = usable(hw.get("gpus") or [])
     gpu = max(gpus, key=lambda g: g["vram_total"], default=None)
     vram = busy = 0
     if gpu:

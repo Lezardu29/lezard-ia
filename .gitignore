@@ -47,3 +47,8 @@ coverage.xml
 
 # application Android publiée sur le site (téléchargement public)
 !site/fichiers/LezardIA.apk
+
+# --- rendus de la vidéo (video/render.py, music.py, voice.py) : régénérés par les scripts, ~95 Mo ---
+# seule la voix enregistrée, entrée de voice.py, reste versionnée
+video/out/*
+!video/out/voix.mp3

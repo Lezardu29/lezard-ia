@@ -51,7 +51,8 @@ async function copy(button) {
 }
 
 async function load() {
-  const token = decodeURIComponent(location.pathname.split("/").pop() || "");
+  let token = location.pathname.split("/").pop() || "";
+  try { token = decodeURIComponent(token); } catch { /* lien abîmé (« %E0 ») : le serveur répond 404 */ }
   let r = null, data = null;
   try {
     r = await fetch(`/v1/shared/${encodeURIComponent(token)}`, { referrerPolicy: "no-referrer" });
