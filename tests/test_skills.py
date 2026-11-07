@@ -123,3 +123,14 @@ def test_unknown_skill_is_refused_before_any_call(api):  # noqa: F811
         json={"model": "ollama/llama3.1:8b", "skills": ["x"], "messages": [{"role": "user", "content": "a"}]},
     )
     assert r.status_code == 400 and "inconnue" in r.json()["error"]["message"] and len(up.bodies) == n
+
+
+def test_competence_offers_a_list_to_pick_from_like_modele():
+    """« /competence » ouvre la liste des compétences (● active), Tab passe à la suivante, comme « /modele »."""
+    from pathlib import Path
+
+    js = (Path(__file__).resolve().parent.parent / "gateway" / "web" / "static" / "slash-commands.js").read_text(
+        encoding="utf-8"
+    )
+    assert "const updateSkills = async (query)" in js and 'picking = "Compétence"' in js
+    assert "if (skill) return updateSkills(skill[1]);" in js and 'fill: "/competence off"' in js

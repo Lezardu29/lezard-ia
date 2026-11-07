@@ -495,9 +495,10 @@ function panel(title) {
 }
 
 // ---------- suggestions pendant la frappe : ↑ ↓ pour choisir, Tab / Entrée pour compléter, Échap ----------
-// Deux listes : les commandes (« / »), et après « /modele » les modèles de chat, filtrés par ce qui est tapé. Pour
-// les modèles, Tab (Maj+Tab : précédent) passe au suivant et écrit son nom dans la saisie ; le nom reste visible
-// en tête de liste pendant le choix. Entrée valide le modèle sans l'envoyer : Entrée une seconde fois envoie /modele.
+// Listes : les commandes (« / »), après « /modele » les modèles de chat, après « /competence » les compétences
+// (● active), après « /mcp » les serveurs, filtrés par ce qui est tapé. Pour les modèles et les compétences, Tab
+// (Maj+Tab : précédent) passe au suivant et écrit son nom dans la saisie ; le nom reste visible en tête de liste
+// pendant le choix. Entrée valide sans envoyer : Entrée une seconde fois envoie /modele ou /competence.
 export function initSlash(prompt) {
   rights();                                                // /web régénéré au rechargement : outils déjà connus
   const menu = document.createElement("ul");
@@ -507,9 +508,10 @@ export function initSlash(prompt) {
   menu.hidden = true;
   prompt.closest("form").prepend(menu);
   prompt.setAttribute("aria-controls", "slash-menu");
-  let items = [], active = 0, models = false;
+  // picking : liste où l'on choisit une valeur (« Modèle », « Compétence ») ; Tab passe à la suivante et l'écrit
+  let items = [], active = 0, picking = null;
 
-  const close = () => { menu.hidden = true; items = []; models = false; prompt.setAttribute("aria-expanded", "false"); };
+  const close = () => { menu.hidden = true; items = []; picking = null; prompt.setAttribute("aria-expanded", "false"); };
   const show = () => {
     menu.hidden = false;
     prompt.setAttribute("aria-expanded", "true");
@@ -518,18 +520,20 @@ export function initSlash(prompt) {
   const choose = (i) => {
     const it = items[i];
     if (!it) return;
+    const chosen = picking;
     prompt.value = it.fill;
     close();
     prompt.focus();
-    prompt.dispatchEvent(new Event("input"));           // « /modele » ouvre aussitôt la liste des modèles
+    // « /modele », « /competence » : leur liste s'ouvre aussitôt ; une valeur choisie : Entrée suivante envoie
+    if (!chosen) prompt.dispatchEvent(new Event("input"));
   };
   const paint = () => {
     menu.innerHTML = "";
-    if (models && items.length) {                       // le modèle en cours de choix reste affiché
+    if (picking && items.length) {                      // la valeur en cours de choix reste affichée
       const head = document.createElement("li");
       head.className = "slash-head";
       head.setAttribute("role", "presentation");
-      head.textContent = `Modèle : ${items[active].label} (${active + 1}/${items.length}) · Tab suivant · Maj+Tab précédent · Entrée valide`;
+      head.textContent = `${picking} : ${items[active].name || items[active].label} (${active + 1}/${items.length}) · Tab suivant · Maj+Tab précédent · Entrée valide`;
       menu.append(head);
     }
     items.forEach((it, i) => {
@@ -550,7 +554,7 @@ export function initSlash(prompt) {
     if (plain(/^\/(\S*)$/.exec(prompt.value)?.[1] ?? "\u0000") !== typed) return;   // la saisie a changé entre-temps
     const found = commands().filter((c) => allowed(c) && c.name.startsWith(typed));
     if (!found.length || (found.length === 1 && found[0].name === typed && !found[0].args)) return close();
-    models = false;
+    picking = null;
     items = found.map((c) => ({
       label: `/${c.name}${c.args ? ` ${c.args}` : ""}`,
       help: c.help,
@@ -567,7 +571,7 @@ export function initSlash(prompt) {
     const rank = (id) => (id.toLowerCase().startsWith(typed) ? 0 : 1);   // début de nom d'abord
     ids.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
     if (!ids.length) return close();
-    models = true;
+    picking = "Modèle";
     items = ids.map((id) => ({
       label: id,
       help: id === forcedModel() ? "choisi" : "",
@@ -581,14 +585,39 @@ export function initSlash(prompt) {
     if (plain(/^\/mcp\s+(\S*)$/i.exec(prompt.value)?.[1] ?? "\u0000") !== typed) return;
     const found = servers.filter((s) => plain(s.id).startsWith(typed));
     if (!found.length) return close();
-    models = false;
+    picking = null;
     items = found.map((s) => ({ label: `/mcp ${s.id}`, help: s.name, fill: `/mcp ${s.id} ` }));
+    active = Math.min(active, items.length - 1);
+    show();
+  };
+  // « /competence r » : les compétences, comme les modèles (● active : la choisir la coupe ; « off » : toutes)
+  const updateSkills = async (query) => {
+    const typed = plain(query.trim());
+    const { data: list } = await skillCatalog();
+    if (!/^\/competence\s/i.test(prompt.value)) return;   // la saisie a changé pendant le chargement
+    const on = new Set(activeSkills());
+    const found = list.filter((sk) => plain(sk.id).includes(typed) || plain(sk.name).includes(typed));
+    const rank = (sk) => (on.has(sk.id) ? 0 : 1) + (plain(sk.id).startsWith(typed) ? 0 : 2);  // actives, début de nom
+    found.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+    items = found.map((sk) => ({
+      label: `${on.has(sk.id) ? "● " : "○ "}${sk.id}`,
+      name: sk.name,
+      help: on.has(sk.id) ? `${sk.name} · active (la choisir la coupe)` : `${sk.name} · ${sk.description}`,
+      fill: `/competence ${sk.id}`,
+    }));
+    if (on.size && "off".startsWith(typed)) {
+      items.push({ label: "off", name: "toutes coupées", help: "Couper toutes les compétences actives", fill: "/competence off" });
+    }
+    if (!items.length) return close();
+    picking = "Compétence";
     active = Math.min(active, items.length - 1);
     show();
   };
   const update = () => {
     const mod = /^\/modele\s(.*)$/i.exec(prompt.value);
     if (mod) return updateModels(mod[1]);
+    const skill = /^\/competence\s(.*)$/i.exec(prompt.value);
+    if (skill) return updateSkills(skill[1]);
     const srv = /^\/mcp\s+(\S*)$/i.exec(prompt.value);
     if (srv) return updateServers(plain(srv[1]));
     const cmd = /^\/(\S*)$/.exec(prompt.value);
@@ -600,13 +629,13 @@ export function initSlash(prompt) {
   prompt.addEventListener("keydown", (e) => {        // avant l'envoi par Entrée (chat.js)
     if (menu.hidden || !items.length) return;
     const step = { ArrowDown: 1, ArrowUp: -1 }[e.key];
-    if (e.key === "Tab" && models) {                    // Tab : modèle suivant, son nom reste dans la saisie
+    if (e.key === "Tab" && picking) {                   // Tab : valeur suivante, son nom reste dans la saisie
       active = (active + (e.shiftKey ? -1 : 1) + items.length) % items.length;
       prompt.value = items[active].fill;
       paint();
     } else if (step) {
       active = (active + step + items.length) % items.length;
-      if (models) prompt.value = items[active].fill;
+      if (picking) prompt.value = items[active].fill;
       paint();
     } else if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
       choose(active);
