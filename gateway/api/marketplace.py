@@ -57,6 +57,15 @@ STEP_TIMEOUT = 30 * 60
 LOG_LINES = 40
 
 
+def after_install(key: str, after: str | None) -> str | None:
+    """Ce que la page dit après l'installation : la commande du chat d'abord (« /aider … »), puis le reste."""
+    eid = key.split(":", 1)[1]
+    if eid not in marketplace.CHAT:
+        return after
+    use = marketplace.chat_usage(eid)["use"]
+    return f"Dans le chat de Lezard IA : {use}." + (f" {after}" if after else "")
+
+
 def log_path() -> Path:
     return Path(os.getenv("MARKETPLACE_LOG", os.path.join("data", "logs", "marketplace.log")))
 
@@ -115,7 +124,7 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
             "one_click": True,
             "missing": installers.missing(key),
             "steps": installers.display(key),
-            "after": r.get("after"),
+            "after": after_install(key, r.get("after")),
             "size": r.get("size"),
             "where": r.get("where"),
             "deps": installers.dependencies(key),

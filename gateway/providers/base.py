@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import gc
 import hashlib
 import json
 import re
+import time
 from contextlib import nullcontext
 from collections.abc import AsyncIterator
 
@@ -109,3 +111,33 @@ class Provider:
             except ValueError:
                 retry_after = None
             raise ProviderError(r.status_code, r.text[:500], self.name, retry_after)
+
+
+class InProcessModel:
+    """IA chargée dans la gateway même (Kokoro, Whisper) : attributs `_model`, `_load_lock`, `_run_lock`. Libérée de
+    la mémoire après un délai sans usage (déchargement automatique, local_gpu.unload_idle), rechargée à la demande
+    suivante. Jamais pendant un usage : le verrou de l'IA doit être libre."""
+
+    _used = 0.0
+
+    def _touch(self) -> None:
+        self._used = time.monotonic()
+
+    def release_if_idle(self, seconds: float) -> bool:
+        if self._model is None or time.monotonic() - self._used < seconds:
+            return False
+        if not self._run_lock.acquire(blocking=False):  # synthèse ou transcription en cours
+            return False
+        try:
+            if not self._load_lock.acquire(blocking=False):  # chargement en cours
+                return False
+            try:
+                if self._model is None or time.monotonic() - self._used < seconds:
+                    return False
+                self._model = None
+            finally:
+                self._load_lock.release()
+        finally:
+            self._run_lock.release()
+        gc.collect()  # la mémoire du modèle est rendue tout de suite
+        return True

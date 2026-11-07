@@ -24,7 +24,7 @@ from pathlib import Path
 import httpx
 
 from ..config import ProviderConfig, hosted_instance
-from .base import Provider, ProviderError
+from .base import InProcessModel, Provider, ProviderError
 
 NAME = "whisper-local"
 log = logging.getLogger("gateway")
@@ -112,7 +112,7 @@ def subtitles(segments: list[dict], fmt: str) -> bytes:
     return "\n".join(lines).encode("utf-8")
 
 
-class LocalWhisperProvider(Provider):
+class LocalWhisperProvider(InProcessModel, Provider):
     """Fournisseur « whisper-local » : un seul modèle de transcription, chargé au premier usage (ou en avance par
     `preload`). Une transcription à la fois : elle occupe les cœurs du processeur."""
 
@@ -140,6 +140,7 @@ class LocalWhisperProvider(Provider):
         return [self.model_id]
 
     def _load(self):
+        self._touch()
         with self._load_lock:
             if self._model is None:
                 if self._factory:
@@ -189,6 +190,7 @@ class LocalWhisperProvider(Provider):
                 {"id": i, "start": round(s.start, 2), "end": round(s.end, 2), "text": s.text}
                 for i, s in enumerate(segments)
             ]
+            self._touch()  # fin d'usage : le délai avant déchargement part d'ici
         return {
             "text": "".join(s["text"] for s in segs).strip(),
             "language": info.language,

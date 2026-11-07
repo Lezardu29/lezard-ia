@@ -575,7 +575,8 @@ RECIPES: dict[str, dict] = {
         "steps": [("npm", "install", "--global", "openclaw@2026.10.5")],
         "size": "258 Mo",
         "where": NPM + " : commande openclaw",
-        "after": "Branchez Lezard IA avec le guide « OpenClaw » (fichier ~/.openclaw/openclaw.json).",
+        "after": "Pour l'utiliser aussi dans un terminal ou vos messageries : guide « OpenClaw » (fichier "
+        "~/.openclaw/openclaw.json).",
     },
     "app:comfyui": {
         "steps": [_winget("Comfy.ComfyUI-Desktop")],

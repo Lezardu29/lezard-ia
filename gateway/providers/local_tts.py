@@ -26,7 +26,7 @@ import httpx
 
 from ..config import ProviderConfig, hosted_instance
 from ..store import default_db_path
-from .base import Provider, ProviderError
+from .base import InProcessModel, Provider, ProviderError
 
 NAME = "tts-local"
 MODEL_ID = "kokoro"
@@ -106,7 +106,7 @@ def to_wav(samples, rate: int) -> bytes:
     return buf.getvalue()
 
 
-class LocalTtsProvider(Provider):
+class LocalTtsProvider(InProcessModel, Provider):
     """Fournisseur « tts-local » : un seul modèle (« kokoro »), chargé au premier usage (ou en avance par `preload`).
     Une synthèse à la fois : elle occupe les cœurs du processeur."""
 
@@ -122,6 +122,7 @@ class LocalTtsProvider(Provider):
         return [MODEL_ID]
 
     def _load(self):
+        self._touch()
         with self._load_lock:
             if self._model is None:
                 if self._factory:
@@ -168,6 +169,7 @@ class LocalTtsProvider(Provider):
         options = {"sentence_pause": float(payload["pause"])} if payload.get("pause") is not None else {}
         with self._run_lock:
             samples, rate = model.create(payload["input"], voice=style, speed=speed, lang=lang, **options)
+            self._touch()  # fin d'usage : le délai avant déchargement part d'ici
         if payload.get("response_format") == "pcm":
             return pcm16(samples)
         return to_wav(samples, rate)

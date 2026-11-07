@@ -17,6 +17,8 @@ os.environ.setdefault("GATEWAY_ANONYMOUS_FROM", "*")
 # transcription locale intégrée (faster-whisper) : pas de modèle chargé pendant les tests (testée à part, simulée)
 os.environ.setdefault("LOCAL_WHISPER", "false")
 os.environ.setdefault("HARDWARE_PROBE", "false")  # ni de relevé du matériel en tâche de fond (nvidia-smi…)
+os.environ.setdefault("GATEWAY_IDLE_UNLOAD", "off")  # ni de déchargement automatique (testé à part, unload_idle)
+os.environ.setdefault("GATEWAY_KEEP_ALIVE", "ollama")  # ni de rappel keep_alive après chaque requête (test_idle_unload)
 os.environ.setdefault("LOCAL_TTS", "false")  # ni de lecture vocale locale (Kokoro) : testée à part, simulée
 # guide des applications du contrôle du PC : jamais celui du vrai PC (data/pc_apps.json) ; tests : fichier à part
 os.environ.setdefault("PC_APP_GUIDES", os.path.join(os.path.dirname(__file__), "aucun-guide-pc_apps.json"))

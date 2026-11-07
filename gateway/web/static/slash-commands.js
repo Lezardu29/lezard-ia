@@ -3,7 +3,9 @@
 // Commandes locales (/memoire, /retiens, /oublie, /nouveau, /compacte, /prive, /aide, /modele, /mode, /effort, /multi, /competence) : exécutées dans la page,
 // rien n'est envoyé à l'IA (/compacte fait résumer la conversation par la gateway). /modele choisit l'IA qui répond ; /mode, /effort et /multi règlent le routage. La mémoire du contrôle du PC (préférences, leçons tirées des erreurs) est sur la gateway.
 // /mcp : seul ou avec un nom de serveur, explique (local) ; suivie d'une demande, elle part à l'IA, limitée au serveur nommé.
-import { api } from "./auth.js";
+// Outils de la marketplace installés sur ce PC (GET /v1/apps, clé maître) : une commande chacun (/openclaw, /aider,
+// /gws, /jan…) ; l'outil répond dans la conversation à la place de l'IA du chat (chat.js, askTool).
+import { api, rawApi } from "./auth.js";
 import { activeSkills, chatModels, forcedModel, routing, setEffort, setForcedModel, setMode, setMulti, setSkill,
          skillCatalog } from "./settings-bar.js";
 
@@ -43,12 +45,21 @@ const $ = (id) => document.getElementById(id);
 let tools = null;                                          // outils permis à cette clé (GET /v1/tools)
 let servers = [];                                          // serveurs MCP de cette clé, connectés ou non
 let numbered = [];                                         // ids des souvenirs, dans l'ordre affiché par /memoire
+let apps = [];                                             // outils de la marketplace installés sur ce PC (clé maître)
+const ARGS = { agent: "<demande>", cli: "<arguments>" };
+
+/** Commandes du chat : celles de Lezard IA, puis une par outil installé (/openclaw, /aider, /gws, /jan…). */
+function commands() {
+  return [...COMMANDS, ...apps.map((a) => ({ name: a.command, args: ARGS[a.kind], app: a, send: true,
+                                            help: `${a.name} ${a.what}` }))];
+}
 
 async function rights(fresh = false) {
   if (!tools || fresh) {
-    const r = await api("/v1/tools");
+    const [r, installed] = await Promise.all([api("/v1/tools"), rawApi("/v1/apps")]);
     tools = r.ok ? r.data.data : [];
     servers = r.ok ? r.data.mcp_servers || [] : [];
+    apps = installed.ok ? installed.data?.data || [] : [];
   }
   return tools;
 }
@@ -80,7 +91,7 @@ export function mcpTool(name) {
 export function parseCommand(text) {
   const m = /^\/(\p{L}+)(?:\s+([\s\S]*))?$/u.exec(text.trim());
   if (!m) return null;
-  return { name: m[1], cmd: COMMANDS.find((c) => c.name === plain(m[1])) || null, rest: (m[2] || "").trim() };
+  return { name: m[1], cmd: commands().find((c) => c.name === plain(m[1])) || null, rest: (m[2] || "").trim() };
 }
 
 /** Commande reconnue au début d'un message affiché : { label: "/pc", rest } (bulle de l'utilisateur). */
@@ -107,6 +118,12 @@ export function commandOptions(text) {
   return { gateway_tools: (tools || []).filter((t) => !["pc", "mcp", "docs"].includes(t.level)).map((t) => t.name), orchestration: undefined };
 }
 
+/** Outil de la marketplace qui répond à ce message (« /aider … ») : { app, rest } ; null pour l'IA du chat. */
+export function appRequest(text) {
+  const p = parseCommand(text || "");
+  return p?.cmd?.app ? { app: p.cmd.app, rest: p.rest } : null;
+}
+
 /** Contenu d'un message sans la commande d'envoi du début (l'IA reçoit la demande seule). */
 export function stripCommand(content) {
   const strip = (s) => {
@@ -129,7 +146,8 @@ export async function handleCommand(text, ui) {
   const p = parseCommand(text);
   if (!p) return null;
   ui.notice("");
-  await rights(p.cmd?.name === "mcp");                      // un serveur vient peut-être d'être installé ou retiré
+  await rights(p.cmd?.name === "mcp" || !p.cmd);           // un serveur ou un outil vient peut-être d'être installé
+  if (!p.cmd) p.cmd = commands().find((c) => c.name === plain(p.name)) || null;
   if (!p.cmd) {
     ui.notice(`Commande inconnue : /${p.name}. Tapez /aide pour la liste.`, true);
     return { send: false, keep: true };
@@ -156,6 +174,13 @@ export async function handleCommand(text, ui) {
     }
     return { send: true };
   }
+  if (p.cmd.app) {                                         // outil de la marketplace : il répond à la place de l'IA
+    if (p.cmd.app.kind === "agent" && !p.rest) {
+      ui.notice(`Indiquez la demande après la commande, ex. ${p.cmd.app.example || `/${p.cmd.name} …`}`, true);
+      return { send: false, keep: true };
+    }
+    return { send: true };
+  }
   if (p.cmd.send) {
     if (!p.rest) {
       ui.notice(`Indiquez la demande après la commande, ex. /${p.cmd.name} ${p.cmd.name === "pc"
@@ -175,7 +200,7 @@ const LOCAL = {
     const box = panel("Commandes");
     const list = document.createElement("dl");
     list.className = "slash-help";
-    for (const c of COMMANDS.filter(allowed)) {
+    for (const c of commands().filter(allowed)) {
       const dt = document.createElement("dt");
       dt.textContent = `/${c.name}${c.args ? ` ${c.args}` : ""}`;
       const dd = document.createElement("dd");
@@ -521,7 +546,7 @@ export function initSlash(prompt) {
   const updateCommands = async (typed) => {
     await rights();
     if (plain(/^\/(\S*)$/.exec(prompt.value)?.[1] ?? "\u0000") !== typed) return;   // la saisie a changé entre-temps
-    const found = COMMANDS.filter((c) => allowed(c) && c.name.startsWith(typed));
+    const found = commands().filter((c) => allowed(c) && c.name.startsWith(typed));
     if (!found.length || (found.length === 1 && found[0].name === typed && !found[0].args)) return close();
     models = false;
     items = found.map((c) => ({

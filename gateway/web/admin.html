@@ -380,10 +380,10 @@
           <summary>Réglages : file d'attente, mémoire, horaires, économie</summary>
           <form id="gpu-form">
             <div class="gpu-grid">
-              <label>Garder un modèle chargé après usage
+              <label title="Les IA de ce PC (Ollama, voix intégrées) inutilisées pendant ce délai sont déchargées automatiquement de la mémoire, même chargées par une autre application.">Décharger une IA inutilisée depuis
                 <select id="gpu-keep">
-                  <option value="">Réglage d'Ollama (5 min)</option><option value="0">Décharger aussitôt</option>
-                  <option value="60">1 minute</option><option value="300">5 minutes</option>
+                  <option value="">1 minute (par défaut)</option><option value="0">Décharger aussitôt</option>
+                  <option value="300">5 minutes</option>
                   <option value="1800">30 minutes</option><option value="3600">1 heure</option>
                   <option value="-1">Toujours chargé</option></select></label>
               <label>Requêtes simultanées par serveur

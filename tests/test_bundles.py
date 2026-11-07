@@ -120,9 +120,10 @@ def test_chat_commands_exist_in_the_chat():
     """Une commande du chat montrée dans la marketplace est une vraie commande « / » du chat."""
     js = (STATIC / "slash-commands.js").read_text(encoding="utf-8")
     real = set(re.findall(r'\{ name: "(\w+)"', js))
+    real |= {marketplace.chat_command(e) for e in marketplace.CHAT}  # une par outil installé (GET /v1/apps)
     shown = {
         c["use"].split()[0].lstrip("/")
-        for e in (*marketplace.COMPONENTS, *marketplace.MCP_SERVERS, *marketplace.APPS)
+        for e in (*marketplace.COMPONENTS, *marketplace.MCP_SERVERS, *marketplace.APPS, *marketplace.AGENT_TOOLS)
         for c in e.get("commands", [])
         if c["where"] == marketplace.WHERE["chat"] and c["use"].startswith("/")  # pas les boutons (micro…)
     }
@@ -146,7 +147,8 @@ def test_catalogs_carry_bundles_and_commands(client, monkeypatch):  # noqa: F811
 def test_site_export_has_bundles():
     cat = marketplace_export.static_catalog()
     assert cat["bundles"] == marketplace.public_bundles()
-    assert next(t for t in cat["agent_tools"] if t["id"] == "watch")["commands"][0]["where"] == "Claude Code"
+    watch = next(t for t in cat["agent_tools"] if t["id"] == "watch")["commands"]
+    assert [c["where"] for c in watch] == ["Chat de Lezard IA", "Claude Code"]  # dans le chat, puis dans Claude Code
     json.dumps(cat)  # écrit tel quel dans site/marketplace/catalog.json
 
 

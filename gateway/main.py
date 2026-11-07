@@ -51,6 +51,7 @@ from .api import (
     account,
     admin,
     alerts,
+    apps,
     audio,
     audit_log,
     backups,
@@ -96,6 +97,11 @@ def history_days(name: str, default: float) -> float | None:
     return days if days > 0 else None
 
 
+def idle_unload() -> bool:
+    """Déchargement automatique des IA locales inutilisées ; GATEWAY_IDLE_UNLOAD=off le coupe (tests)."""
+    return os.getenv("GATEWAY_IDLE_UNLOAD", "on").lower() not in ("0", "false", "no", "off")
+
+
 def hardware_probe() -> bool:
     """Relevé du matériel en tâche de fond (choix du modèle d'embeddings) ; coupé pendant les tests."""
     return os.getenv("HARDWARE_PROBE", "true").lower() not in ("0", "false", "no")
@@ -124,6 +130,7 @@ ROUTERS = (
     supervision,
     documents,
     marketplace,
+    apps,
     ui_packs,
     pages,
 )
@@ -407,6 +414,8 @@ def create_app(
 
         audit_task = asyncio.create_task(purge_audit())
         gpu_task = asyncio.create_task(holder["gw"].local.run())  # plages horaires « PC occupé » (18.4)
+        # IA locales de ce PC inutilisées depuis une minute (réglable) : déchargées de la mémoire
+        idle_task = asyncio.create_task(holder["gw"].local.idle_loop()) if idle_unload() else None
 
         async def supervise():
             await asyncio.sleep(supervision_interval())  # premier passage après un intervalle : détection faite
@@ -514,6 +523,7 @@ def create_app(
             hw_task,
             update_task,
             gpu_task,
+            idle_task,
             supervision_task,
             license_task,
         ):

@@ -188,13 +188,14 @@ def test_eco_mode_limits_gpu_cpu_and_context():
     with TestClient(make(up)) as c:
         assert ask(c).json()["choices"][0]["message"]["content"] == "compat"  # hors mode économie
         c.post("/v1/admin/gpu/eco", headers=MASTER, json={"on": True})
+        before = len(up.generate)  # rappel keep_alive de la requête hors mode économie (défaut : une minute)
         r = ask(c)
         assert r.status_code == 200 and r.json()["choices"][0]["message"]["content"] == "Bonjour"
         assert r.json()["usage"]["total_tokens"] == 10 and len(up.compat) == 1
         threads = max(1, round(max(1, (os.cpu_count() or 2) // 2) * 0.5))
         assert up.native[-1]["options"] == {"num_predict": 1024, "num_gpu": 24, "num_thread": threads, "num_ctx": 4096}
         assert up.native[-1]["keep_alive"] == 60
-        assert not [g for g in up.generate if g.get("keep_alive") == 60]  # pas de rappel qui ferait recharger
+        assert not [g for g in up.generate[before:] if g.get("keep_alive") == 60]  # pas de rappel qui ferait recharger
         # en flux : fragments OpenAI, usage à la fin
         with c.stream(
             "POST",

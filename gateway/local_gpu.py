@@ -10,10 +10,12 @@
   réglable) sont réservés au propriétaire. Les autres (clés virtuelles, comptes) basculent selon le réglage
   de leur clé (« when_busy ») : offres cloud gratuites (13.8, défaut), tout le cloud permis, ou refus 503. Les
   modèles chargés peuvent être déchargés au passage, pour libérer la mémoire vidéo.
-- keep_alive d'Ollama : durée pendant laquelle un modèle reste en mémoire après une requête de la gateway
-  (0 = déchargé aussitôt, -1 = toujours chargé ; absent = réglage d'Ollama, 5 min). L'API compatible OpenAI d'Ollama
-  n'accepte pas keep_alive : la gateway le règle juste après la requête (POST /api/generate sans prompt). Une
-  requête faite directement à Ollama (hors gateway) garde son propre réglage.
+- keep_alive : durée pendant laquelle une IA locale reste en mémoire sans servir (0 = déchargée aussitôt, -1 =
+  toujours chargée ; par défaut 1 minute). L'API compatible OpenAI d'Ollama n'accepte pas keep_alive : la gateway le
+  règle juste après la requête (POST /api/generate sans prompt). Déchargement automatique (`unload_idle`, toutes les
+  10 s) : les modèles chargés par l'Ollama de ce PC sont déchargés après ce délai sans usage, même chargés par une
+  autre application (un usage hors gateway se voit à leur échéance, qu'Ollama repousse à chaque requête) ; les IA
+  intégrées (Kokoro, Whisper) aussi, rechargées à la demande suivante. Jamais pendant une requête en cours.
 - Mode « économie » (bouton, pour une durée ou jusqu'à nouvel ordre) : les IA locales consomment le moins possible
   de ressources de ce PC, pour TOUT le monde (propriétaire compris) — une requête à la fois par serveur local,
   modèles libérés de la mémoire après 60 s, réponses locales plafonnées (1 024 tokens), routage automatique vers les
@@ -49,6 +51,9 @@ log = logging.getLogger("gateway.local_gpu")
 
 SETTING = "local_gpu"
 KEEP_ALIVE_MAX = 7 * 86400
+DEFAULT_KEEP_ALIVE = 60  # s : une IA locale inutilisée depuis une minute est déchargée de la mémoire
+IDLE_CHECK = 10  # s entre deux vérifications des modèles chargés
+IDLE_GRACE = 5  # s de marge : une requête qui vient de finir n'est jamais coupée de justesse
 THIS_PC_HOSTS = {"localhost", "host.docker.internal", "gateway.docker.internal"}
 DAYS = ("lun", "mar", "mer", "jeu", "ven", "sam", "dim")
 ECO_DEFAULTS = {
@@ -83,6 +88,18 @@ CALLER: contextvars.ContextVar[tuple[str, bool]] = contextvars.ContextVar("gw_ca
 def _int_env(name: str, default: int) -> int:
     raw = os.getenv(name, "").strip()
     return int(raw) if raw.isdigit() and int(raw) > 0 else default
+
+
+def default_keep_alive() -> int | None:
+    """Délai par défaut avant déchargement (s) : GATEWAY_KEEP_ALIVE, 60 sans réglage ; « ollama » = laisser le
+    réglage d'Ollama (5 min) et pas de déchargement automatique."""
+    raw = os.getenv("GATEWAY_KEEP_ALIVE", "").strip().lower()
+    if raw in ("ollama", "off", "non", "no"):
+        return None
+    try:
+        return max(-1, min(KEEP_ALIVE_MAX, int(raw))) if raw else DEFAULT_KEEP_ALIVE
+    except ValueError:
+        return DEFAULT_KEEP_ALIVE
 
 
 def default_max_concurrent() -> int:
@@ -397,6 +414,10 @@ class LocalGpu:
         self.on_eco_change = None  # rappel (audit) : fin du mode économie (durée écoulée)
         self._eco_event = asyncio.Event()  # réveille les tâches en pause (vectorisation) au changement de mode
         self._layers: dict[tuple[str, str], int | None] = {}  # (serveur, modèle) -> nombre de couches (/api/show)
+        # déchargement automatique : (serveur, modèle) -> (échéance vue dans /api/ps, dernier usage connu, monotone)
+        self._idle: dict[tuple[str, str], tuple[str | None, float]] = {}
+        self._last_use: dict[tuple[str, str], float] = {}  # dernier usage par la gateway (fin de requête)
+        self.monotonic = time.monotonic  # horloge des délais d'inactivité (remplaçable dans les tests)
 
     def attach(self, store) -> None:
         self.store = store
@@ -596,10 +617,18 @@ class LocalGpu:
             opts["num_ctx"] = ctx
         return opts
 
-    def eco_keep_alive(self) -> int:
+    def keep_alive(self) -> int | None:
+        """Secondes en mémoire sans servir : le réglage de la page Modèles, sinon une minute (GATEWAY_KEEP_ALIVE)."""
         ka = self.config.get("keep_alive")
+        return default_keep_alive() if ka is None else ka
+
+    def eco_keep_alive(self) -> int:
+        ka = self.keep_alive()
         eco = self.eco_setting("keep_alive")
         return eco if ka is None or ka < 0 or eco < ka else ka
+
+    def idle_delay(self) -> int | None:
+        return self.eco_keep_alive() if self.eco_on() else self.keep_alive()
 
     async def eco_request(self, provider, payload: dict) -> dict | None:
         """Corps /api/chat bridé pour `payload` (format OpenAI), ou None : requête à envoyer telle quelle."""
@@ -742,11 +771,10 @@ class LocalGpu:
         return p
 
     def after_use(self, gate: Gate, model: str) -> None:
+        self._last_use[(gate.name, model)] = self.monotonic()
         if self.eco_native(gate.provider):
             return  # requête native : keep_alive déjà envoyé, avec les mêmes options (sinon Ollama rechargerait)
-        ka = self.config.get("keep_alive")
-        if self.eco_on():  # mode économie : libéré plus tôt (jamais plus tard que le réglage habituel)
-            ka = self.eco_keep_alive()
+        ka = self.idle_delay()  # mode économie : libéré plus tôt (jamais plus tard que le réglage habituel)
         if ka is None or gate.total or not looks_ollama(gate.name, gate.provider.cfg.base_url):
             return  # d'autres requêtes en cours : la dernière s'en charge
         try:
@@ -799,6 +827,59 @@ class LocalGpu:
         for m in models:
             await self._keep_alive(p, m, 0)
         return models
+
+    async def unload_idle(self) -> list[str]:
+        """Un passage du déchargement automatique : « serveur/modèle » déchargés. Seulement les IA de CE PC (un
+        serveur du réseau sert d'autres personnes) ; jamais un serveur qui a des requêtes en cours par la gateway."""
+        delay = self.idle_delay()
+        if delay is None or delay < 0:  # réglage d'Ollama, ou « toujours chargé »
+            return []
+        now, done = self.monotonic(), []
+        for name in self.local_names():
+            p = self.providers[name]
+            gate = self.gates.get(name)
+            if not this_pc(p.cfg.base_url):
+                continue
+            if gate and gate.total:  # requête en cours : ses modèles comptent comme utilisés à l'instant
+                for key in [k for k in self._idle if k[0] == name]:
+                    self._idle[key] = (self._idle[key][0], now)
+                continue
+            release = getattr(p, "release_if_idle", None)
+            if release:  # IA intégrée (Kokoro, Whisper) : chargée dans la gateway
+                if await asyncio.to_thread(release, delay + IDLE_GRACE):
+                    done.append(f"{name}/{(await p.list_models() or ['?'])[0]}")
+                continue
+            if not looks_ollama(name, p.cfg.base_url):
+                continue
+            try:
+                models = await self.loaded(name)
+            except LocalGpuError:
+                continue
+            seen = set()
+            for m in models:
+                key = (name, m["model"])
+                seen.add(key)
+                mark = self._idle.get(key)
+                if mark is None or mark[0] != m["expires_at"]:  # chargé ou utilisé depuis le dernier passage
+                    mark = self._idle[key] = (m["expires_at"], now)
+                last = max(mark[1], self._last_use.get(key, 0.0))
+                if now - last >= delay + IDLE_GRACE:
+                    await self._keep_alive(p, m["model"], 0)
+                    self._idle.pop(key, None)
+                    done.append(f"{name}/{m['model']}")
+            for key in [k for k in self._idle if k[0] == name and k not in seen]:
+                self._idle.pop(key, None)  # déchargé entre-temps (par Ollama lui-même ou à la main)
+        for item in done:
+            log.info("IA locale déchargée de la mémoire : %s (inutilisée depuis %s s)", item, delay)
+        return done
+
+    async def idle_loop(self, every: float = IDLE_CHECK) -> None:
+        while True:
+            await asyncio.sleep(every)
+            try:
+                await self.unload_idle()
+            except Exception:
+                log.exception("Déchargement automatique des IA locales impossible")
 
     def status(self) -> dict:
         busy_set = set(self.busy_providers_config())

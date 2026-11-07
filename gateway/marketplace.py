@@ -998,7 +998,8 @@ APPS = (
         "commands": [
             _cmd(
                 "openclaw onboard",
-                "Première fois : réglages guidés (modèle, service local, dossier de travail, messageries).",
+                "Pour l'utiliser aussi hors de Lezard IA : réglages guidés (modèle, service local, dossier de travail, "
+                "messageries).",
                 where="terminal",
             ),
             _cmd("openclaw chat", "Discuter avec l'assistant dans le terminal.", where="terminal"),
@@ -2098,3 +2099,113 @@ def bundles_for(reco: dict, hw: dict, found: Callable[[str], str | None], platfo
             }
         )
     return out
+
+
+# ---------- outils dans le chat : « /<commande> » pour chaque outil installé (chat_tools.py) ----------
+# kind « agent » : une demande en langage courant, l'outil répond dans la conversation. runner : openclaw, aider,
+#   opencode, qwen (branchés sur Lezard IA, avec le modèle choisi dans le chat) ; claude : Claude Code de ce PC, avec
+#   l'extension installée (prefix : sa commande, ajoutée devant la demande).
+# kind « cli » : les arguments du programme, comme dans un terminal ; sa sortie s'affiche dans la conversation.
+# kind « open » : ouvre l'application sur ce PC (start : nom du menu Démarrer ; path ; vscode ; url) ;
+#   kind « serve » : lance le programme (service) puis donne son adresse.
+# Sans commande : bibliothèques (python, langchain), ComfyUI (déjà /image), Page Assist (extension du navigateur :
+# Ctrl+Maj+Y), happy (appairage du téléphone) et ccstatusline (barre d'état de Claude Code) : rien à lancer ici.
+CHAT = {
+    # agents : une demande, une réponse
+    "openclaw": {"kind": "agent", "runner": "openclaw", "example": "range les fichiers de mon bureau par type"},
+    "aider": {"kind": "agent", "runner": "aider", "example": "écris un script Python qui renomme mes photos par date"},
+    "opencode": {"kind": "agent", "runner": "opencode", "example": "crée une page HTML avec un compteur"},
+    "qwencode": {"kind": "agent", "runner": "qwen", "command": "qwen", "example": "explique ce que fait ce code : …"},
+    "hyperframes": {
+        "kind": "agent",
+        "runner": "claude",
+        "prefix": "/hyperframes:hyperframes ",
+        "example": "fais une intro de 10 secondes avec un titre en fondu",
+    },
+    "watch": {
+        "kind": "agent",
+        "runner": "claude",
+        "prefix": "/watch ",
+        "example": "https://www.youtube.com/watch?v=… résume",
+    },
+    "rea": {
+        "kind": "agent",
+        "runner": "claude",
+        "example": "comprends comment fonctionne la recherche de l'application Notes",
+    },
+    "agentmemory": {"kind": "agent", "runner": "claude", "example": "qu'avions-nous décidé pour la page d'accueil ?"},
+    "superpowers": {"kind": "agent", "runner": "claude", "example": "faisons une liste de tâches en React"},
+    "speckit": {"kind": "agent", "runner": "claude", "example": "/speckit-specify une liste de courses partagée"},
+    "wshobson": {"kind": "agent", "runner": "claude", "example": "fais une revue de sécurité de ce dossier"},
+    "serena": {"kind": "agent", "runner": "claude", "example": "Activate the project C:\\Projets\\site"},
+    "bmad": {"kind": "agent", "runner": "claude", "example": "bmad status"},
+    "claudemem": {"kind": "agent", "runner": "claude", "example": "comment avions-nous réglé le bug de connexion ?"},
+    "superclaude": {"kind": "agent", "runner": "claude", "example": "/sc:help"},
+    # programmes en ligne de commande : arguments → sortie
+    "gws": {"kind": "cli", "program": "gws", "example": "calendar +agenda --today"},
+    "findskills": {"kind": "cli", "program": "npx", "args": ["--yes", "skills"], "example": "find pdf"},
+    "codegraph": {"kind": "cli", "program": "codegraph", "example": "query login"},
+    "ccrouter": {"kind": "cli", "program": "ccr", "command": "ccr", "example": "status"},
+    "ccusage": {"kind": "cli", "program": "ccusage", "example": "daily"},
+    "repomix": {"kind": "cli", "program": "repomix", "example": "--remote yamadashy/repomix --stdout"},
+    "hyperframes-cli": {"kind": "cli", "program": "hyperframes", "command": "hyperframescli", "example": "doctor"},
+    "cctemplates": {
+        "kind": "cli",
+        "program": "cct",
+        "command": "cct",
+        "example": "--agent development-tools/code-reviewer --yes",
+    },
+    "markitdown": {"kind": "cli", "program": "markitdown", "example": "C:\\Users\\moi\\Documents\\rapport.pdf"},
+    "ollama": {"kind": "cli", "program": "ollama", "example": "list"},
+    "cloudcli": {"kind": "serve", "program": "cloudcli", "url": "http://localhost:3001"},
+    # applications : ouvertes sur ce PC
+    "openwebui": {"kind": "open", "url": "http://localhost:3000", "docker": "open-webui"},
+    "librechat": {"kind": "open", "url": "http://localhost:3080"},
+    "continue": {"kind": "open", "vscode": True},
+    "cline": {"kind": "open", "vscode": True},
+    "kilocode": {"kind": "open", "vscode": True},
+    "cursor": {"kind": "open", "start": "Cursor"},
+    "zed": {"kind": "open", "start": "Zed"},
+    "jan": {"kind": "open", "start": "Jan"},
+    "chatbox": {"kind": "open", "start": "Chatbox"},
+    "anythingllm": {"kind": "open", "start": "AnythingLLM"},
+    "openhuman": {"kind": "open", "start": "OpenHuman"},
+    "meetily": {"kind": "open", "start": "Meetily"},
+    "cherrystudio": {"kind": "open", "start": "Cherry Studio"},
+    "orca": {"kind": "open", "start": "Orca"},
+    "goose": {"kind": "open", "path": "%LOCALAPPDATA%\\Programs\\Goose\\dist-windows\\Goose.exe", "start": "Goose"},
+}
+CHAT_HELP = {  # précédé du nom de l'outil : « Aider répond dans la conversation… »
+    "agent": "répond dans la conversation, branché sur Lezard IA (demande en langage courant)",
+    "agent:claude": "répond dans la conversation, par Claude Code de ce PC (demande en langage courant)",
+    "cli": "se lance avec ces arguments, comme dans un terminal ; sa sortie s'affiche dans la conversation",
+    "serve": "démarre sur ce PC ; son adresse s'affiche dans la conversation",
+    "open": "s'ouvre sur ce PC",
+}
+
+
+def chat_command(eid: str) -> str:
+    """Nom de la commande « / » d'un élément (lettres seulement, comme les commandes du chat)."""
+    return CHAT[eid].get("command") or eid
+
+
+def chat_usage(eid: str) -> dict:
+    """La commande du chat d'un élément, telle que la fiche et le menu « / » l'affichent."""
+    spec, name = CHAT[eid], chat_command(eid)
+    kind = spec["kind"]
+    args = {"agent": " <demande>", "cli": " <arguments>"}.get(kind, "")
+    what = CHAT_HELP.get(f"{kind}:{spec.get('runner')}") or CHAT_HELP[kind]
+    example = f"/{name} {spec['example']}" if spec.get("example") else None
+    return {"command": name, "kind": kind, "use": f"/{name}{args}", "what": what, "example": example}
+
+
+def _with_chat_commands() -> None:
+    """La commande du chat de chaque outil, en tête de ses commandes (fiche, case « Commande à utiliser »)."""
+    for entry in (*APPS, *AGENT_TOOLS, *COMPONENTS):
+        if entry["id"] in CHAT and not any(c["where"] == WHERE["chat"] for c in entry.get("commands", ())):
+            u = chat_usage(entry["id"])
+            what = f"Dans le chat de Lezard IA (clé maître) : {entry['name']} {u['what']}."
+            entry["commands"] = [_cmd(u["use"], what, u["example"]), *entry.get("commands", ())]
+
+
+_with_chat_commands()

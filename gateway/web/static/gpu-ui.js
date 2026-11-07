@@ -123,10 +123,11 @@ function slotRow(slot = { days: [1, 2, 3, 4, 5], start: "09:00", end: "18:00" })
 
 function fillSettings(d) {
   const c = d.config;
-  $("gpu-keep").value = c.keep_alive === null || c.keep_alive === undefined ? "" : String(c.keep_alive);
-  if ($("gpu-keep").value !== String(c.keep_alive ?? "")) {     // valeur posée par l'API, hors liste
-    $("gpu-keep").append(new Option(`${c.keep_alive} s`, String(c.keep_alive)));
-    $("gpu-keep").value = String(c.keep_alive);
+  const keep = c.keep_alive === 60 ? null : c.keep_alive;          // 60 s : le défaut (« 1 minute »)
+  $("gpu-keep").value = keep === null || keep === undefined ? "" : String(keep);
+  if ($("gpu-keep").value !== String(keep ?? "")) {               // valeur posée par l'API, hors liste
+    $("gpu-keep").append(new Option(`${keep} s`, String(keep)));
+    $("gpu-keep").value = String(keep);
   }
   $("gpu-max").value = c.max_concurrent || "";
   $("gpu-max").placeholder = d.defaults.max_concurrent;

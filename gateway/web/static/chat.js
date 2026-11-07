@@ -11,7 +11,8 @@ import { saveCode } from "./save-file.js";
 import { renderMarkdown } from "./markdown.js";
 import { renderMetrics } from "./metrics.js";
 import { attachmentsReady, hasAttachments, sizeLabel, takeAttachments } from "./attachments.js";
-import { commandLabel, commandOptions, handleCommand, initSlash, mcpTool, stripCommand } from "./slash-commands.js";
+import { appRequest, commandLabel, commandOptions, handleCommand, initSlash, mcpTool,
+         stripCommand } from "./slash-commands.js";
 import { AUTO_COMPACT, contextRatio, mountContextRing, updateContextRing } from "./context-ring.js";
 import { initRowMenus } from "./row-menu.js";
 import { sse } from "./sse.js";
@@ -415,6 +416,49 @@ function scrollToBottom(force = false) {
 function attachMetrics(el, meta) {
   const m = renderMetrics(meta);
   if (m) el.querySelector(".content").appendChild(m);
+  const tool = meta?.tool;                                // réponse d'un outil de la marketplace : dit qui a répondu
+  if (tool) {
+    const note = Object.assign(document.createElement("p"), { className: "claw-note" });
+    const of = /^[aeiouyh]/i.test(tool.name) ? "d'" : "de ";   // « d'Aider », « de Jan »
+    note.textContent = `Réponse ${of}${tool.name}${tool.model ? ` · modèle ${tool.model}` : ""}` +
+      (tool.seconds ? ` · ${tool.seconds} s` : "");
+    el.querySelector(".content").appendChild(note);
+  }
+}
+
+// « /aider … », « /openclaw … », « /gws … », « /jan » : l'outil de la marketplace répond à la place de l'IA du chat.
+// La gateway le lance en tâche de fond (gateway/chat_tools.py), la page la suit toutes les 2 s. Une session par
+// conversation : chaque outil s'y souvient des échanges précédents. Bouton d'arrêt : la tâche est arrêtée sur le PC.
+const POLL_MS = 2000;
+async function askTool(app, request, signal, onWait) {
+  if (state.private && app.kind === "agent") {
+    throw new Error(`Mode privé : /${app.command} n'est pas disponible (repassez en mode normal avec /prive off).`);
+  }
+  const session = state.messages.findLast((m) => m.meta?.tool?.session)?.meta.tool.session
+    || Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, "0")).join("");
+  const model = state.getOptions().model;
+  let r = await api(`/v1/apps/${encodeURIComponent(app.id)}/runs`, { method: "POST",
+    body: { message: request, session, ...(model && model !== "auto" && { model }) } });
+  if (!r.ok) throw new Error(r.data?.error?.message || `${app.name} : erreur ${r.status}`);
+  const id = encodeURIComponent(r.data.id);
+  const stop = () => api(`/v1/apps/runs/${id}`, { method: "DELETE" });
+  signal.addEventListener("abort", stop, { once: true });
+  try {
+    while (r.data.status === "running") {
+      onWait(r.data.seconds);
+      await new Promise((ok) => setTimeout(ok, POLL_MS));
+      if (signal.aborted) throw new DOMException("Arrêtée", "AbortError");
+      const next = await api(`/v1/apps/runs/${id}`);
+      if (next.ok) r = next;
+      else if (next.status) throw new Error(next.data?.error?.message || `${app.name} : erreur ${next.status}`);
+      // status 0 : connexion coupée un instant (accès distant), on réessaie
+    }
+  } finally {
+    signal.removeEventListener("abort", stop);
+  }
+  if (r.data.status !== "done") throw new Error(r.data.error || `${app.name} n'a pas répondu.`);
+  return { text: r.data.text,
+           meta: { tool: { id: app.id, name: app.name, session, model: r.data.model, seconds: r.data.seconds } } };
 }
 
 function renderAttachments(el, content, attachments) {
@@ -529,48 +573,62 @@ async function generate({ model = null, before = null } = {}) {
 
   state.onStart();
   const asked = [...state.messages].reverse().find((m) => m.role === "user");
+  const tool = appRequest(textOf(asked?.content));            // « /aider … » : l'outil répond à la place de l'IA
   try {
-    const res = await fetch("/v1/chat/completions", {
-      method: "POST", signal: state.controller.signal,
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${getKey()}` },
-      body: JSON.stringify({ ...state.getOptions(), ...(model && { model }),   // autre modèle demandé (19.3)
-                             ...commandOptions(textOf(asked?.content)),    // « /pc … », « /web … »
-                             stream: true,                                 // mode / effort / multi-agents (5.4)
-                             ...(state.private && { private: true }),      // refusé par le serveur hors IA locale
-                             ...(state.project && { project: state.project }),   // instructions et fichiers du projet
-                             ...documentsOption(),                         // documents joints (19.2)
-                             // préférences personnelles et style (profile.js) : en tête, jamais enregistrés
-                             messages: [...[state.getSystem()].filter(Boolean),
-                                        ...fitBudget(state.messages.slice(contextStart()).map(({ role, content }) =>
-                                          ({ role, content: role === "user" ? stripCommand(content) : forModel(content) })),
-                                        REQUEST_BUDGET)] }),
-    });
-    if (!res.ok) {
-      let msg = `Erreur ${res.status}`;
-      try { msg = (await res.json()).error?.message || msg; } catch { /* corps vide */ }
-      if (res.status === 401) state.onAuthError();
-      throw new Error(msg);
-    }
-    for await (const chunk of sse(res)) {
-      if (chunk.error) throw new Error(chunk.error.message || "Erreur du fournisseur.");
-      const delta = chunk.choices?.[0]?.delta?.content;
-      const thought = chunk.choices?.[0]?.delta?.reasoning_content ?? chunk.choices?.[0]?.delta?.reasoning;
-      if (delta || thought) {
-        if (ttft === undefined) ttft = Math.round(performance.now() - t0);      // premier token (5.5)
-        if (delta) text += delta;
-        if (thought && !text) reasoning += thought;
-        if (!frame) frame = requestAnimationFrame(() => paint());
+    if (tool) {
+      const r = await askTool(tool.app, tool.rest, state.controller.signal, (s) => {
+        const wait = Object.assign(document.createElement("p"), { className: "split-progress" });
+        wait.setAttribute("role", "status");
+        wait.textContent = `${tool.app.name} travaille… ${s} s` +
+          (s >= 30 && tool.app.kind === "agent" ? " (une IA locale peut mettre plusieurs minutes)" : "");
+        body.innerHTML = THINKING;
+        body.append(wait);
+      });
+      text = r.text;
+      meta = r.meta;
+    } else {
+      const res = await fetch("/v1/chat/completions", {
+        method: "POST", signal: state.controller.signal,
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getKey()}` },
+        body: JSON.stringify({ ...state.getOptions(), ...(model && { model }),   // autre modèle demandé (19.3)
+                               ...commandOptions(textOf(asked?.content)),    // « /pc … », « /web … »
+                               stream: true,                                 // mode / effort / multi-agents (5.4)
+                               ...(state.private && { private: true }),      // refusé par le serveur hors IA locale
+                               ...(state.project && { project: state.project }),   // instructions et fichiers du projet
+                               ...documentsOption(),                         // documents joints (19.2)
+                               // préférences personnelles et style (profile.js) : en tête, jamais enregistrés
+                               messages: [...[state.getSystem()].filter(Boolean),
+                                          ...fitBudget(state.messages.slice(contextStart()).map(({ role, content }) =>
+                                            ({ role, content: role === "user" ? stripCommand(content) : forModel(content) })),
+                                          REQUEST_BUDGET)] }),
+      });
+      if (!res.ok) {
+        let msg = `Erreur ${res.status}`;
+        try { msg = (await res.json()).error?.message || msg; } catch { /* corps vide */ }
+        if (res.status === 401) state.onAuthError();
+        throw new Error(msg);
       }
-      const split = chunk.x_gateway_progress?.split;       // message trop long, lu par parties (13.4)
-      if (split && !text && !reasoning) {
-        const done = Math.min(split.done + 1, split.parts);
-        body.innerHTML = THINKING +
-          `<p class="split-progress" role="status">Message long, lu en ${split.parts} parties : ` +
-          (split.done < split.parts ? `partie ${done} sur ${split.parts}…` : "synthèse…") + "</p>";
+      for await (const chunk of sse(res)) {
+        if (chunk.error) throw new Error(chunk.error.message || "Erreur du fournisseur.");
+        const delta = chunk.choices?.[0]?.delta?.content;
+        const thought = chunk.choices?.[0]?.delta?.reasoning_content ?? chunk.choices?.[0]?.delta?.reasoning;
+        if (delta || thought) {
+          if (ttft === undefined) ttft = Math.round(performance.now() - t0);      // premier token (5.5)
+          if (delta) text += delta;
+          if (thought && !text) reasoning += thought;
+          if (!frame) frame = requestAnimationFrame(() => paint());
+        }
+        const split = chunk.x_gateway_progress?.split;       // message trop long, lu par parties (13.4)
+        if (split && !text && !reasoning) {
+          const done = Math.min(split.done + 1, split.parts);
+          body.innerHTML = THINKING +
+            `<p class="split-progress" role="status">Message long, lu en ${split.parts} parties : ` +
+            (split.done < split.parts ? `partie ${done} sur ${split.parts}…` : "synthèse…") + "</p>";
+        }
+        if (chunk.x_gateway_tool) toolEvent(el, chunk.x_gateway_tool);   // outils exécutés par la gateway
+        if (chunk.usage) usage = chunk.usage;
+        if (chunk.x_gateway) meta = chunk.x_gateway;
       }
-      if (chunk.x_gateway_tool) toolEvent(el, chunk.x_gateway_tool);   // outils exécutés par la gateway
-      if (chunk.usage) usage = chunk.usage;
-      if (chunk.x_gateway) meta = chunk.x_gateway;
     }
     cancelAnimationFrame(frame);
     paint(true);

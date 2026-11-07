@@ -392,16 +392,19 @@ def test_this_pc():
 # ---------- keep_alive et déchargement ----------
 
 
-def test_keep_alive_is_applied_after_each_request():
+def test_keep_alive_is_applied_after_each_request(monkeypatch):
+    monkeypatch.delenv("GATEWAY_KEEP_ALIVE", raising=False)  # réglage par défaut : une minute
     up = Upstream()
     with TestClient(make(up)) as c:
-        chat(c, MASTER, "ollama/llama3.1:8b")
-        assert not [call for _, call in up.calls if "keep_alive" in call]  # défaut : réglage d'Ollama
-        r = c.put("/v1/admin/gpu/settings", headers=MASTER, json={"keep_alive": 60})
-        assert r.json()["config"]["keep_alive"] == 60
+        chat(c, MASTER, "ollama/llama3.1:8b")  # défaut : déchargé après une minute sans usage
+        assert [call for _, call in up.calls if "keep_alive" in call] == ["/api/generate llama3.1:8b keep_alive=60"]
+        r = c.put("/v1/admin/gpu/settings", headers=MASTER, json={"keep_alive": 300})
+        assert r.json()["config"]["keep_alive"] == 300
         chat(c, MASTER, "ollama/llama3.1:8b")
         chat(c, MASTER, "openai/gpt-4o-mini")  # cloud : rien
-        assert [call for _, call in up.calls if "keep_alive" in call] == ["/api/generate llama3.1:8b keep_alive=60"]
+        assert [call for _, call in up.calls if "keep_alive" in call][1:] == [
+            "/api/generate llama3.1:8b keep_alive=300"
+        ]
 
 
 def test_unload_models_from_the_admin():
