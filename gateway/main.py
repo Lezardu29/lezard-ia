@@ -341,7 +341,9 @@ def create_app(
 
         hw_task = asyncio.create_task(hardware_refresh()) if hardware_probe() else None
         # version installée ; nouvelle version signalée si GATEWAY_UPDATE_CHECK=on (18.3), jamais installée d'ici
-        holder["updates"] = UpdateChecker(holder["store"], backups=holder["backups"])
+        holder["updates"] = UpdateChecker(
+            holder["store"], backups=holder["backups"], owner=account_identity(master) if master else None
+        )
         update_task = asyncio.create_task(holder["updates"].run()) if update_check_enabled() else None
         price_task = asyncio.create_task(holder["pricing"].run(holder["gw"])) if pricing_auto_refresh() else None
         # sauvegarde quotidienne (18.2) : base ouverte ici seulement (une base fournie appartient à l'appelant)

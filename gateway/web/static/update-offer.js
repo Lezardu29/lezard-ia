@@ -22,6 +22,25 @@ function el(tag, cls, text) {
   return e;
 }
 
+/** Installe la dernière version signée (bandeau et notification du tableau de bord) : `go` montre l'avancement,
+ * `text` reçoit l'erreur ou la suite ; `others` (ex. « Plus tard ») sont désactivés pendant l'envoi. Vrai si lancée. */
+export async function installLatest(version, go, text, others = []) {
+  go.disabled = true;
+  others.forEach((b) => { b.disabled = true; });
+  go.textContent = "Téléchargement et vérification…";
+  const r = await api("/v1/admin/update/install", { method: "POST", body: { target: "latest" } });
+  if (!r.ok) {
+    go.disabled = false;
+    others.forEach((b) => { b.disabled = false; });
+    go.textContent = "Réessayer";
+    text.textContent = `Mise à jour impossible : ${errorMessage(r)}`;
+    return false;
+  }
+  text.textContent = `Installation de la ${version} : Lezard IA redémarre tout seul (une minute environ), `
+    + "puis rechargez cette page. Vos conversations et réglages sont gardés.";
+  return true;
+}
+
 export function offerUpdate(me) {
   const u = me.update;
   if (!me.is_admin || !u?.available || !u.version) return;
@@ -43,18 +62,7 @@ export function offerUpdate(me) {
     const go = el("button", "btn btn-primary btn-inline", "Mettre à jour");
     go.type = "button";
     go.addEventListener("click", async () => {
-      go.disabled = close.disabled = true;
-      go.textContent = "Téléchargement et vérification…";
-      const r = await api("/v1/admin/update/install", { method: "POST", body: { target: "latest" } });
-      if (!r.ok) {
-        go.disabled = close.disabled = false;
-        go.textContent = "Réessayer";
-        text.textContent = `Mise à jour impossible : ${errorMessage(r)}`;
-        return;
-      }
-      actions.remove();
-      text.textContent = `Installation de la ${u.version} : Lezard IA redémarre tout seul (une minute environ), `
-        + "puis rechargez cette page. Vos conversations et réglages sont gardés.";
+      if (await installLatest(u.version, go, text, [close])) actions.remove();
     });
     actions.append(go);
   } else {

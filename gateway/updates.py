@@ -160,9 +160,18 @@ def installed() -> dict:
 
 class UpdateChecker:
     def __init__(
-        self, store, clock=time.time, transport=None, launcher=None, backups=None, folder=None, zip_launcher=None
+        self,
+        store,
+        clock=time.time,
+        transport=None,
+        launcher=None,
+        backups=None,
+        folder=None,
+        zip_launcher=None,
+        owner: str | None = None,
     ):
         self.store, self.clock = store, clock
+        self.owner = owner  # compte de la clé maître : reçoit la notification « nouvelle version »
         self.transport, self.backups = transport, backups
         self.launcher = launcher or launch_installer
         self.zip_launcher = zip_launcher or launch_zip_update
@@ -358,7 +367,27 @@ class UpdateChecker:
                         if line.count("\t") >= 2
                     ]
         self.store.set_setting("update_check", result)
+        self._notify(result)
         return result
+
+    def _notify(self, result: dict) -> None:
+        """Nouvelle version vue pour la première fois : une notification (cloche du tableau de bord) pour la clé
+        maître, une seule par version ; elle propose « Mettre à jour », comme le bandeau."""
+        version = result.get("version")
+        if not (self.owner and result.get("available") and version):
+            return
+        if (self.store.get_setting("update_notified") or {}).get("version") == version:
+            return
+        notes = (result.get("notes") or "").strip()
+        message = f"Vous avez la {self.info['version']}." + (f" Nouveautés : {notes}" if notes else "")
+        self.store.add_notification(
+            self.owner,
+            "info",
+            f"Lezard IA {version} est disponible",
+            message[:600],
+            {"kind": "update", "version": version},
+        )
+        self.store.set_setting("update_notified", {"version": version})
 
     async def run(self) -> None:
         """Vérification à chaque lancement, puis toutes les 5 minutes (si GATEWAY_UPDATE_CHECK=on, le défaut de

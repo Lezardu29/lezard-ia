@@ -55,6 +55,60 @@ def test_me_offers_the_new_version_to_the_master_key(monkeypatch):
     assert "offerUpdate(me)" in (ROOT / "gateway" / "web" / "static" / "app.js").read_text(encoding="utf-8")
 
 
+def _checker(owner, versions):
+    """Vérificateur d'une version installée 1.0.0 dont les vérifications successives voient `versions`."""
+    seen = iter(versions)
+
+    class Checker(updates.UpdateChecker):
+        def check_release(self):
+            v = next(seen)
+            return {"at": 1, "available": v is not None, "version": v or "1.0.0", "notes": "Nouveautés de la version"}
+
+    c = Checker(DocumentStore(":memory:"), owner=owner)
+    c._info = {"version": "1.0.0", "source": "installer"}
+    return c
+
+
+def test_a_new_version_is_notified_once_to_the_master_key():
+    c = _checker("compte-maitre", ["1.0.1", "1.0.1", None, "1.0.2"])
+    for _ in range(4):
+        c.check()
+    items, unread = c.store.list_notifications("compte-maitre")
+    assert unread == 2 and [n["data"] for n in items] == [
+        {"kind": "update", "version": "1.0.2"},
+        {"kind": "update", "version": "1.0.1"},
+    ]  # une seule par version, aucune quand rien n'est disponible
+    assert items[0]["title"] == "Lezard IA 1.0.2 est disponible"
+    assert "Vous avez la 1.0.0" in items[0]["message"] and "Nouveautés de la version" in items[0]["message"]
+    nobody = _checker(None, ["1.0.1"])  # pas de clé maître : personne à prévenir
+    nobody.check()
+    assert nobody.store.list_notifications("compte-maitre")[1] == 0
+
+
+def test_update_notification_offers_to_install_from_the_dashboard(monkeypatch):
+    monkeypatch.setattr(updates, "installed", lambda: {"version": "1.0.0", "source": "installer"})
+    monkeypatch.setattr(
+        updates.UpdateChecker,
+        "check_release",
+        lambda self: {"at": 1, "available": True, "version": "1.0.1", "notes": "", "token": "x"},
+    )
+    app = create_app(
+        [ProviderConfig("ollama", "openai", "http://ollama/v1", "local")],
+        httpx.AsyncClient(transport=httpx.MockTransport(Upstream())),
+        plans=PlanResolver({}, "free", master_key="master"),
+        store=DocumentStore(":memory:"),
+    )
+    with TestClient(app, client=("127.0.0.1", 50000)) as c:
+        assert c.post("/v1/admin/update/check", headers=MASTER).status_code == 200
+        notes = c.get("/v1/notifications", headers=MASTER).json()
+        assert notes["unread"] == 1 and notes["data"][0]["data"] == {"kind": "update", "version": "1.0.1"}
+    js = (ROOT / "gateway" / "web" / "static" / "alerts-ui.js").read_text(encoding="utf-8")
+    assert 'n.data?.kind === "update"' in js and '"Mettre à jour"' in js and "installLatest(version" in js
+    assert "export async function installLatest" in (ROOT / "gateway" / "web" / "static" / "update-offer.js").read_text(
+        encoding="utf-8"
+    )
+
+
 def test_installer_offers_only_web_choices():
     iss = (ROOT / "installer" / "lezard-ia.iss").read_text(encoding="utf-8-sig")
     tasks = [line.split('"')[1] for line in iss.splitlines() if line.startswith('Name: "') and "Description" in line]

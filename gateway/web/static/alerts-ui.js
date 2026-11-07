@@ -2,6 +2,7 @@
 import { api, errorMessage, getKey } from "./auth.js";
 import { fmtEur } from "./metrics.js";
 import { saveBlob } from "./save-file.js";
+import { installLatest } from "./update-offer.js";
 
 const $ = (id) => document.getElementById(id);
 const PERIODS = { day: "par jour", week: "par semaine", month: "par mois" };
@@ -48,12 +49,38 @@ async function loadNotifications() {
   const list = $("notif-list");
   list.replaceChildren();
   if (!r.data.data.length) list.append(el("li", "empty", "Aucune notification."));
+  // nouvelle version (notification « update ») : l'état des mises à jour dit si elle est encore à installer
+  const status = r.data.data.some((n) => n.data?.kind === "update") ? await api("/v1/admin/update") : null;
   for (const n of r.data.data) {
     const li = el("li", `notif ${n.level}${n.read ? "" : " unread"}`);
     const t = el("time", "", new Date(n.ts * 1000).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }));
-    li.append(el("strong", "", n.title), el("span", "", n.message), t);
+    const message = el("span", "", n.message);
+    li.append(el("strong", "", n.title), message);
+    if (n.data?.kind === "update") li.append(updateAction(n.data.version, status?.ok ? status.data : null, message));
+    li.append(t);
     list.append(li);
   }
+}
+
+/** « Mettre à jour » dans la notification d'une nouvelle version, tant que c'est la version proposée. */
+const vnum = (v) => String(v || "0").split(".").map((x) => parseInt(x, 10) || 0);
+function atLeast(a, b) {                       // version a ≥ version b, chiffre par chiffre (1.0.10 > 1.0.9)
+  const x = vnum(a), y = vnum(b);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0);
+  return true;
+}
+function updateAction(version, status, message) {
+  if (!status) return el("span", "notif-done", "État des mises à jour illisible pour l'instant.");
+  const last = status.last;
+  if (atLeast(status.installed?.version, version)) return el("span", "notif-done", "Installée");
+  if (!last?.available || last.version !== version) {
+    return el("span", "notif-done", last?.available ? `La ${last.version}, plus récente, est proposée.` : "Plus proposée.");
+  }
+  if (!status.can_install) return el("span", "notif-done", "Pour cette copie : sur le PC, lancer.ps1 -Update.");
+  const go = el("button", "btn btn-primary btn-inline notif-action", "Mettre à jour");
+  go.type = "button";
+  go.addEventListener("click", async () => { if (await installLatest(version, go, message)) go.remove(); });
+  return go;
 }
 
 export function initNotifications() {
