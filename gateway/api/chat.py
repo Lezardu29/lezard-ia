@@ -536,11 +536,12 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
             origin = mcp.ORIGIN.get(t.name)
             if not origin:
                 return base
+            catalog = mcp_help.catalog_id(getattr(mcp.SERVERS.get(origin[0]), "cfg", None))  # textes de son paquet
             return {
                 **base,
                 "server": origin[0],
                 "tool": origin[1],
-                "help": mcp_help.tool_help(origin[1], t.description),
+                "help": mcp_help.tool_help(origin[1], t.description, catalog),
             }
 
         rows = [row(t) for t in allowed.values()]

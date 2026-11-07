@@ -4,8 +4,9 @@
   Une licence pas encore lue coûte deux requêtes au registre d'Ollama : PUBLIC_FETCHES par minute au plus pour les
   visiteurs (les lectures en cache sont libres).
 - Marketplace de lezard-ia.fr (SITE_ORIGINS, appel direct du navigateur du visiteur, CORS) : /v1/marketplace/installed
-  dit ce qui est déjà installé sur ce PC, avec la clé maître ; lecture seule (rien n'est modifié, aucun secret), donc
-  sans la double authentification, qui reste exigée pour installer.
+  dit ce qui est déjà installé sur ce PC, avec la clé maître, et ce que la marketplace locale en sait (matériel,
+  modèles conseillés, bundles jugés) ; lecture seule (rien n'est modifié, aucun secret), donc sans la double
+  authentification, qui reste exigée pour installer.
 - Clé maître : /v1/admin/marketplace (état de ce PC), installation en un clic des composants, des outils pour agents
   et des applications (recettes figées de installers.py, une installation à la fois, journal dans
   data/logs/marketplace.log), et des serveurs MCP. Les modèles s'installent par /v1/admin/ollama/pull, les
@@ -16,6 +17,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import importlib.util
 import os
 import subprocess
@@ -34,6 +36,7 @@ from .. import (
     installers,
     marketplace,
     mcp,
+    mcp_tools,
     model_catalog,
     ollama_library,
     services,
@@ -45,6 +48,7 @@ from ..keys import VirtualKeyError
 from ..plans import PlanError
 from ..validation import json_object
 
+log = logging.getLogger("gateway")
 PACK_MODULES = {"voix": ("faster_whisper", "kokoro_onnx"), "multi": ("crewai",)}
 PUBLIC_FETCHES = 20  # licences pas encore lues, par minute, pour l'ensemble des visiteurs
 SITE_ORIGINS = ("https://lezard-ia.fr", "https://www.lezard-ia.fr")  # marketplace publique du site
@@ -131,7 +135,7 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
         star = lambda e: marketplace.with_stars(e, snap)  # noqa: E731
         return {
             "components": [star({k: v for k, v in c.items() if k != "action"}) for c in marketplace.COMPONENTS],
-            "mcp": [star(s) for s in marketplace.MCP_SERVERS],
+            "mcp": [{**star(s), "tools": mcp_tools.tools_of(s["id"])} for s in marketplace.MCP_SERVERS],
             "apps": [star(a) for a in marketplace.APPS],
             "agent_tools": [star(t) for t in marketplace.AGENT_TOOLS],
             "bundles": marketplace.public_bundles(),
@@ -222,8 +226,32 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
             "mcp": sorted(marketplace.installed_mcp()),
             "tools": sorted(k.split(":", 1)[1] for k in here if k.startswith("tool:")),
             "apps": sorted(k.split(":", 1)[1] for k in here if k.startswith("app:")),
+            "pc": await this_pc(),
         }
         return JSONResponse(body, headers=headers)
+
+    async def this_pc() -> dict | None:
+        """Ce que la marketplace locale sait de ce PC, pour celle du site : conseils selon le matériel, adéquation
+        de chaque taille de modèle, bundles jugés, serveurs MCP connectés. Lu par le navigateur du propriétaire
+        (clé maître), jamais par le serveur de lezard-ia.fr. None si le relevé échoue : le site s'en passe."""
+        if not hasattr(shared, "recommendations"):
+            return None
+        try:
+            reco = await shared.recommendations()
+            try:
+                lib = await shared.library()
+                fits = {r["tag"]: [r["fit"], r["memory"], r["speed_label"]] for r in lib["models"]}
+            except VirtualKeyError:  # ollama.com injoignable : les conseils restent, sans le détail de chaque taille
+                fits = {}
+            return {
+                "recommendations": reco,
+                "fits": fits,
+                "bundles": await bundles(),
+                "mcp_connected": sorted(s["name"] for s in mcp.overview() if s["ok"]),
+            }
+        except Exception:  # noqa: BLE001 - matériel ou Ollama illisible : la liste de ce qui est installé suffit
+            log.warning("Marketplace du site : relevé de ce PC impossible", exc_info=True)
+            return None
 
     @router.get("/v1/marketplace/models/{name}/license")
     async def public_model_license(name: str, tag: str = "latest"):
@@ -301,6 +329,7 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
         servers = [
             {
                 **marketplace.with_stars(s, snap),
+                "tools": mcp_tools.tools_of(s["id"]),
                 "installed": s["id"] in declared,
                 "deps": [] if npx() else node_deps,
                 "connected": bool(status.get(s["id"], {}).get("ok")),

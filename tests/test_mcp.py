@@ -213,3 +213,36 @@ def test_servers_are_named_from_our_texts_the_catalog_or_their_declared_name():
         "description": "Serveur déclaré dans data/mcp.json.",
         "example": None,
     }
+
+
+def test_every_catalog_server_lists_its_tools_explained_in_french():
+    """Fiche de chaque serveur (marketplace locale et lezard-ia.fr) : ses outils, relevés sur la version figée."""
+    from gateway import marketplace, mcp_tools
+
+    ids = {s["id"] for s in marketplace.MCP_SERVERS}
+    assert set(mcp_tools.CATALOG) <= ids and ids - set(mcp_tools.CATALOG) == {"magic21"}  # liste donnée avec une clé
+    for sid, listed in mcp_tools.CATALOG.items():
+        assert listed, sid
+        for name, text in listed.items():
+            assert text[:1].isupper() and text.endswith((".", "…", ")")), (sid, name)
+    assert mcp_tools.tools_of("git")[0] == {
+        "name": "git_set_working_dir",
+        "help": mcp_tools.CATALOG["git"]["git_set_working_dir"],
+    }
+    assert mcp_tools.tools_of("magic21") == []
+
+
+def test_a_tool_is_explained_by_the_server_that_really_runs_it():
+    """Même nom, outils différents : le serveur est reconnu à son paquet, pas au nom choisi dans data/mcp.json."""
+    cyan = {"command": "npx", "args": ["-y", "@cyanheads/git-mcp-server@2.15.3"]}
+    assert mcp_help.catalog_id(cyan) == "git"
+    assert mcp_help.catalog_id({"command": "python.exe", "args": ["-m", "mcp_server_git"]}) is None
+    assert (
+        mcp_help.catalog_id({"command": "node", "args": ["C:/m/@modelcontextprotocol/server-filesystem/dist/index.js"]})
+        == "fichiers"
+    )
+    assert mcp_help.tool_help("git_reset", "", "git") != mcp_help.tool_help(
+        "git_reset"
+    )  # cyanheads : aussi des commits
+    assert mcp_help.tool_help("read_file", "", "desktopcommander") != mcp_help.tool_help("read_file", "", "fichiers")
+    assert mcp_help.tool_help("inconnu", "[MCP x] Does it", "git") == mcp_help.SERVER_TEXT + "Does it"

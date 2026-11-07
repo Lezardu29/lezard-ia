@@ -426,6 +426,19 @@ def test_tools_route_says_which_server_each_mcp_tool_belongs_to(client, tmp_path
     assert other["mcp_servers"] == [] and not any(t["level"] == "mcp" for t in other["data"])
 
 
+def test_the_site_marketplace_also_gets_what_the_local_one_knows_about_this_pc(client):
+    """Marketplace de lezard-ia.fr : les conseils de la page locale (matériel, modèles, bundles, MCP connectés)."""
+    pc = client.get("/v1/marketplace/installed", headers=MASTER).json()["pc"]
+    assert {"budget", "best", "uses", "models"} <= set(pc["recommendations"])
+    assert isinstance(pc["fits"], dict) and isinstance(pc["mcp_connected"], list)
+    assert pc["bundles"] and {"suggested", "why", "why_not", "parts"} <= set(pc["bundles"][0])
+    local = client.get("/v1/admin/models/recommendations", headers=MASTER).json()
+    assert pc["recommendations"]["best"] == local["best"]  # les mêmes conseils que la page locale
+    for tag, (fit, memory, _speed) in pc["fits"].items():
+        assert ":" in tag and fit in ("vram", "offload", "too_big") and memory > 0
+    assert client.get("/v1/marketplace/installed", headers=ACCOUNT).status_code == 403
+
+
 @pytest.fixture
 def install_log(tmp_path, monkeypatch):
     monkeypatch.setenv("MARKETPLACE_LOG", str(tmp_path / "logs" / "marketplace.log"))
@@ -1017,7 +1030,7 @@ def test_site_reads_what_is_installed_with_cors_for_lezard_ia_only(client):
     assert "access-control-allow-origin" not in other.headers
     r = client.get("/v1/marketplace/installed", headers={**site, **MASTER})
     assert r.status_code == 200 and r.headers["access-control-allow-origin"] == "https://lezard-ia.fr"
-    assert set(r.json()) == {"models", "skills", "components", "mcp", "tools", "apps"}
+    assert set(r.json()) == {"models", "skills", "components", "mcp", "tools", "apps", "pc"}
     bad = client.get("/v1/marketplace/installed", headers={**site, "Authorization": "Bearer faux"})
     assert (
         bad.status_code in (401, 403) and bad.headers["access-control-allow-origin"] == "https://lezard-ia.fr"

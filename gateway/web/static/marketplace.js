@@ -711,6 +711,7 @@ function mcpDetail(it, body, foot) {
   body.append(el("p", "small muted", `Paquet npm ${s.package}, version figée ${s.version}, lancé par npx sur ce PC. `
     + "Chaque appel d'outil demande votre accord dans le chat (commande /mcp)."));
   if (s.service) body.append(el("p", "alert show warn-box", s.service));
+  body.append(toolsList(s));
   webSearchCompare(it, body);
   body.append(licenseBlock(s.license));
   if (!admin) { foot.prepend(loginButton()); return; }
@@ -743,6 +744,23 @@ function mcpDetail(it, body, foot) {
   foot.prepend(button("Installer", "btn-primary", (b) => twoStep(b, body, [["Serveur MCP", s.name], ["Taille", s.size],
     ["Emplacement", "Déclaré dans Lezard IA (data/mcp.json), téléchargé par npm et lancé par Lezard IA"]],
     () => addMcp(s, { folder: folder?.value.trim(), secret: secret?.value.trim() }, b, body), s.deps)));
+}
+
+/** Les outils d'un serveur MCP et ce que fait chacun (gateway/mcp_tools.py), comme /mcp <serveur> dans le chat. */
+function toolsList(s) {
+  const box = el("details", "market-tools-list");
+  if (!s.tools?.length) {
+    box.append(el("summary", "", "Ses outils"), el("p", "small muted", "Liste donnée par le serveur une fois installé : dans le chat, "
+      + `/mcp ${s.id} explique chacun de ses outils.`));
+    return box;
+  }
+  box.open = s.tools.length <= 12;
+  box.append(el("summary", "", `Ce que fait chacun de ses ${s.tools.length} outils`));
+  const dl = el("dl", "market-tools-dl");
+  for (const t of s.tools) dl.append(el("dt", "", t.name), el("dd", "", t.help));
+  box.append(dl, el("p", "small muted", `Dans le chat : /mcp ${s.id} <demande> n'utilise que ce serveur ; chaque appel `
+    + "affiche l'outil utilisé et attend votre accord."));
+  return box;
 }
 
 async function addMcp(s, fields, btn, dialogBody) {

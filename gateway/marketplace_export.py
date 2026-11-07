@@ -22,7 +22,7 @@ from pathlib import Path
 
 import httpx
 
-from . import installers, marketplace, ollama_library, skills
+from . import installers, marketplace, mcp_tools, ollama_library, skills
 
 OUT = Path(__file__).resolve().parents[1] / "site" / "marketplace"
 PARALLEL = 8
@@ -102,7 +102,11 @@ def static_catalog() -> dict:
             marketplace.with_stars({k: v for k, v in c.items() if k != "action"}) for c in marketplace.COMPONENTS
         ],
         "mcp": [
-            {**marketplace.with_stars(s), "deps": installers.possible_dependencies(names=["npx"])}
+            {
+                **marketplace.with_stars(s),
+                "deps": installers.possible_dependencies(names=["npx"]),
+                "tools": mcp_tools.tools_of(s["id"]),
+            }
             for s in marketplace.MCP_SERVERS
         ],
         "stars_date": marketplace.stars_snapshot().get("date"),

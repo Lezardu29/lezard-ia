@@ -626,6 +626,10 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
         """Catalogue de modèles locaux classé selon le matériel (13.2) : tient en VRAM, en VRAM + RAM, trop gros ;
         avec le test de performance, vitesse estimée de chaque modèle."""
         admin(request)
+        return await recommendations()
+
+    async def recommendations() -> dict:
+        """Aussi lu par la marketplace de lezard-ia.fr (api/marketplace.py, ce qui est installé sur ce PC)."""
         gw: Gateway = holder["gw"]
         hw = await hardware.snapshot(list(gw.providers.values()), gw.client)
         o = await this_pc_ollama(gw)
@@ -681,6 +685,10 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
         """Tous les modèles de la bibliothèque Ollama, avec chaque taille : mémoire, téléchargement, vitesse (mesurée
         ou estimée) et s'ils sont installés. Rien n'est installé ici : c'est la page qui le propose, au choix."""
         admin(request)
+        return await library()
+
+    async def library() -> dict:
+        """Aussi lue par la marketplace de lezard-ia.fr (adéquation de chaque taille à ce PC)."""
         gw: Gateway = holder["gw"]
         store = holder["store"]
         try:
@@ -733,6 +741,8 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
             "ollama_running": bool(o["target"]) or o["running"],
             "benchmark": bench,
         }
+
+    shared.recommendations, shared.library = recommendations, library  # marketplace de lezard-ia.fr
 
     # ----- mesure d'un modèle précis, installé sur ce PC (vitesse réelle, pas estimée) -----
     model_job: dict = {"state": "idle", "model": None, "step": None, "error": None}

@@ -6,7 +6,7 @@ personne lit. Un outil sans texte ici garde celui du serveur, signalé comme tel
 
 from __future__ import annotations
 
-from . import marketplace
+from . import marketplace, mcp_tools
 
 # serveurs déclarés à la main dans data/mcp.json, absents du catalogue de la marketplace
 SERVERS = {
@@ -40,33 +40,6 @@ TOOLS = {
     "git_checkout": "Change de branche.",
     "git_show": "Montre le contenu d'un commit, ou d'un fichier à un moment donné.",
     "git_branch": "Liste les branches du dépôt.",
-    # fichiers
-    "read_file": "Lit un fichier texte (ancien nom de read_text_file).",
-    "read_text_file": "Lit un fichier texte en entier, ou seulement son début ou sa fin.",
-    "read_media_file": "Lit une image ou un fichier audio.",
-    "read_multiple_files": "Lit plusieurs fichiers d'un coup, pour les comparer par exemple.",
-    "write_file": "Crée un fichier ou remplace entièrement un fichier existant, sans prévenir s'il existe déjà.",
-    "edit_file": "Modifie des lignes précises d'un fichier texte et montre ce qui a changé.",
-    "create_directory": "Crée un dossier, et les dossiers parents s'il en manque.",
-    "list_directory": "Liste les fichiers et les dossiers d'un dossier.",
-    "list_directory_with_sizes": "Liste le contenu d'un dossier avec la taille de chaque fichier.",
-    "directory_tree": "Donne toute l'arborescence d'un dossier et de ses sous-dossiers.",
-    "move_file": "Déplace ou renomme un fichier ou un dossier.",
-    "search_files": "Cherche des fichiers et des dossiers d'après leur nom, dans tous les sous-dossiers.",
-    "get_file_info": "Donne les informations d'un fichier : taille, dates, droits.",
-    "list_allowed_directories": "Liste les dossiers auxquels l'IA a le droit d'accéder.",
-    # mémoire
-    "create_entities": "Ajoute à la mémoire de nouveaux éléments : une personne, un projet, une préférence…",
-    "create_relations": "Note un lien entre deux éléments de la mémoire, par exemple « Lezard utilise Python ».",
-    "add_observations": "Ajoute des faits à un élément déjà en mémoire.",
-    "delete_entities": "Efface des éléments de la mémoire, avec leurs liens.",
-    "delete_observations": "Efface certains faits d'un élément de la mémoire.",
-    "delete_relations": "Efface des liens entre éléments de la mémoire.",
-    "read_graph": "Lit toute la mémoire.",
-    "search_nodes": "Cherche dans la mémoire à partir d'un mot ou d'une question.",
-    "open_nodes": "Lit des éléments précis de la mémoire, d'après leur nom.",
-    # réflexion
-    "sequentialthinking": "Découpe un problème en étapes, que l'IA peut revoir et corriger avant de répondre.",
     # rea
     "open_binary": "Ouvre un programme ou une archive à analyser. C'est la première étape avec REA.",
     "close_binary": "Termine l'analyse et ferme le programme ouvert.",
@@ -80,12 +53,24 @@ TOOLS = {
     "inspect_artifact": "Décrit le contenu d'une archive ou d'une application empaquetée.",
     "analyze_javascript_application": "Reconstitue la structure d'une application JavaScript, sans la lancer.",
 }
+# mêmes paquets que ceux du catalogue (mémoire, réflexion, fichiers) : leurs textes, une seule fois
+TOOLS.update(mcp_tools.MEMOIRE, **mcp_tools.CATALOG["reflexion"], **mcp_tools.FICHIERS)
 SERVER_TEXT = "Texte fourni par le serveur : "
 MAX_FALLBACK = 200
 
 
-def tool_help(raw: str, description: str = "") -> str:
-    """L'explication d'un outil ; à défaut, le début de la description du serveur, sans son préfixe « [MCP nom] »."""
+def catalog_id(cfg: dict | None) -> str | None:
+    """Le serveur du catalogue que lance cette déclaration (son paquet npm, quel que soit le nom choisi), sinon None :
+    ses outils ont alors leurs textes à lui (deux serveurs peuvent donner le même nom à des outils différents)."""
+    launched = " ".join([str((cfg or {}).get("command", "")), *map(str, (cfg or {}).get("args", []))])
+    return next((s["id"] for s in marketplace.MCP_SERVERS if s["package"] in launched), None)
+
+
+def tool_help(raw: str, description: str = "", catalog: str | None = None) -> str:
+    """L'explication d'un outil : celle de son serveur du catalogue, sinon la nôtre, sinon le début de la description
+    du serveur, sans son préfixe « [MCP nom] »."""
+    if raw in mcp_tools.CATALOG.get(catalog or "", {}):
+        return mcp_tools.CATALOG[catalog][raw]
     if raw in TOOLS:
         return TOOLS[raw]
     text = description.split("] ", 1)[-1].strip() if description.startswith("[MCP ") else description.strip()
