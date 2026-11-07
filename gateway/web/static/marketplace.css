@@ -30,6 +30,12 @@
   -webkit-box-orient: vertical; overflow: hidden; }
 .mc-tags, .mc-meta { margin: 0; font-size: 12.5px; color: var(--text-muted); overflow-wrap: anywhere; }
 .mc-open { margin-top: auto; align-self: flex-start; }
+.mc-cmd { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 8px 10px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--surface-2); }
+.mc-cmd-label { flex-basis: 100%; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--text-muted); }
+.mc-cmd code { font-size: 13px; overflow-wrap: anywhere; }
+.mc-cmd .pill { font-size: 11px; }
 .on-pill { background: color-mix(in srgb, var(--success) 16%, transparent); color: var(--success); }
 .reco-pill { background: var(--accent-soft); color: var(--accent); }
 

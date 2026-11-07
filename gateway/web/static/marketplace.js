@@ -271,6 +271,16 @@ function statusChip(it) {
   if (admin && entry && !entry.one_click) return el("span", "pill", "À brancher");
   return el("span", "pill", admin && ON_THIS_PC.includes(it.kind) ? "Non installé" : "Un clic");
 }
+/** Case de la carte : la commande principale (la première de l'élément), sans ouvrir les détails ; un modèle se choisit
+ * dans le menu du chat ; un bundle renvoie aux commandes de ses éléments, dans ses détails. */
+function commandBox(it) {
+  const c = it.kind === "model" ? { use: "Menu des modèles", where: "Chat de Lezard IA" }
+    : it.kind === "bundle" ? null : commandsOf(it)[0];
+  if (!c) return null;
+  const box = el("div", "mc-cmd");
+  box.append(el("span", "mc-cmd-label", "Commande à utiliser"), el("code", "", c.use), el("span", "pill", c.where));
+  return box;
+}
 function card(it) {
   const li = el("li", `market-card kind-${it.kind}${it.recommended ? " is-reco" : ""}`);
   const head = el("div", "mc-head");
@@ -287,6 +297,8 @@ function card(it) {
     li.append(el("p", "mc-meta", `Tailles : ${it.model.sizes.map((s) => s.tag.split(":")[1]).join(", ")}`));
   }
   if (it.kind === "bundle") li.append(el("p", "mc-meta", it.bundle.parts.map(partName).join(" · ")));
+  const cmd = commandBox(it);
+  if (cmd) li.append(cmd);
   li.append(it.kind === "model" ? licenseFor(it.licenseKey)
     : it.kind === "bundle" ? el("span", "lic lic-wait", "Licence de chaque élément dans les détails")
     : licenseChip(it.license || { name: "Aucune licence tierce", commercial: "oui", summary: "Fonction de Lezard IA." }));
