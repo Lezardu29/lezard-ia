@@ -661,7 +661,9 @@ async function follow(r, btn, body, words = { doing: "Installation en cours…",
     btn.disabled = false;
     return;
   }
-  prog.set(100, (s.data.restart ? `${words.done} Redémarrez Lezard IA pour l'activer.` : words.done) + (s.data.after ? ` ${s.data.after}` : ""));
+  // redémarrage proposé seulement s'il est utile (composant chargé au démarrage, programme pas encore visible)
+  prog.set(100, (s.data.restart ? `${words.done} Lezard IA doit redémarrer pour que l'ajout fonctionne : bouton « Redémarrer Lezard IA ».`
+    : words.done) + (s.data.after ? ` ${s.data.after}` : ""));
   if (s.data.restart) {
     btn.replaceWith(button("Redémarrer Lezard IA", "btn-primary", async (b) => {
       b.disabled = true;
@@ -956,7 +958,7 @@ async function installBundle(b, todo, btn, body) {
     rows[i].className = r.ok ? "ok" : "bad";
   }
   message(failed ? `${b.name} : ${todo.length - failed} élément(s) installé(s), ${failed} en échec (détail dans la fenêtre).`
-    : `${b.name} est installé.${restart ? " Redémarrez Lezard IA pour l'activer." : ""}`, !failed);
+    : `${b.name} est installé.${restart ? " Lezard IA doit redémarrer pour que l'ajout fonctionne : bouton « Redémarrer Lezard IA »." : ""}`, !failed);
   if (restart) {
     btn.replaceWith(button("Redémarrer Lezard IA", "btn-primary", async (x) => {
       x.disabled = true;

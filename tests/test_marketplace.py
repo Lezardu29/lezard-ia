@@ -490,11 +490,17 @@ def test_component_install_runs_the_launcher(client, monkeypatch, tmp_path, inst
 def test_agent_tools_and_apps_install_in_one_click(client, monkeypatch, install_log):
     started = []
     fake_popen(monkeypatch, started)
+    visible = [{"id": "rea"}]  # commandes du chat qui marchent déjà (chat_tools.available)
+    monkeypatch.setattr(market_api.chat_tools, "available", lambda store: visible)
     r = client.post("/v1/admin/marketplace/tools/rea/install", headers=MASTER)
-    assert r.status_code == 202 and r.json()["restart"]
+    assert r.status_code == 202
     job = wait_job(client)
-    assert job["state"] == "done" and job["restart"]  # la page propose de redémarrer Lezard IA
+    assert job["state"] == "done" and not job["restart"]  # /rea marche déjà : rien à redémarrer
+    assert job["after"].startswith("Dans le chat de Lezard IA : /rea <demande>.")
     assert started == [["C:/bin/npx.cmd", "--yes", "rea-agents@6.7.0", "setup", "--client", "claude_code", "--yes"]]
+    visible.clear()  # programme pas encore visible par Lezard IA (PATH lu au démarrage) : redémarrage proposé
+    client.post("/v1/admin/marketplace/tools/rea/install", headers=MASTER)
+    assert wait_job(client)["restart"]
     cat = client.get("/v1/admin/marketplace", headers=MASTER).json()
     rea = next(t for t in cat["agent_tools"] if t["id"] == "rea")
     assert (
@@ -509,6 +515,16 @@ def test_agent_tools_and_apps_install_in_one_click(client, monkeypatch, install_
     assert client.post("/v1/admin/marketplace/tools/inconnu/install", headers=MASTER).status_code == 404
     assert client.post("/v1/admin/marketplace/autre/rea/install", headers=MASTER).status_code == 404
     assert client.post("/v1/admin/marketplace/tools/rea/install", headers=ACCOUNT).status_code == 403
+
+
+def test_no_restart_for_tools_without_chat_command(client, monkeypatch, install_log):
+    """Bibliothèque Python, extension du navigateur… : rien à redémarrer dans Lezard IA."""
+    fake_popen(monkeypatch, [])
+    monkeypatch.setattr(market_api.chat_tools, "available", lambda store: [])
+    assert "python" not in market_api.marketplace.CHAT
+    client.post("/v1/admin/marketplace/apps/python/install", headers=MASTER)
+    job = wait_job(client)
+    assert job["state"] == "done" and not job["restart"]
 
 
 def test_installed_items_uninstall_with_the_reverse_steps(client, monkeypatch, install_log):

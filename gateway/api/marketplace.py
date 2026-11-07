@@ -32,6 +32,7 @@ from fastapi.responses import JSONResponse, Response
 
 from .. import (
     benchmark,
+    chat_tools,
     detection,
     installers,
     marketplace,
@@ -454,7 +455,19 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
                 done[key] = {"at": int(time.time())}
             holder["store"].set_setting(INSTALLED_SETTING, done)
         detection.forget()  # même après un échec : une partie des étapes a peut-être abouti
+        if code == 0 and record is True:  # outil ou application installé : redémarrer seulement si c'est utile
+            job["restart"] = await asyncio.to_thread(needs_restart, key)
         job.update(state="done" if code == 0 else "error", code=code, proc=None)
+
+    def needs_restart(key: str) -> bool:
+        """Après l'installation d'un outil : sa commande du chat marche-t-elle déjà ? Le PATH de Windows est relu
+        (le programme vient d'arriver) ; s'il reste introuvable par Lezard IA, seul un redémarrage le fera voir.
+        Sans commande du chat (bibliothèque, extension du navigateur, outil de Claude Code) : rien à redémarrer ici."""
+        installers.refresh_path()
+        eid = key.split(":", 1)[1]
+        if eid not in marketplace.CHAT:
+            return False
+        return not any(a["id"] == eid for a in chat_tools.available(holder["store"]))
 
     def start(
         key: str, steps: list, cwd: Path, restart: bool, after: str | None, record: bool | str, then=None
@@ -522,7 +535,8 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
             steps = installers.plan(key)
         except marketplace.MarketplaceError as e:
             fail(e)
-        return start(key, steps, Path.home(), True, r.get("after"), True)  # la page propose de redémarrer, sans forcer
+        # redémarrage proposé à la fin seulement si la commande du chat de l'outil ne marche pas encore (needs_restart)
+        return start(key, steps, Path.home(), False, after_install(key, r.get("after")), True)
 
     @router.post("/v1/admin/marketplace/{kind}/{item}/uninstall", status_code=202)
     async def uninstall_item(kind: str, item: str, request: Request):

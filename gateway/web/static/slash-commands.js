@@ -54,8 +54,10 @@ function commands() {
                                             help: `${a.name} ${a.what}` }))];
 }
 
+let loadedAt = 0;                                          // un outil installé entre-temps apparaît sans recharger
 async function rights(fresh = false) {
-  if (!tools || fresh) {
+  if (!tools || fresh || Date.now() - loadedAt > 30_000) {
+    loadedAt = Date.now();
     const [r, installed] = await Promise.all([api("/v1/tools"), rawApi("/v1/apps")]);
     tools = r.ok ? r.data.data : [];
     servers = r.ok ? r.data.mcp_servers || [] : [];
