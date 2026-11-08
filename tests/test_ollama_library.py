@@ -37,19 +37,90 @@ PAGE = (
 )
 
 
-def test_parse_reads_every_local_size_and_skips_cloud_only_models():
+def test_parse_reads_every_local_size_and_marks_the_others():
     models = ollama_library.parse(PAGE)
-    names = [m["name"] for m in models]
-    assert names == [
+    assert [m["name"] for m in models] == [
         "qwen3.8",
         "bge-m3",
-    ]  # cloud-only ignoré ; le nombre de téléchargements (120.7M) n'est pas une taille
+        "cloud-only",
+    ]  # 120.7M (téléchargements) : pas une taille
     qwen = models[0]
     assert qwen["sizes"] == [{"params_b": 27.0, "label": "27b"}]
     assert qwen["capabilities"] == ["tools", "vision"] and qwen["description"] == "Qwen3.8 & co."
     assert models[1]["sizes"][0]["params_b"] == pytest.approx(0.567)
+    assert models[2]["sizes"] == [] and models[2]["pending"] == "cloud"  # complété par la page de ses étiquettes
     assert ollama_library.uses(models[1]["capabilities"]) == ("embeddings",)
     assert ollama_library.uses(qwen["capabilities"]) == ("chat", "vision")
+
+
+def tags_page(name: str, rows: list[tuple[str, str]]) -> str:
+    """Page des étiquettes d'ollama.com : « nom:étiquette empreinte • taille • contexte »."""
+    return "".join(
+        f'<a href="/library/{name}:{t}"><span>{name}:{t}</span> <span>0a377808afea</span> • <span>{size}</span> • 32K'
+        f" context window</a>"
+        for t, size in rows
+    )
+
+
+def test_every_model_of_the_library_is_listed():
+    """Tailles que la carte ne sait pas dire (« 8x7b », « e4b », aucune) : lues sur la page des étiquettes ;
+    modèles cloud d'Ollama : listés avec leur étiquette « cloud »."""
+    page = (
+        "<ul>"
+        + "".join(
+            [
+                CARD.format(name="qwen3.8", desc="Q", caps="", sizes='<span class="b">27b</span>'),
+                CARD.format(name="mixtral", desc="M", caps="", sizes="<span>8x7b</span><span>8x22b</span>"),
+                CARD.format(name="nomic-embed-text", desc="N", caps="<span>embedding</span>", sizes=""),
+                CARD.format(name="wizardlm", desc="W", caps="", sizes=""),
+                CARD.format(name="kimi-k3", desc="K", caps="<span>vision</span><span>cloud</span>", sizes=""),
+            ]
+        )
+        + "</ul>"
+    )
+    tags = {
+        "mixtral": [("latest", "26GB"), ("instruct", "26GB"), ("8x22b", "80GB"), ("8x7b-instruct-v0.1-q8_0", "50GB")],
+        "nomic-embed-text": [("latest", "274MB"), ("v1.5", "274MB"), ("q8_0", "200MB")],
+        "wizardlm": [("7b-q2_K", "2.8GB"), ("7b-q4_0", "3.8GB"), ("13b-q4_0", "7.4GB")],
+        "kimi-k3": [("cloud", "Extra High Usage")],
+    }
+
+    def site(request):
+        path = request.url.path
+        if path == "/library":
+            return httpx.Response(200, text=page)
+        name = path.split("/")[2]
+        return httpx.Response(200, text=tags_page(name, tags[name]))
+
+    models = asyncio.run(ollama_library.fetch(httpx.AsyncClient(transport=httpx.MockTransport(site))))
+    by = {m["name"]: [(s["label"], s.get("download_gb"), s.get("cloud")) for s in m["sizes"]] for m in models}
+    assert len(models) == 5 and "pending" not in str(models)
+    assert by["qwen3.8"] == [("27b", None, None)]  # taille de la carte : téléchargement estimé
+    assert by["mixtral"] == [("8x7b", 26.0, None), ("8x22b", 80.0, None)]  # tailles de la carte, dans l'ordre
+    assert by["nomic-embed-text"] == [("latest", 0.274, None)]  # « latest » d'abord ; q8_0 (quantification) écarté
+    assert by["wizardlm"] == [("7b-q4_0", 3.8, None), ("13b-q4_0", 7.4, None)]  # seulement des variantes : Q4
+    assert by["kimi-k3"] == [("cloud", 0, True)]
+    sizes = {m["name"]: m["sizes"] for m in models}
+    assert ollama_library.public_size("kimi-k3", sizes["kimi-k3"][0]) == {
+        "tag": "kimi-k3:cloud",
+        "params_b": 0,
+        "download": 0,
+        "cloud": True,
+    }
+    assert ollama_library.public_size("mixtral", sizes["mixtral"][0])["download"] == 26e9  # exact, pas estimé
+
+
+def test_ollama_cloud_models_are_never_local():
+    """Ils passent par l'Ollama de ce PC mais tournent chez Ollama : jamais en mode privé ni pour une clé « locale »."""
+    from gateway.permissions import model_allowed
+    from gateway.registry import ModelRegistry, is_ollama_cloud
+
+    assert is_ollama_cloud("kimi-k3:cloud") and is_ollama_cloud("gpt-oss:120b-cloud")
+    assert not is_ollama_cloud("qwen3:8b") and not is_ollama_cloud("cloudy")
+    reg = ModelRegistry([])
+    assert reg.get("ollama", "kimi-k3:cloud", "local").hosting == "cloud"
+    assert reg.get("ollama", "qwen3:8b", "local").hosting == "local"
+    assert not model_allowed({"hosting": "local"}, reg.get("ollama", "kimi-k3:cloud", "local"))
 
 
 def test_the_list_is_cached_a_day_and_served_stale_when_offline():
@@ -58,13 +129,15 @@ def test_the_list_is_cached_a_day_and_served_stale_when_offline():
 
     def page(request):
         calls.append(request.url)
+        if request.url.path.endswith("/tags"):
+            return httpx.Response(200, text=tags_page("cloud-only", [("cloud", "-")]))
         return httpx.Response(200, text=PAGE)
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(page))
     first = asyncio.run(ollama_library.cached(store, client))
-    assert len(calls) == 1 and first["stale"] is False and len(first["models"]) == 2
+    assert len(calls) == 2 and first["stale"] is False and len(first["models"]) == 3  # liste + étiquettes du cloud
     second = asyncio.run(ollama_library.cached(store, client))
-    assert len(calls) == 1 and second["models"] == first["models"]  # pas de nouvel appel dans la journée
+    assert len(calls) == 2 and second["models"] == first["models"]  # pas de nouvel appel dans la journée
 
     store.set_setting(ollama_library.SETTING, {**store.get_setting(ollama_library.SETTING), "at": 0})  # périmée
     offline = httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(503)))

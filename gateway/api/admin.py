@@ -708,11 +708,30 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
         for m in lib["models"]:
             for size in m["sizes"]:
                 tag = f"{m['name']}:{size['label']}"
+                if size.get("cloud"):  # tourne chez Ollama (compte ollama.com) : rien à faire tenir sur ce PC
+                    rows.append(
+                        {
+                            "tag": tag,
+                            "name": m["name"],
+                            "description": m["description"],
+                            "capabilities": m["capabilities"],
+                            "params_b": 0,
+                            "download": 0,
+                            "memory": 0,
+                            "fit": "cloud",
+                            "cloud": True,
+                            "speed": None,
+                            "speed_source": None,
+                            "speed_label": None,
+                            "installed": tag in have,
+                        }
+                    )
+                    continue
                 entry = model_catalog.CatalogModel(
                     tag,
                     m["name"],
                     size["params_b"],
-                    ollama_library.tag_size_gb(size["params_b"]),
+                    ollama_library.size_gb(size),
                     ollama_library.uses(m["capabilities"]),
                 )
                 need = model_catalog.memory_needed(entry)

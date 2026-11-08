@@ -26,7 +26,8 @@ const COMMERCIAL = {
   non: ["Non commercial", "bad"],
   inconnu: ["À vérifier", "warn"],
 };
-const FIT = { vram: ["Rapide sur ce PC", "vram"], offload: ["Plus lent (VRAM + RAM)", "offload"], too_big: ["Trop gros pour ce PC", "too_big"] };
+const FIT = { vram: ["Rapide sur ce PC", "vram"], offload: ["Plus lent (VRAM + RAM)", "offload"], too_big: ["Trop gros pour ce PC", "too_big"],
+              cloud: ["Cloud d'Ollama (compte ollama.com)", "cloud"] };
 // sans carte graphique, « VRAM + RAM » n'a pas de sens : le modèle tourne sur le processeur
 const fitLabel = (fit) => (fit === "offload" && reco && !reco.budget?.gpu ? "Plus lent (sur le processeur)" : FIT[fit][0]);
 const CAPS = { vision: "images", tools: "outils", thinking: "raisonnement", embedding: "embeddings", cloud: "cloud" };
@@ -180,8 +181,10 @@ function modelItems() {
   const best = new Set(Object.values(reco?.best || {}).filter(Boolean).map((t) => t.split(":")[0]));
   return groupedModels().map((m) => {
     const fast = m.sizes.filter((s) => s.fit === "vram"), slow = m.sizes.filter((s) => s.fit === "offload");
-    // taille conseillée : la plus grosse qui tient en VRAM, sinon la plus petite en VRAM + RAM
-    const pick = admin ? (fast.length ? fast[fast.length - 1] : slow[0] || null) : null;
+    // taille conseillée : la plus grosse qui tient en VRAM, sinon la plus petite en VRAM + RAM ; modèle cloud
+    // d'Ollama (rien à faire tenir sur ce PC) : sa seule étiquette
+    const cloud = m.sizes.every((s) => s.cloud);
+    const pick = admin ? (cloud ? m.sizes[0] : fast.length ? fast[fast.length - 1] : slow[0] || null) : null;
     const tag = admin ? (pick || m.sizes[0])?.tag.split(":")[1] || "latest" : "latest";
     return {
       kind: "model", id: m.name, name: m.name, description: m.description || "",
@@ -290,7 +293,9 @@ function card(it) {
   if (it.tags.filter(Boolean).length) li.append(el("p", "mc-tags", it.tags.filter(Boolean).join(" · ")));
   const gh = entryOf(it);
   if (gh?.stars) li.append(starsLine(gh, "mc-stars"));
-  if (it.kind === "model" && it.pick) {
+  if (it.kind === "model" && it.fit === "cloud") {
+    li.append(el("p", "mc-meta", `Cloud d'Ollama : ${it.model.sizes.map((s) => s.tag).join(", ")} · rien à télécharger, compte ollama.com`));
+  } else if (it.kind === "model" && it.pick) {
     li.append(el("p", "mc-meta", `Taille conseillée : ${it.pick.tag.split(":")[1]} · ${size(it.pick.download)} · ${size(it.pick.memory)} en mémoire`
       + (it.pick.speed_label ? ` · ${it.pick.speed_label}` : "")));
   } else if (it.kind === "model") {
@@ -464,13 +469,14 @@ function modelDetail(it, body, foot, focus) {
     const tr = el("tr", s.tag === focus || s === it.pick ? "is-pick" : "");
     tr.dataset.tag = s.tag;
     if (!admin) {
-      tr.append(el("td", "", s.tag.split(":")[1]), el("td", "", `${String(s.params_b).replace(".", ",")} milliards`),
-                el("td", "", `~${size(s.download)}`));
+      tr.append(el("td", "", s.tag.split(":")[1]),
+                el("td", "", s.cloud ? "Cloud d'Ollama" : `${String(s.params_b).replace(".", ",")} milliards`),
+                el("td", "", s.cloud ? "rien à télécharger" : `~${size(s.download)}`));
       table.append(tr);
       continue;
     }
-    tr.append(el("td", "", s.tag.split(":")[1]), el("td", "", size(s.memory)), el("td", "", `~${size(s.download)}`),
-              el("td", "", s.speed_label || "–"));
+    tr.append(el("td", "", s.tag.split(":")[1]), el("td", "", s.cloud ? "chez Ollama" : size(s.memory)),
+              el("td", "", s.cloud ? "–" : `~${size(s.download)}`), el("td", "", s.speed_label || "–"));
     const fitCell = el("td");
     fitCell.append(el("span", `fit ${FIT[s.fit][1]}`, fitLabel(s.fit)));
     const act = el("td");
@@ -486,6 +492,11 @@ function modelDetail(it, body, foot, focus) {
   }
   const wrap = el("div", "market-table");
   wrap.append(table);
+  if (m.sizes.some((s) => s.cloud)) {
+    body.append(el("p", "small", "Modèle cloud d'Ollama : il tourne chez Ollama, pas sur ce PC. Il faut connecter Ollama "
+      + "à un compte ollama.com (dans le chat : /ollama signin) ; vos demandes à ce modèle partent chez Ollama, "
+      + "jamais en mode privé. Offre gratuite limitée."));
+  }
   body.append(wrap, el("p", "small muted", admin
     ? "Mémoire et téléchargement estimés (quantification Q4_K_M) ; la vitesse est "
       + (reco?.benchmark ? "mesurée par le test de performance de ce PC." : "estimée : lancez le test de performance (page Modèles) pour la mesurer.")
@@ -513,6 +524,15 @@ function installModel(s, provider, btn, body) {
   const fit = s.fit === "too_big" ? "Trop gros pour ce PC : il risque de ne pas démarrer ou d'être très lent."
     : s.fit === "offload" ? "Ne tient pas entièrement dans la carte graphique : il répondra plus lentement." : "Rapide sur ce PC.";
   const withOllama = !provider;
+  if (s.cloud) {
+    twoStep(btn, body, [
+      ["Vous ajoutez", `Le modèle ${s.tag}, qui tourne chez Ollama (cloud) : rien de lourd à télécharger`],
+      ["Ollama", withOllama ? "Installé et démarré par Lezard IA d'abord" : null],
+      ["Compte", "Ollama doit être connecté à un compte ollama.com : dans le chat, /ollama signin"],
+      ["Vos données", "Vos demandes à ce modèle partent chez Ollama ; jamais utilisé en mode privé"]],
+      () => startModel(s, provider, btn, body));
+    return;
+  }
   twoStep(btn, body, [
     ["Vous installez", withOllama ? `Ollama, le moteur qui fait tourner les IA sur ce PC, puis le modèle ${s.tag}` : `Le modèle ${s.tag}`],
     ["Ollama", withOllama ? (reco?.ollama_installed ? "Déjà sur ce PC : Lezard IA le démarre et l'ajoute"
@@ -539,8 +559,9 @@ async function startModel(s, provider, btn, body) {
     ? prog.set(ev.pct, `Téléchargement : ${ev.pct} % (${size(ev.completed)} / ${size(ev.total)})`)
     : prog.set(100, ev.status === "done" ? "Terminé" : ev.status));
   if (failed) { prog.set(0, failed); btn.disabled = false; return; }
-  prog.set(100, `${s.tag} est installé : il est disponible dans le chat.`);
-  message(`${s.tag} est installé et disponible dans le chat.`, true);
+  const account = s.cloud ? " Il tourne chez Ollama : connectez Ollama à votre compte ollama.com (dans le chat : /ollama signin)." : "";
+  prog.set(100, `${s.tag} est installé : il est disponible dans le chat.${account}`);
+  message(`${s.tag} est installé et disponible dans le chat.${account}`, true);
   await load(false);
 }
 

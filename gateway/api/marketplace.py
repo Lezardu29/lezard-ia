@@ -166,14 +166,7 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
                     "name": m["name"],
                     "description": m["description"],
                     "capabilities": m["capabilities"],
-                    "sizes": [
-                        {
-                            "tag": f"{m['name']}:{x['label']}",
-                            "params_b": x["params_b"],
-                            "download": ollama_library.tag_size_gb(x["params_b"]) * 1e9,
-                        }
-                        for x in m["sizes"]
-                    ],
+                    "sizes": [ollama_library.public_size(m["name"], x) for x in m["sizes"]],
                 }
                 for m in lib["models"]
             ]

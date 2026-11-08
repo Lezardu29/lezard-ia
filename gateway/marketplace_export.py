@@ -142,14 +142,7 @@ async def library_with_licenses(client: httpx.AsyncClient) -> tuple[list[dict], 
             "name": m["name"],
             "description": m["description"],
             "capabilities": m["capabilities"],
-            "sizes": [
-                {
-                    "tag": f"{m['name']}:{x['label']}",
-                    "params_b": x["params_b"],
-                    "download": ollama_library.tag_size_gb(x["params_b"]) * 1e9,
-                }
-                for x in m["sizes"]
-            ],
+            "sizes": [ollama_library.public_size(m["name"], x) for x in m["sizes"]],
             "license": None,
         }
         if lic:

@@ -92,6 +92,7 @@
 .fit.vram { color: var(--success); }
 .fit.offload { color: var(--warn); }
 .fit.too_big { color: var(--danger); }
+.fit.cloud { color: var(--text-muted); }  /* modèle cloud d'Ollama : rien à faire tenir sur ce PC */
 /* test de performance : vitesse estimée de chaque modèle sur ce PC */
 .bench { display: grid; gap: 8px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); }
 .bench p { margin: 0; }

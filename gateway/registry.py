@@ -209,6 +209,13 @@ _NO_TOOLS_NAME = re.compile(
 )
 
 
+def is_ollama_cloud(model_id: str) -> bool:
+    """Modèle « cloud » d'Ollama (« kimi-k3:cloud », « gpt-oss:120b-cloud ») : les données quittent ce PC, le mode
+    privé et les clés limitées aux IA locales ne s'en servent jamais."""
+    tag = model_id.lower().rsplit(":", 1)[1] if ":" in model_id else ""
+    return tag == "cloud" or tag.endswith("-cloud")
+
+
 def infer_local(provider: str, model_id: str) -> ModelInfo:
     """Métadonnées a priori d'un modèle local, déduites de son nom (ex: llama3.1:70b)."""
     m = _PARAMS.search(model_id.replace(":", " ").replace("-", " "))
@@ -304,6 +311,8 @@ class ModelRegistry:
                 info = replace(info, tools="tools" in caps, vision="vision" in caps)
             if model_id.lower().startswith(NO_TOOL_CALLING):
                 info = replace(info, tools=False)
+            if is_ollama_cloud(model_id):  # passe par l'Ollama de ce PC mais tourne chez Ollama : jamais « local »
+                info = replace(info, hosting="cloud", context_window=max(info.context_window, 32_768))
             return info
         return ModelInfo(model_id, provider, hosting)
 
