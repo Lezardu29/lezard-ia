@@ -31,6 +31,7 @@ from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 
 from .. import (
+    app_connect,
     benchmark,
     chat_tools,
     detection,
@@ -132,6 +133,7 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
             "installed": key in here,
             "uninstall": [installers.label(a) for a in installers.uninstall_steps(key) or ()],
             "uninstall_hint": installers.uninstall_hint(key),
+            "connect": key.split(":", 1)[1] in app_connect.APPS and key.startswith("app:"),
         }
 
     def npx() -> str | None:
@@ -395,11 +397,20 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
         path = log_path()
         path.parent.mkdir(parents=True, exist_ok=True)
         env = {**os.environ, "CI": "1", "NO_COLOR": "1", "npm_config_fund": "false", "npm_config_audit": "false"}
+        env.pop("ELECTRON_RUN_AS_NODE", None)  # héritée d'un terminal de VS Code : fausse les applis Electron
         code = 0
+        if record is True:  # réinstallation : ce qui ferait échouer une étape (déjà déclaré) est retiré juste avant
+            pre = await asyncio.to_thread(lambda: [installers.replaced_first(t) for t in steps])
+            steps = [step for t, first in zip(steps, pre) for step in ((first, t) if first else (t,))]
         with path.open("w", encoding="utf-8") as out:
             for template in steps:
                 out.write("> " + installers.label(template) + "\n")  # sans le chemin de ce PC
                 out.flush()
+                if record == "forget" and await asyncio.to_thread(installers.already_undone, template):
+                    out.write("Déjà retiré.\n")
+                    continue
+                if record == "forget" and await asyncio.to_thread(installers.stop_running, template):
+                    out.write("Ses programmes encore lancés sont arrêtés d'abord (fichiers libérés).\n")
                 try:
                     await asyncio.to_thread(installers.refresh_path)  # une dépendance vient peut-être d'arriver
                     argv = installers.resolve(template)
@@ -431,6 +442,8 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
                     code = -2
                 if code:
                     break
+                if record == "forget":
+                    await asyncio.to_thread(installers.tidy_after, template)
             if code == 0 and then is not None:
                 try:
                     note = await then()
@@ -529,7 +542,39 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
         except marketplace.MarketplaceError as e:
             fail(e)
         # redémarrage proposé à la fin seulement si la commande du chat de l'outil ne marche pas encore (needs_restart)
-        return start(key, steps, Path.home(), False, after_install(key, r.get("after")), True)
+        ctx = admin(request)
+        then = None
+        if item in (app_connect.APPS if kind == "apps" else app_connect.TOOLS):  # branché d'office (app_connect.py)
+
+            async def then() -> str | None:
+                note = await asyncio.to_thread(
+                    app_connect.connect,
+                    item,
+                    holder["store"],
+                    ctx.identity,
+                    ctx.base_plan or ctx.plan,
+                    holder["remote"].port,
+                )
+                if note and not note.startswith("Branchement automatique impossible"):
+                    use = marketplace.chat_usage(item)["use"] if item in marketplace.CHAT else None
+                    job["after"] = (f"Dans le chat de Lezard IA : {use}. " if use else "") + note
+                elif note:
+                    job["after"] = f"{note} {job['after'] or ''}".strip()
+                return note
+
+        return start(key, steps, Path.home(), False, after_install(key, r.get("after")), True, then)
+
+    @router.post("/v1/admin/marketplace/apps/{item}/connect")
+    async def connect_app(item: str, request: Request):
+        """Rebranche une application déjà installée sur Lezard IA (nouvelle clé, l'ancienne est révoquée)."""
+        ctx = admin(request)
+        if item not in app_connect.APPS:
+            raise VirtualKeyError(404, "Cette application se branche avec son guide.")
+        request.state.audit = {"target": f"marketplace:app:{item}:connect"}
+        note = await asyncio.to_thread(
+            app_connect.connect, item, holder["store"], ctx.identity, ctx.base_plan or ctx.plan, holder["remote"].port
+        )
+        return {"connected": not note.startswith("Branchement automatique impossible"), "message": note}
 
     @router.post("/v1/admin/marketplace/{kind}/{item}/uninstall", status_code=202)
     async def uninstall_item(kind: str, item: str, request: Request):

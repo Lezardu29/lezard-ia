@@ -550,6 +550,13 @@ MCP_SERVERS = (
         "id": "chromedevtools",
         "package": "chrome-devtools-mcp",
         "args": ["--no-usage-statistics"],  # statistiques d'usage envoyées à Google par défaut : coupées
+        # 32 outils : gemma4 ne trouvait plus « new_page » ; ceux d'une inspection courante (essai réel 2026-11-08)
+        "only_tools": [
+            *("new_page", "navigate_page", "list_pages", "select_page", "close_page", "wait_for"),
+            *("take_snapshot", "take_screenshot", "evaluate_script", "click", "fill", "press_key"),
+            *("list_console_messages", "list_network_requests", "performance_start_trace"),
+            *("performance_stop_trace", "performance_analyze_insight"),
+        ],
         "commands": _mcp_cmd("/mcp ouvre http://localhost:8000 et dis-moi pourquoi la page met du temps à charger"),
         "size": "~14 Mo, plus Google Chrome sur ce PC",
         "name": "Chrome DevTools (inspecter une page)",
@@ -912,6 +919,8 @@ def add_mcp(sid: str, npx: str, folder: str | None = None, secret: str | None = 
         env[s["secret"]["env"]] = secret
     if env:
         cfg["env"] = env
+    if s.get("only_tools"):  # serveur aux nombreux outils : ceux d'un usage courant (une IA locale s'y perd)
+        cfg["only_tools"] = list(s["only_tools"])
     if not write:
         return {**cfg, "env": sorted(cfg.get("env", {}))}
     path = mcp.config_path()
@@ -938,14 +947,13 @@ APPS = (
     {
         "id": "openwebui",
         "name": "Open WebUI",
-        "description": "Interface de chat complète, à installer sur un serveur ou un PC (Docker).",
+        "description": "Interface de chat complète, lancée par Lezard IA et déjà branchée sur ses modèles.",
         "commands": [
             _cmd(
                 "http://localhost:3000",
-                "Ouvrir Open WebUI (première fois : créez le compte administrateur).",
+                "Ouvrir Open WebUI après /openwebui dans le chat (première fois : créez le compte administrateur).",
                 where="browser",
             ),
-            _cmd("docker stop open-webui", "L'arrêter ; docker start open-webui le relance.", where="terminal"),
         ],
         "guide": "openwebui",
         "url": "https://github.com/open-webui/open-webui",
@@ -1426,8 +1434,9 @@ AGENT_TOOLS = (
                 where="terminal",
             ),
         ],
-        "needs": "Node.js et npm.",
-        "lezard": "Outil pour agents de code, à part du chat de Lezard IA.",
+        "needs": "Node.js et npm. Ghidra (décompilateur de la NSA, Apache 2.0) et Java 21 (Eclipse Temurin) sont "
+        "installés avec lui.",
+        "lezard": "Dans le chat de Lezard IA : /rea, avec l'IA choisie dans le chat.",
         "url": "https://github.com/morluto/rea",
         "license": _lic("MIT", "morluto", "https://github.com/morluto/rea", summary=MIT_NOTE),
         "warning": "N'analysez que des logiciels que vous avez le droit d'étudier : leur licence (CLUF) peut interdire "
@@ -1569,7 +1578,7 @@ AGENT_TOOLS = (
         "name": "Claude Code Router",
         "description": "Faire tourner Claude Code sur d'autres modèles que ceux d'Anthropic, dont ceux de Lezard IA : "
         "une adresse locale reçoit les demandes de Claude Code et les envoie au fournisseur choisi, selon vos règles.",
-        "install": "npm install --global @musistudio/claude-code-router@3.1.3",
+        "install": "npm install --global --ignore-scripts @musistudio/claude-code-router@3.1.3, puis réparation de ses modules natifs par Lezard IA",
         "guide": "ccrouter",
         "commands": [
             _cmd(
@@ -1845,7 +1854,8 @@ AGENT_TOOLS = (
         "name": "CloudCLI (Claude Code dans le navigateur)",
         "description": "Une interface web pour Claude Code et Codex : sessions, fichiers, terminal et Git dans le "
         "navigateur, aussi sur tablette ou téléphone.",
-        "install": "npm install --global @cloudcli-ai/cloudcli@1.37.5\ncloudcli",
+        "install": "npm install --global --ignore-scripts @cloudcli-ai/cloudcli@1.37.5, puis réparation de ses "
+        "modules natifs par Lezard IA\ncloudcli",
         "commands": [_cmd("cloudcli", "Démarrer l'interface, puis ouvrir http://localhost:3001.", where="terminal")],
         "needs": "Node.js et Claude Code (ou Codex).",
         "lezard": "Application à part, sur ce PC. Ne l'ouvrez pas sur Internet sans protection : elle donne accès à vos "
@@ -2103,11 +2113,13 @@ def bundles_for(reco: dict, hw: dict, found: Callable[[str], str | None], platfo
 
 # ---------- outils dans le chat : « /<commande> » pour chaque outil installé (chat_tools.py) ----------
 # kind « agent » : une demande en langage courant, l'outil répond dans la conversation. runner : openclaw, aider,
-#   opencode, qwen (branchés sur Lezard IA, avec le modèle choisi dans le chat) ; claude : Claude Code de ce PC, avec
-#   l'extension installée (prefix : sa commande, ajoutée devant la demande).
+#   opencode, qwen ; claude : Claude Code de ce PC avec l'extension installée (prefix : sa commande, ajoutée devant
+#   la demande). Tous branchés sur Lezard IA, avec le modèle choisi dans le chat, sans compte extérieur.
 # kind « cli » : les arguments du programme, comme dans un terminal ; sa sortie s'affiche dans la conversation.
 # kind « open » : ouvre l'application sur ce PC (start : nom du menu Démarrer ; path ; vscode ; url) ;
 #   kind « serve » : lance le programme (service) puis donne son adresse.
+# mcp : extension qui passe par un serveur MCP (son nom pour Claude Code) : seul ce serveur est gardé avec une IA
+# locale (chat_tools.mcp_args).
 # Sans commande : bibliothèques (python, langchain), ComfyUI (déjà /image), Page Assist (extension du navigateur :
 # Ctrl+Maj+Y), happy (appairage du téléphone) et ccstatusline (barre d'état de Claude Code) : rien à lancer ici.
 CHAT = {
@@ -2120,32 +2132,152 @@ CHAT = {
         "kind": "agent",
         "runner": "claude",
         "prefix": "/hyperframes:hyperframes ",
+        # dossier de la demande contrôlé par l'outil HyperFrames (s'il est installé) ; erreurs renvoyées à l'IA
+        "prepare": {
+            "program": "hyperframes",
+            "args": ["init", "{name}", "--non-interactive", "--example", "blank"],
+            "unless": "index.html",
+            "note": "Le projet HyperFrames est déjà créé et valide dans {folder} (index.html et hyperframes.json). "
+            "Ne lance pas « hyperframes init » : modifie directement {folder}\\index.html (et ajoute des fichiers si "
+            "besoin), en gardant ses attributs data-composition-id, data-width, data-height et window.__timelines.",
+            "tool": "hyperframes-cli",
+        },
+        "check": {"program": "hyperframes", "args": ["lint"], "label": "hyperframes lint", "tool": "hyperframes-cli"},
         "example": "fais une intro de 10 secondes avec un titre en fondu",
     },
     "watch": {
         "kind": "agent",
         "runner": "claude",
-        "prefix": "/watch ",
+        # son script demande des commandes : Lezard IA le lance lui-même (chat_tools._watched), moteur local
+        "watch": True,
         "example": "https://www.youtube.com/watch?v=… résume",
     },
     "rea": {
         "kind": "agent",
         "runner": "claude",
-        "example": "comprends comment fonctionne la recherche de l'application Notes",
+        "mcp": "rea",
+        # descriptions d'outils courtes (sinon 3,4 millions de caractères pour ses 207 outils) ; une IA locale ne voit
+        # que ceux d'une analyse de programme (environ 3 000 jetons au lieu de 57 000)
+        "mcp_env": {"REA_MCP_INPUT_SCHEMA_PROFILE": "compact", "REA_MCP_OUTPUT_SCHEMA_PROFILE": "off"},
+        "only_tools": [
+            "open_binary",
+            "close_binary",
+            "binary_overview",
+            "list_strings",
+            "search_strings",
+            "list_procedures",
+            "search_procedures",
+            "procedure_pseudo_code",
+            "procedure_callers",
+            "inspect_artifact",
+            "analyze_javascript_application",
+        ],
+        "drop_args": ["document"],  # sous Windows : le programme ouvert, pas son chemin (voir mcp_filter.py)
+        # le décompilateur fourni par sa recette (installers.GHIDRA, JAVA21), donné à REA à chaque demande
+        "env": {
+            "GHIDRA_INSTALL_DIR": r"%LOCALAPPDATA%\Programs\Ghidra\ghidra_12.1.4_PUBLIC",
+            "JAVA_HOME": r"%LOCALAPPDATA%\Programs\Java21\jdk-21.0.13+9",
+        },
+        "example": r"décompile C:\Outils\mon-programme.exe et explique ce que fait sa fonction principale",
     },
-    "agentmemory": {"kind": "agent", "runner": "claude", "example": "qu'avions-nous décidé pour la page d'accueil ?"},
-    "superpowers": {"kind": "agent", "runner": "claude", "example": "faisons une liste de tâches en React"},
-    "speckit": {"kind": "agent", "runner": "claude", "example": "/speckit-specify une liste de courses partagée"},
+    "agentmemory": {
+        "kind": "agent",
+        "runner": "claude",
+        # sans son serveur (rien à faire tourner à part), sa recherche veut TOUS les mots dans le souvenir
+        # (une IA locale pose la question entière) : le relais la refait mot par mot (mcp_filter.py)
+        "any_word": ["memory_recall", "memory_smart_search"],
+        "mcp": "agentmemory",
+        "example": "qu'avions-nous décidé pour la page d'accueil ?",
+    },
+    # methods : avec une IA locale, Lezard IA lui donne d'office la méthode de Superpowers qui convient (chat_tools)
+    "superpowers": {
+        "kind": "agent",
+        "runner": "claude",
+        "methods": True,
+        "example": "faisons une liste de tâches en React",
+    },
+    "speckit": {
+        "kind": "agent",
+        "runner": "claude",
+        # ses commandes (/speckit-…) vivent dans le projet : il y est initialisé, et Claude Code y travaille
+        "in_folder": True,
+        "prepare": {
+            "program": "specify",
+            "args": ["init", "--here", "--force", "--non-interactive", "--integration", "claude"],
+            "cwd": "folder",
+            "unless": ".specify",
+            "note": "Spec Kit est initialisé dans {folder} (dossier .specify et commandes /speckit-…).",
+            "tool": "speckit",
+        },
+        "example": r"/speckit-specify une liste de courses partagée, dans C:\Projets\courses",
+    },
     "wshobson": {"kind": "agent", "runner": "claude", "example": "fais une revue de sécurité de ce dossier"},
-    "serena": {"kind": "agent", "runner": "claude", "example": "Activate the project C:\\Projets\\site"},
-    "bmad": {"kind": "agent", "runner": "claude", "example": "bmad status"},
-    "claudemem": {"kind": "agent", "runner": "claude", "example": "comment avions-nous réglé le bug de connexion ?"},
+    "serena": {
+        "kind": "agent",
+        "runner": "claude",
+        "mcp": "serena",
+        "example": "Activate the project C:\\Projets\\site",
+    },
+    "bmad": {
+        "kind": "agent",
+        "runner": "claude",
+        # ses agents et méthodes vivent dans le projet : installés là en français, et Claude Code y travaille
+        "in_folder": True,
+        "prepare": {
+            "program": "bmad",
+            "args": [
+                *("install", "--directory", ".", "--modules", "bmm", "--tools", "claude-code", "--yes"),
+                *("--communication-language", "Français", "--document-output-language", "Français"),
+            ],
+            "cwd": "folder",
+            "unless": "_bmad",
+            "note": "BMAD est installé dans {folder} (dossier _bmad, compétences bmad-… dans .claude/skills).",
+            "tool": "bmad",
+        },
+        "example": r"brief produit d'une application de recettes, dans C:\Projets\recettes",
+    },
+    "claudemem": {
+        "kind": "agent",
+        "runner": "claude",
+        "mcp": "claude-mem",
+        "allow": ["mcp__plugin_claude-mem_mcp-search"],  # son serveur MCP vient de l'extension elle-même
+        # une IA locale ne voit que ses outils de mémoire (« smart_search » cherche dans le code : elle s'y trompait)
+        "deny_local": [
+            f"mcp__plugin_claude-mem_mcp-search__{name}"
+            for name in (
+                "smart_search",
+                "smart_unfold",
+                "smart_outline",
+                "dumb_search",
+                "build_corpus",
+                "rebuild_corpus",
+                "query_corpus",
+                "reprime_corpus",
+                "prime_corpus",
+                "list_corpora",
+                "work_state_write",
+                "work_state_read",
+                "get_tool_uses",
+                "session_start_context",
+            )
+        ],
+        "example": "comment avions-nous réglé le bug de connexion ?",
+    },
     "superclaude": {"kind": "agent", "runner": "claude", "example": "/sc:help"},
     # programmes en ligne de commande : arguments → sortie
     "gws": {"kind": "cli", "program": "gws", "example": "calendar +agenda --today"},
     "findskills": {"kind": "cli", "program": "npx", "args": ["--yes", "skills"], "example": "find pdf"},
     "codegraph": {"kind": "cli", "program": "codegraph", "example": "query login"},
-    "ccrouter": {"kind": "cli", "program": "ccr", "command": "ccr", "example": "status"},
+    # Claude Code Router : ses fournisseurs se règlent dans son interface (base SQLite, pas de commande pour cela)
+    "ccrouter": {
+        "kind": "serve",
+        "program": "ccr",
+        # service détaché ; il écrit l'adresse de son interface avec son jeton d'accès, ouverte telle quelle
+        "args": ["start", "--no-open"],
+        "detached": True,
+        "command": "ccr",
+        "url": "http://127.0.0.1:3458",
+    },
     "ccusage": {"kind": "cli", "program": "ccusage", "example": "daily"},
     "repomix": {"kind": "cli", "program": "repomix", "example": "--remote yamadashy/repomix --stdout"},
     "hyperframes-cli": {"kind": "cli", "program": "hyperframes", "command": "hyperframescli", "example": "doctor"},
@@ -2153,13 +2285,22 @@ CHAT = {
         "kind": "cli",
         "program": "cct",
         "command": "cct",
-        "example": "--agent development-tools/code-reviewer --yes",
+        # --directory : le projet (sans lui, l'agent irait dans le dossier de travail de Lezard IA)
+        "example": r"--agent development-tools/code-reviewer --yes --directory C:\Projets\site",
     },
     "markitdown": {"kind": "cli", "program": "markitdown", "example": "C:\\Users\\moi\\Documents\\rapport.pdf"},
     "ollama": {"kind": "cli", "program": "ollama", "example": "list"},
-    "cloudcli": {"kind": "serve", "program": "cloudcli", "url": "http://localhost:3001"},
+    # « claude » : son Claude Code passe par Lezard IA (chat_tools._serve)
+    "cloudcli": {"kind": "serve", "program": "cloudcli", "url": "http://localhost:3001", "claude": True},
     # applications : ouvertes sur ce PC
-    "openwebui": {"kind": "open", "url": "http://localhost:3000", "docker": "open-webui"},
+    # lancé par Lezard IA (paquet Python, sans Docker), branché d'office sur lui (chat_tools._serve)
+    "openwebui": {
+        "kind": "serve",
+        "program": "open-webui",
+        "args": ["serve", "--host", "127.0.0.1", "--port", "3000"],
+        "url": "http://localhost:3000",
+        "openwebui": True,
+    },
     "librechat": {"kind": "open", "url": "http://localhost:3080"},
     "continue": {"kind": "open", "vscode": True},
     "cline": {"kind": "open", "vscode": True},
@@ -2177,7 +2318,8 @@ CHAT = {
 }
 CHAT_HELP = {  # précédé du nom de l'outil : « Aider répond dans la conversation… »
     "agent": "répond dans la conversation, branché sur Lezard IA (demande en langage courant)",
-    "agent:claude": "répond dans la conversation, par Claude Code de ce PC (demande en langage courant)",
+    "agent:claude": "répond dans la conversation, par Claude Code de ce PC branché sur Lezard IA (demande en langage "
+    "courant)",
     "cli": "se lance avec ces arguments, comme dans un terminal ; sa sortie s'affiche dans la conversation",
     "serve": "démarre sur ce PC ; son adresse s'affiche dans la conversation",
     "open": "s'ouvre sur ce PC",

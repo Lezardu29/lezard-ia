@@ -32,7 +32,8 @@ if "dors" in args:
     time.sleep(60)
 seen = {"args": args, "cwd": os.getcwd(), "env": {k: os.environ.get(k) for k in (
     "LEZARD_API_KEY", "OPENAI_API_KEY", "OPENAI_API_BASE", "OPENAI_BASE_URL", "OPENAI_MODEL", "OPENCODE_CONFIG",
-    "OPENCLAW_CONFIG_PATH", "ANTHROPIC_API_KEY")}}
+    "OPENCLAW_CONFIG_PATH", "ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_MODEL",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL", "CLAUDE_CODE_SUBAGENT_MODEL")}}
 json.dump(seen, open(os.path.join(os.environ["FAKE_LOG"], "recu.json"), "w"))
 tool = os.environ["FAKE_TOOL"]
 if tool == "openclaw":
@@ -126,13 +127,89 @@ def test_agents_are_wired_to_lezard_ia(api):
     assert "master" not in seen["args"]  # la clé passe par une variable, jamais par la ligne de commande
 
 
-def test_claude_code_extensions_use_the_pc_account(api):
+def test_claude_code_extensions_run_only_in_lezard_ia(api):
+    """Superpowers, HyperFrames… : Claude Code de ce PC, mais son IA est celle de Lezard IA (modèle choisi dans le
+    chat), jamais le compte claude.ai de ce PC ni la clé d'API d'Anthropic du .env."""
     c, ask, got, _ = api
-    run = ask("hyperframes", "une intro de 10 secondes", fake_as="claude")
+    run = ask("hyperframes", "une intro de 10 secondes", fake_as="claude", model="ollama/gemma4:e4b")
     seen = got()
-    assert run["text"] == "claude : /hyperframes:hyperframes une intro de 10 secondes" and run["model"] is None
-    assert seen["env"]["ANTHROPIC_API_KEY"] is None and seen["env"]["LEZARD_API_KEY"] is None
+    assert run["text"] == "claude : /hyperframes:hyperframes une intro de 10 secondes"
+    assert run["model"] == "ollama/gemma4:e4b"
+    env = seen["env"]
+    assert env["ANTHROPIC_BASE_URL"] == "http://127.0.0.1:8123" and env["ANTHROPIC_AUTH_TOKEN"] == "master"
+    assert env["ANTHROPIC_API_KEY"] is None and env["LEZARD_API_KEY"] is None  # la clé du .env : jamais
+    assert env["ANTHROPIC_MODEL"] == env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] == env["CLAUDE_CODE_SUBAGENT_MODEL"]
+    assert seen["args"][seen["args"].index("--model") + 1] == "ollama/gemma4:e4b"
     assert seen["args"][seen["args"].index("--permission-mode") + 1] == "acceptEdits"
+    assert seen["args"][seen["args"].index("--tools") + 1] == "Read,Write,Edit,Glob,Grep,Skill"  # tient en local
+    assert "--strict-mcp-config" in seen["args"]
+    ask("superpowers", "faisons une liste de tâches", fake_as="claude")
+    assert got()["env"]["ANTHROPIC_MODEL"] == "auto"  # sans modèle choisi : le choix automatique de Lezard IA
+
+
+def test_superpowers_adapts_to_a_local_ai_or_to_claude(api, monkeypatch):
+    """IA locale : outils réduits, et la méthode de Superpowers qui convient donnée d'office (un petit modèle n'irait
+    pas la chercher). Clé d'API d'Anthropic enregistrée dans Lezard IA : Claude, l'extension telle qu'écrite."""
+    c, ask, got, _ = api
+    ask("superpowers", "Je veux construire une appli de liste de courses", fake_as="claude", model="ollama/gemma4:e4b")
+    args = got()["args"]
+    guide = args[args.index("--append-system-prompt") + 1]
+    assert "Cadrer avant de construire" in guide and args[args.index("--tools") + 1] == chat_tools.CLAUDE_TOOLS
+    ask("superpowers", "mon script plante avec une erreur", fake_as="claude", model="ollama/gemma4:e4b")
+    assert "Débogage" in got()["args"][got()["args"].index("--append-system-prompt") + 1]
+    ask("hyperframes", "une intro", fake_as="claude", model="ollama/gemma4:e4b")
+    args = got()["args"]  # seulement la langue de la demande : pas de méthode de Superpowers
+    assert args[args.index("--append-system-prompt") + 1] == chat_tools.LANGUAGE
+
+    monkeypatch.setattr(chat_tools, "claude_model_of", lambda providers: "anthropic/claude-sonnet-5-5")
+    run = ask("superpowers", "Je veux construire une appli", fake_as="claude")  # aucun modèle choisi : Claude
+    seen = got()
+    assert (
+        run["model"] == "anthropic/claude-sonnet-5-5"
+        and seen["env"]["ANTHROPIC_MODEL"] == "anthropic/claude-sonnet-5-5"
+    )
+    assert seen["env"]["ANTHROPIC_BASE_URL"] == "http://127.0.0.1:8123"  # toujours par Lezard IA (sa clé, ses comptes)
+    assert seen["args"][seen["args"].index("--tools") + 1] == chat_tools.CLAUDE_FULL
+    assert seen["args"][seen["args"].index("--append-system-prompt") + 1] == chat_tools.LANGUAGE  # pas de méthode
+    ask("superpowers", "Je veux construire une appli", fake_as="claude", model="ollama/gemma4:e4b")
+    assert got()["env"]["ANTHROPIC_MODEL"] == "ollama/gemma4:e4b"  # le modèle choisi dans le chat prime
+
+
+def test_claude_model_only_with_an_anthropic_key():
+    from gateway.config import ProviderConfig
+
+    class P:
+        def __init__(self, cfg):
+            self.cfg = cfg
+
+    assert chat_tools.claude_model_of({"ollama": P(ProviderConfig("ollama", "openai", "http://o/v1", "local"))}) is None
+    keyless = ProviderConfig("anthropic", "anthropic", "https://api.anthropic.com/v1", "cloud", api_key_env="ABSENTE_X")
+    assert chat_tools.claude_model_of({"anthropic": P(keyless)}) is None
+    keyed = ProviderConfig("anthropic", "anthropic", "https://api.anthropic.com/v1", "cloud", api_key="sk-ant-x")
+    assert chat_tools.claude_model_of({"anthropic": P(keyed)}) == "anthropic/claude-sonnet-5-5"
+    assert chat_tools.is_claude("anthropic/claude-opus-5-5") and not chat_tools.is_claude("ollama/qwen3:8b")
+
+
+def test_system_messages_in_the_conversation_are_accepted():
+    """Claude Code récent met des messages « system » dans la conversation : ramenés aux instructions système."""
+    from gateway.validation import validate_messages_body
+
+    body = {
+        "system": [{"type": "text", "text": "Tu es Claude Code."}],
+        "messages": [
+            {"role": "user", "content": [{"type": "text", "text": "Dis OK"}]},
+            {"role": "system", "content": [{"type": "text", "text": "Rappel : réponds court.", "cache_control": {}}]},
+        ],
+    }
+    validate_messages_body(body)
+    assert [m["role"] for m in body["messages"]] == ["user"]
+    assert [b["text"] for b in body["system"]] == ["Tu es Claude Code.", "Rappel : réponds court."]
+    plain = {
+        "system": "Instructions",
+        "messages": [{"role": "system", "content": "Note"}, {"role": "user", "content": "x"}],
+    }
+    validate_messages_body(plain)
+    assert plain["system"] == [{"type": "text", "text": "Instructions"}, {"type": "text", "text": "Note"}]
 
 
 def test_command_line_tools_show_their_output(api):
@@ -152,10 +229,10 @@ def test_apps_open_on_this_pc(api, monkeypatch):
     opened = []
     monkeypatch.setattr(chat_tools, "_windows_open", lambda spec: opened.append(spec["start"]) or spec["start"])
     monkeypatch.setattr(chat_tools.webbrowser, "open", opened.append)
-    monkeypatch.setattr(chat_tools.installers, "program", lambda name: None)  # pas de Docker
+    monkeypatch.setattr(chat_tools.installers, "program", lambda name: None)
     assert ask("jan", "")["text"] == "Jan est ouvert sur ce PC."
-    assert "http://localhost:3000" in ask("openwebui", "")["text"]
-    assert opened == ["Jan", "http://localhost:3000"]
+    assert ask("librechat", "")["text"].startswith("Ouvert dans le navigateur de ce PC : http://localhost:3080")
+    assert opened == ["Jan", "http://localhost:3080"]
 
 
 def test_a_request_can_be_stopped_and_checks(api, monkeypatch):
@@ -244,3 +321,88 @@ def test_chat_page_uses_the_tools():
     assert 'rawApi("/v1/apps")' in js and "export function appRequest" in js
     chat = (STATIC / "chat.js").read_text(encoding="utf-8")
     assert "appRequest(textOf(asked?.content))" in chat and "/v1/apps/runs/" in chat and 'method: "DELETE"' in chat
+
+
+def test_every_agent_uses_claude_when_a_key_is_saved(api, monkeypatch):
+    """Aider, OpenCode, Qwen Code, OpenClaw : sans modèle choisi dans le chat, Claude si une clé d'Anthropic est
+    enregistrée dans Lezard IA (toujours par Lezard IA)."""
+    c, ask, got, _ = api
+    monkeypatch.setattr(chat_tools, "claude_model_of", lambda providers: "anthropic/claude-sonnet-5-5")
+    run = ask("aider", "écris un script")
+    seen = got()
+    assert run["model"] == "anthropic/claude-sonnet-5-5"
+    assert seen["args"][seen["args"].index("--model") + 1] == "openai/anthropic/claude-sonnet-5-5"
+    assert seen["env"]["OPENAI_API_BASE"] == "http://127.0.0.1:8123/v1"
+    ask("qwencode", "explique")
+    assert got()["env"]["OPENAI_MODEL"] == "anthropic/claude-sonnet-5-5"
+    ask("aider", "x", model="ollama/gemma4:e4b")
+    assert got()["args"][got()["args"].index("--model") + 1] == "openai/ollama/gemma4:e4b"  # le choix du chat prime
+
+
+def fake_plugin(home, plugin: str, skills: dict[str, str]):
+    """Extension de Claude Code installée sous `home`, avec ses méthodes (skills/<nom>/SKILL.md)."""
+    root = home / ".claude" / "plugins" / "cache" / plugin.replace("@", "/") / "1.0"
+    for name, desc in skills.items():
+        (root / "skills" / name).mkdir(parents=True)
+        (root / "skills" / name / "SKILL.md").write_text(
+            f"---\nname: {name}\ndescription: {desc}\n---\n\n# {name}\nÉtapes de la méthode {name}.", encoding="utf-8"
+        )
+    index = home / ".claude" / "plugins" / "installed_plugins.json"
+    data = json.loads(index.read_text("utf-8")) if index.exists() else {"plugins": {}}
+    data["plugins"][plugin] = [{"scope": "user", "installPath": str(root)}]
+    index.write_text(json.dumps(data), encoding="utf-8")
+
+
+def test_extensions_give_a_local_ai_the_right_method(api, tmp_path, monkeypatch):
+    """IA locale : la méthode de l'extension qui convient, choisie par le modèle en une courte requête, est donnée
+    dans ses instructions ; jamais le mode d'emploi général (« using-… »)."""
+    import asyncio
+
+    monkeypatch.setattr(chat_tools.Path, "home", lambda: tmp_path)
+    fake_plugin(
+        tmp_path,
+        "debugging-toolkit@claude-code-workflows",
+        {"debug-hunt": "Use when a program crashes", "code-review": "Use to review code", "using-tools": "Intro"},
+    )
+    assert [s["name"] for s in chat_tools.plugin_skills("wshobson")] == ["code-review", "debug-hunt", "using-tools"]
+
+    asked = []
+
+    class Model:
+        def __init__(self, reply):
+            self.reply = reply
+
+        def __call__(self, request):
+            asked.append(json.loads(request.content))
+            return httpx.Response(200, json={"choices": [{"message": self.reply}]})
+
+    real = httpx.AsyncClient
+
+    def guide(reply, message="mon programme plante"):
+        transport = httpx.MockTransport(Model(reply))
+        monkeypatch.setattr(chat_tools.httpx, "AsyncClient", lambda **kw: real(transport=transport))
+        return asyncio.run(chat_tools.plugin_guide("wshobson", message, 8123, "master", "ollama/gemma4:e4b"))
+
+    g = guide({"content": "debug-hunt"})
+    assert "Méthode « debug-hunt »" in g and "Étapes de la méthode debug-hunt." in g and "---" not in g
+    assert "using-tools" not in asked[-1]["messages"][1]["content"]  # mode d'emploi général : jamais proposé
+    g = guide({"content": "", "reasoning": "code-review ? non, plutôt debug-hunt"})  # a tout dit en réfléchissant
+    assert "Méthode « debug-hunt »" in g
+    assert guide({"content": "aucune"}, "quelle heure est-il ?") == ""
+    assert asyncio.run(chat_tools.plugin_guide("hyperframes", "x", 8123, "k", "m")) == ""  # pas installée
+
+
+def test_mcp_extensions_keep_their_own_server(tmp_path, monkeypatch):
+    """Avec une IA locale, Claude Code ne reçoit aucun serveur MCP… sauf celui de l'extension (agentmemory, Serena)."""
+    monkeypatch.setattr(chat_tools.Path, "home", lambda: tmp_path)
+    monkeypatch.setenv("GATEWAY_DATA_DIR", str(tmp_path / "data"))
+    assert chat_tools.mcp_args("watch", {}) == ["--strict-mcp-config"]
+    assert chat_tools.mcp_args("serena", {"mcp": "serena"}) == []  # pas déclaré : ceux de Claude Code, l'outil marche
+    servers = {"serena": {"command": "serena"}, "autre": {"command": "x"}, "mon-agentmemory": {"command": "a"}}
+    (tmp_path / ".claude.json").write_text(json.dumps({"mcpServers": servers}), encoding="utf-8")
+    args = chat_tools.mcp_args("serena", {"mcp": "serena"})
+    assert args[0] == "--mcp-config" and args[2:] == ["--strict-mcp-config", "--allowedTools", "mcp__serena"]
+    assert json.loads(Path(args[1]).read_text("utf-8")) == {"mcpServers": {"serena": {"command": "serena", "env": {}}}}
+    args = chat_tools.mcp_args("agentmemory", {"mcp": "agentmemory"})  # nom un peu différent : retrouvé quand même
+    assert list(json.loads(Path(args[1]).read_text("utf-8"))["mcpServers"]) == ["mon-agentmemory"]
+    assert marketplace.CHAT["serena"]["mcp"] == "serena" and marketplace.CHAT["agentmemory"]["mcp"] == "agentmemory"

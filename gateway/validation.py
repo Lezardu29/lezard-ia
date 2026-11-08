@@ -201,8 +201,33 @@ def validate_chat(body: dict) -> None:
     check_format(rf)
 
 
+def fold_system_messages(body: dict) -> None:
+    """Messages de rôle « system » dans la conversation (Claude Code récent en envoie) : leur texte rejoint les
+    instructions système du début, que tous les modèles comprennent. Le reste de la requête est inchangé."""
+    msgs = body.get("messages")
+    if not isinstance(msgs, list) or not any(isinstance(m, dict) and m.get("role") == "system" for m in msgs):
+        return
+    if all(isinstance(m, dict) and m.get("role") == "system" for m in msgs):
+        return  # aucune demande : la validation le refuse comme avant
+    texts = []
+    for m in msgs:
+        if isinstance(m, dict) and m.get("role") == "system":
+            c = m.get("content")
+            texts += [c] if isinstance(c, str) else [b.get("text", "") for b in c or () if isinstance(b, dict)]
+    body["messages"] = [m for m in msgs if not (isinstance(m, dict) and m.get("role") == "system")]
+    extra = [{"type": "text", "text": t} for t in texts if isinstance(t, str) and t.strip()]
+    sys = body.get("system")
+    if isinstance(sys, str):
+        body["system"] = [{"type": "text", "text": sys}, *extra] if sys else extra
+    elif isinstance(sys, list):
+        body["system"] = [*sys, *extra]
+    else:
+        body["system"] = extra
+
+
 def validate_messages_body(body: dict) -> None:
-    """Requête au format Anthropic Messages."""
+    """Requête au format Anthropic Messages (messages « system » d'abord ramenés aux instructions système)."""
+    fold_system_messages(body)
     _check_options(body)
     msgs = body.get("messages")
     if not isinstance(msgs, list) or not msgs:

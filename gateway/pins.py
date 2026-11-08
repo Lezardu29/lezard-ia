@@ -61,7 +61,6 @@ def collect() -> list[Pin]:
                     add("pypi", m.group(1), m.group(3), key)
                 elif m := _RELEASE.match(a):
                     add("github", m.group(1), m.group(2), key, asset=m.group(3))
-    add("github", "open-webui/open-webui", installers.OPENWEBUI_IMAGE.rsplit(":", 1)[1], "app:openwebui")
     add("github", "LibreChat-AI/LibreChat", installers.LIBRECHAT_TAG, "app:librechat")
     return list(found.values())
 
@@ -173,7 +172,6 @@ def downloads() -> list[dict]:
                 add(kind="page", name=key, url=argv[-1])
     from . import librechat_setup as lc
 
-    add(kind="image", name=f"ghcr.io/open-webui/open-webui:{installers.OPENWEBUI_IMAGE.rsplit(':', 1)[1]}")
     add(kind="image", name=f"ghcr.io/librechat-ai/librechat:{installers.LIBRECHAT_TAG}")
     add(kind="image", name=f"ghcr.io/librechat-ai/librechat-rag-api-dev-lite:{lc.RAG_TAG}")
     return out

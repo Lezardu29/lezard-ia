@@ -345,7 +345,9 @@ def test_detection_reads_each_kind_of_recipe(tmp_path, monkeypatch):
     (npm_root / "ccusage").mkdir()
     (npm_root / "@googleworkspace" / "cli").mkdir(parents=True)
     (uv_dir / "markitdown").mkdir()
-    (tmp_path / "local" / "Programs" / "Goose").mkdir(parents=True)
+    (uv_dir / "open-webui").mkdir()  # lancé par Lezard IA, sans Docker
+    for folder in ("Goose", "Ghidra", "Java21"):  # Ghidra et Java 21 : fournis avec REA
+        (tmp_path / "local" / "Programs" / folder).mkdir(parents=True)
     facts = detection.Facts()
     facts.__dict__["windows_apps"] = {"jan 0.8.6", "cursor (user)", "januszek"}  # lecture du registre : Windows seul
     for key in (
@@ -366,7 +368,7 @@ def test_detection_covers_the_whole_catalog_and_says_when_it_cannot_know(tmp_pat
     facts.__dict__["windows_apps"] = set()
     states = {k: detection.state(k, facts) for k in installers.RECIPES if k.startswith(("tool:", "app:"))}
     # Docker arrêté et extension peut-être dans Firefox : on ne sait pas ; tout le reste a une réponse
-    assert {k for k, v in states.items() if v is None} == {"app:openwebui", "app:librechat", "app:pageassist"}
+    assert {k for k, v in states.items() if v is None} == {"app:librechat", "app:pageassist"}
     assert not any(states.values())
 
 
@@ -379,6 +381,8 @@ def test_detection_ignores_data_left_behind_and_unreadable_files(tmp_path, monke
     monkeypatch.setattr(detection, "_run", lambda *a: (0, ""))
     assert detection.state("app:librechat", detection.Facts()) is False
     (home / ".claude.json").write_text("{cassé", encoding="utf-8")
+    for folder in ("Ghidra", "Java21"):  # fournis avec REA : présents, seul son serveur reste illisible
+        (tmp_path / "local" / "Programs" / folder).mkdir(parents=True)
     assert detection.state("tool:rea", detection.Facts()) is None
 
 
@@ -497,7 +501,8 @@ def test_agent_tools_and_apps_install_in_one_click(client, monkeypatch, install_
     job = wait_job(client)
     assert job["state"] == "done" and not job["restart"]  # /rea marche déjà : rien à redémarrer
     assert job["after"].startswith("Dans le chat de Lezard IA : /rea <demande>.")
-    assert started == [["C:/bin/npx.cmd", "--yes", "rea-agents@6.7.0", "setup", "--client", "claude_code", "--yes"]]
+    assert [Path(a[1]).stem for a in started[:2]] == ["setup_download"] * 2  # Ghidra et Java 21, vérifiés
+    assert started[2] == ["C:/bin/npx.cmd", "--yes", "rea-agents@6.7.0", "setup", "--client", "claude_code", "--yes"]
     visible.clear()  # programme pas encore visible par Lezard IA (PATH lu au démarrage) : redémarrage proposé
     client.post("/v1/admin/marketplace/tools/rea/install", headers=MASTER)
     assert wait_job(client)["restart"]
@@ -507,11 +512,11 @@ def test_agent_tools_and_apps_install_in_one_click(client, monkeypatch, install_
         rea["installed"]
         and rea["one_click"]
         and rea["missing"] == []
-        and rea["steps"][0].startswith("npx --yes rea-agents@")
+        and rea["steps"][-1].startswith("npx --yes rea-agents@")
     )
     assert not next(a for a in cat["apps"] if a["id"] == "cursor")["installed"]
     rea_entry = next(t for t in cat["agent_tools"] if t["id"] == "rea")
-    assert rea_entry["size"] == "29 Mo" and "Claude Code" in rea_entry["where"]
+    assert rea_entry["size"].startswith("~1,2 Go") and "Claude Code" in rea_entry["where"]
     assert client.post("/v1/admin/marketplace/tools/inconnu/install", headers=MASTER).status_code == 404
     assert client.post("/v1/admin/marketplace/autre/rea/install", headers=MASTER).status_code == 404
     assert client.post("/v1/admin/marketplace/tools/rea/install", headers=ACCOUNT).status_code == 403
@@ -546,11 +551,13 @@ def test_installed_items_uninstall_with_the_reverse_steps(client, monkeypatch, i
     assert [Path(a[0]).stem for a in started] == ["claude", "uv"]
     cat = client.get("/v1/admin/marketplace", headers=MASTER).json()
     assert not next(t for t in cat["agent_tools"] if t["id"] == "serena")["installed"]
-    # installateur Windows ou paquet pip partagé avec Lezard IA : pas depuis la page, et on dit comment
-    jan = client.post("/v1/admin/marketplace/apps/jan/uninstall", headers=MASTER)
-    assert jan.status_code == 409 and "Paramètres > Applications" in jan.json()["error"]["message"]
+    # extension du navigateur ou paquet pip de votre Python : pas depuis la page, et on dit comment
+    ext = client.post("/v1/admin/marketplace/apps/pageassist/uninstall", headers=MASTER)
+    assert ext.status_code == 409 and "extensions de votre navigateur" in ext.json()["error"]["message"]
     assert client.post("/v1/admin/marketplace/apps/python/uninstall", headers=MASTER).status_code == 409
-    assert installers.uninstall_steps("app:openwebui") == [("docker", "rm", "--force", "open-webui")]  # volume gardé
+    # installateur Windows : son propre désinstallateur, sans question (nom de Paramètres > Applications)
+    assert installers.uninstall_steps("app:jan") == [(installers.PYTHON, installers.SETUP, "--uninstall", "Jan")]
+    assert installers.uninstall_steps("app:openwebui") == [("uv", "tool", "uninstall", "open-webui")]
     assert installers.uninstall_steps("tool:superpowers") == [
         ("claude", "plugin", "uninstall", "superpowers@superpowers-marketplace")
     ]
@@ -570,9 +577,9 @@ def test_failed_install_stops_and_shows_the_log(client, monkeypatch, install_log
 def test_missing_programs_are_reported(client, monkeypatch, install_log):
     monkeypatch.setattr(installers, "program", lambda name: None)
     cat = client.get("/v1/admin/marketplace", headers=MASTER).json()
-    assert next(a for a in cat["apps"] if a["id"] == "openwebui")["missing"] == ["docker"]
-    r = client.post("/v1/admin/marketplace/apps/openwebui/install", headers=MASTER)
-    assert r.status_code == 409 and "Requis sur ce PC : docker" in r.json()["error"]["message"]
+    assert "docker" in next(a for a in cat["apps"] if a["id"] == "librechat")["missing"]
+    r = client.post("/v1/admin/marketplace/apps/librechat/install", headers=MASTER)
+    assert r.status_code == 409 and "docker" in r.json()["error"]["message"]
 
 
 def test_missing_dependencies_are_installed_first(client, monkeypatch, install_log):
@@ -723,9 +730,14 @@ def test_every_installed_item_can_be_removed_or_says_how():
     for key in (k for k in installers.RECIPES if k.startswith(("tool:", "app:"))):
         assert installers.uninstall_steps(key) or installers.uninstall_hint(key), key
     assert installers.uninstall_steps("tool:rea") == [
-        ("npx", "--yes", "rea-agents@6.7.0", "uninstall")
-    ]  # sans --purge-data
-    assert installers.uninstall_steps("tool:claudemem") == [("npx", "--yes", "claude-mem@15.0.1", "uninstall")]
+        ("npx", "--yes", "rea-agents@6.7.0", "uninstall"),  # sans --purge-data
+        (installers.PYTHON, installers.SETUP, "--remove", "Ghidra"),
+        (installers.PYTHON, installers.SETUP, "--remove", "Java21"),
+    ]
+    assert installers.uninstall_steps("tool:claudemem") == [
+        ("npx", "--yes", "claude-mem@15.0.1", "uninstall"),
+        (installers.PYTHON, installers.USER_PATH, "--remove", installers.CLAUDE_MEM_BIN),  # qu'il laisse dans le PATH
+    ]
     assert installers.uninstall_steps("tool:codegraph") == [
         ("codegraph", "uninstall", "--keep-cli", "--yes"),  # d'abord les agents, tant que la commande existe
         ("npm", "uninstall", "--global", "@colbymchenry/codegraph"),
@@ -1132,7 +1144,7 @@ def test_pins_finds_every_pinned_version_and_waits_14_days():
     assert found[("pypi", "openai")].version  # plafond pip pkg<=version
     jan = found[("github", "janhq/jan")]
     assert jan.version == "v0.8.6" and jan.asset == "Jan_0.8.6_x64-setup.exe"
-    assert ("github", "LibreChat-AI/LibreChat") in found and ("github", "open-webui/open-webui") in found
+    assert ("github", "LibreChat-AI/LibreChat") in found and found[("pypi", "open-webui")].version == "0.12.3"
     assert len({p.source for p in found.values()}) == 3
 
     def handler(request):
@@ -1215,6 +1227,7 @@ def test_link_check_covers_every_pinned_download():
     assert kinds == {"npm", "pypi", "tag", "asset", "image", "vscode", "winget", "page"}
     assets = {d["name"]: d for d in found if d["kind"] == "asset"}
     assert set(assets) == {
+        "tool:rea",  # Ghidra et Java 21
         "tool:orca",
         "app:openhuman",
         "app:anythingllm",

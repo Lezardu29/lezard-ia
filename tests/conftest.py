@@ -40,3 +40,17 @@ def _nothing_detected(request, monkeypatch):
         from gateway import detection
 
         monkeypatch.setattr(detection, "scan", lambda: {})
+
+
+@pytest.fixture(autouse=True)
+def _installs_ignore_this_pc(request, monkeypatch):
+    """Installations : rien ne dépend de l'état du vrai PC (déclarations de Claude Code, programmes lancés, dossiers
+    npm). Ces vérifications ont leurs propres tests (test_install_cleanup.py)."""
+    if request.node.fspath.basename == "test_install_cleanup.py":
+        return
+    from gateway import installers
+
+    monkeypatch.setattr(installers, "already_undone", lambda argv: False)
+    monkeypatch.setattr(installers, "stop_running", lambda argv: [])
+    monkeypatch.setattr(installers, "replaced_first", lambda argv: None)
+    monkeypatch.setattr(installers, "tidy_after", lambda argv: None)

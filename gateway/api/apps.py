@@ -49,6 +49,7 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
                 session=str(body.get("session") or ""),
                 model=model if isinstance(model, str) and model else None,
                 port=holder["remote"].port,
+                claude_model=chat_tools.claude_model_of(holder["gw"].providers),  # clé d'Anthropic dans Lezard IA
             )
         except chat_tools.ChatToolError as e:
             return _err(e.status, e.message)

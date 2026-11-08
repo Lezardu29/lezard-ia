@@ -14,6 +14,7 @@ annonce avant de confirmer (nom, taille, licence).
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -23,9 +24,25 @@ from pathlib import Path
 from .marketplace import MarketplaceError
 
 PYTHON = "{python}"
-OPENWEBUI_IMAGE = "ghcr.io/open-webui/open-webui:v0.12.3"  # publiée le 2026-10-16
-SETUP = str(Path(__file__).with_name("setup_download.py"))  # installateur officiel figé, vérifié, lancé sans question
-LIBRECHAT_SETUP = str(Path(__file__).with_name("librechat_setup.py"))  # dépôt figé, secrets de ce PC, images figées
+OPENWEBUI_VERSION = "0.12.3"  # publiée le 2026-10-16 (PyPI)
+
+
+def _script(name: str) -> str:
+    """Script d'installation lancé par le Python de Lezard IA : le .py, ou le .pyc que Python lance tel quel dans
+    l'installation Windows (le code y est livré compilé, sans ses sources : un .py y serait introuvable)."""
+    source = Path(__file__).with_name(f"{name}.py")
+    compiled = source.with_suffix(".pyc")
+    return str(source if source.exists() or not compiled.exists() else compiled)
+
+
+# outils npm qui dépendent de better-sqlite3 12 (pas de version toute prête pour Node.js 24 sous Windows : npm la
+# compilerait, ce qui demande Visual Studio) : installés sans leurs scripts, puis modules natifs réparés
+NPM_NATIVE = _script("npm_native")
+CLAUDE_FILES = _script("claude_files")  # retire un dossier écrit dans ~/.claude (commandes de SuperClaude)
+USER_PATH = _script("user_path")  # retire un dossier du PATH de l'utilisateur (désinstallation de claude-mem)
+CLAUDE_MEM_BIN = r"%LOCALAPPDATA%\claude-mem\bin"
+SETUP = _script("setup_download")  # installateur officiel figé, vérifié, lancé sans question
+LIBRECHAT_SETUP = _script("librechat_setup")  # dépôt figé, secrets de ce PC, images figées
 ORCA = (
     "https://github.com/stablyai/orca/releases/download/v1.4.229/orca-windows-setup.exe",  # publiée le 2026-10-17
     "fb759053a56ad019a2d52882abaf9c797e2adddf6f217a36f0b64505446d007d",
@@ -60,6 +77,19 @@ GOOSE = (  # pas d'installateur avant la 1.57 (moins de 14 jours) : l'archive of
     "https://github.com/aaif-goose/goose/releases/download/v1.55.0/Goose-win32-x64.zip",  # publiée le 2026-10-16
     "4a10e547730832afc2fb13d1c3c4e60b0332ce3e49fd3793cb04259206054c0c",
     "246032962",
+)
+# REA : décompilateur Ghidra (version vérifiée par REA 6.7.0) et le Java 21 complet qu'il demande, rangés avec l'outil
+JAVA21 = (
+    "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13+9/"
+    "OpenJDK21U-jdk_x64_windows_hotspot_21.0.13_9.zip",  # publiée le 2026-10-23
+    "a4dbaa05fca4bd89d84584e58c459bd732efebb1722af80ab13c6516832004f9",
+    "205421281",
+)
+GHIDRA = (
+    "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.1.4_build/"
+    "ghidra_12.1.4_PUBLIC_20260921.zip",  # publiée le 2026-09-21
+    "ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db",
+    "569649598",
 )
 LIBRECHAT_TAG = "v0.8.8"  # publiée le 2026-10-01
 PAGE_ASSIST = "https://chromewebstore.google.com/detail/page-assist/jfgfiigpkhlkbnfnbobbkinehhfdhndo"
@@ -193,10 +223,15 @@ RECIPES: dict[str, dict] = {
         "after": "Redémarrez Claude Code, puis /watch suivi de l'adresse d'une vidéo.",
     },
     "tool:rea": {
-        "steps": [("npx", "--yes", "rea-agents@6.7.0", "setup", "--client", "claude_code", "--yes")],
-        "size": "29 Mo",
-        "where": "Dans Claude Code (serveur MCP et consignes de REA)",
-        "after": "Redémarrez Claude Code. Hopper, Ghidra ou IDA restent à installer à part pour les binaires.",
+        "steps": [
+            (PYTHON, SETUP, *JAVA21, "Java21"),
+            (PYTHON, SETUP, *GHIDRA, "Ghidra"),
+            ("npx", "--yes", "rea-agents@6.7.0", "setup", "--client", "claude_code", "--yes"),
+        ],
+        "windows": True,  # Ghidra et Java pour Windows
+        "size": "~1,2 Go (Ghidra et Java 21 compris)",
+        "where": "Dans Claude Code (serveur MCP et consignes de REA), avec Ghidra et Java 21 dans %LOCALAPPDATA%\\Programs",
+        "after": "Ghidra (le décompilateur) est fourni : REA lit aussi les programmes compilés.",
     },
     "tool:gws": {
         "steps": [("npm", "install", "--global", "@googleworkspace/cli@0.22.5")],
@@ -225,6 +260,7 @@ RECIPES: dict[str, dict] = {
         "after": "Redémarrez Claude Code, puis demandez-lui de trouver une compétence.",
     },
     "tool:orca": {  # pas de paquet winget : l'installateur officiel de GitHub, figé et vérifié
+        "uninstall_name": "Orca",  # nom dans Paramètres > Applications (désinstallation silencieuse)
         "steps": [(PYTHON, SETUP, *ORCA, "/S")],
         "show": [
             "Téléchargement de l'installateur officiel d'Orca 1.4.229 (GitHub, empreinte vérifiée)",
@@ -268,7 +304,10 @@ RECIPES: dict[str, dict] = {
         "after": "Redémarrez Claude Code : ses outils de mémoire sont disponibles.",
     },
     "tool:ccrouter": {
-        "steps": [("npm", "install", "--global", "@musistudio/claude-code-router@3.1.3")],
+        "steps": [
+            ("npm", "install", "--global", "--ignore-scripts", "@musistudio/claude-code-router@3.1.3"),
+            (PYTHON, NPM_NATIVE, "@musistudio/claude-code-router", "ccr"),
+        ],
         "requires": ("claude",),
         "size": "~37 Mo",
         "where": NPM + " : commande ccr",
@@ -285,7 +324,7 @@ RECIPES: dict[str, dict] = {
         "after": "Redémarrez Claude Code : les compétences Superpowers se déclenchent d'elles-mêmes.",
     },
     "tool:speckit": {
-        "steps": [("uv", "tool", "install", "specify-cli==1.2.2")],
+        "steps": [("uv", "tool", "install", "--force", "specify-cli==1.2.2")],
         "size": "~10 Mo",
         "where": "Outils Python de ce PC (uv tool) : commande specify",
         "after": "Dans le dossier d'un projet : specify init . --integration claude, puis /speckit-specify dans "
@@ -344,7 +383,11 @@ RECIPES: dict[str, dict] = {
     },
     "tool:claudemem": {
         # pas « --provider host » : l'installation échoue sans service d'observation déjà lancé (essai réel, 2026-11-06)
-        "steps": [("npx", "--yes", "claude-mem@15.0.1", "install", "--provider", "claude")],
+        # puis branché sur Lezard IA (app_connect.claudemem) : ses résumés ne passent jamais par le compte Claude
+        "steps": [
+            ("npx", "--yes", "claude-mem@15.0.1", "install", "--provider", "claude"),
+            ("npx", "--yes", "claude-mem@15.0.1", "telemetry", "disable"),  # activée chez lui par défaut
+        ],
         "requires": ("claude",),
         "size": "~25 Mo",
         "where": "Dans Claude Code (extension et crochets de claude-mem), mémoire gardée sur ce PC",
@@ -359,26 +402,32 @@ RECIPES: dict[str, dict] = {
         "le code affiché.",
     },
     "tool:cloudcli": {
-        "steps": [("npm", "install", "--global", "@cloudcli-ai/cloudcli@1.37.5")],
+        "steps": [
+            ("npm", "install", "--global", "--ignore-scripts", "@cloudcli-ai/cloudcli@1.37.5"),
+            (PYTHON, NPM_NATIVE, "@cloudcli-ai/cloudcli", "cloudcli"),
+        ],
         "size": "~10 Mo",
         "where": NPM + " : commande cloudcli",
         "after": "Dans un terminal : cloudcli, puis ouvrez http://localhost:3001.",
     },
     "tool:superclaude": {
-        "steps": [("uv", "tool", "install", "superclaude==4.3.0")],
+        "steps": [
+            ("uv", "tool", "install", "--force", "superclaude==4.3.0"),
+            ("superclaude", "install", "--force"),  # ses commandes /sc:… dans ~/.claude/commands/sc
+        ],
         "size": "~5 Mo",
-        "where": "Outils Python de ce PC (uv tool) : commande superclaude",
-        "after": "Dans un terminal : superclaude install, puis /sc:help dans Claude Code.",
+        "where": "Outils Python de ce PC (uv tool) : commande superclaude, et ses commandes /sc:… dans Claude Code",
+        "after": "Ses commandes /sc:… sont prêtes, par exemple /sc:analyze.",
     },
     "tool:markitdown": {
-        "steps": [("uv", "tool", "install", "markitdown[all]==0.1.8")],
+        "steps": [("uv", "tool", "install", "--force", "markitdown[all]==0.1.8")],
         "size": "~150 Mo (lecteurs PDF, Office et audio compris)",
         "where": "Outils Python de ce PC (uv tool) : commande markitdown",
         "after": "Dans un terminal : markitdown document.pdf -o document.md.",
     },
     "tool:serena": {
         "steps": [
-            ("uv", "tool", "install", "-p", "3.13", "serena-agent==2.1.0"),
+            ("uv", "tool", "install", "--force", "-p", "3.13", "serena-agent==2.1.0"),
             (
                 "claude",
                 "mcp",
@@ -392,6 +441,11 @@ RECIPES: dict[str, dict] = {
                 "--context",
                 "claude-code",
                 "--project-from-cwd",
+                # sans tableau de bord : sinon une fenêtre s'ouvre à chaque tâche et reste ouverte après elle
+                "--enable-web-dashboard",
+                "false",
+                "--open-web-dashboard",
+                "false",
             ),
         ],
         "size": "~150 Mo (Python 3.13 compris s'il manque)",
@@ -399,6 +453,7 @@ RECIPES: dict[str, dict] = {
         "after": "Redémarrez Claude Code dans un projet : /mcp montre Serena.",
     },
     "app:anythingllm": {
+        "uninstall_name": "AnythingLLM",  # nom dans Paramètres > Applications (désinstallation silencieuse)
         "steps": [(PYTHON, SETUP, *ANYTHINGLLM, "/S")],
         "show": [
             "Téléchargement de l'installateur officiel d'AnythingLLM 1.18.0 (GitHub, empreinte vérifiée)",
@@ -428,6 +483,7 @@ RECIPES: dict[str, dict] = {
         "« LibreChat » (librechat.yaml).",
     },
     "app:jan": {
+        "uninstall_name": "Jan",  # nom dans Paramètres > Applications (désinstallation silencieuse)
         "steps": [(PYTHON, SETUP, *JAN, "/S")],
         "show": [
             "Téléchargement de l'installateur officiel de Jan 0.8.6 (GitHub, empreinte vérifiée)",
@@ -453,7 +509,7 @@ RECIPES: dict[str, dict] = {
         "clé.",
     },
     "app:aider": {
-        "steps": [("uv", "tool", "install", "--python", "3.12", "aider-chat==0.86.2")],
+        "steps": [("uv", "tool", "install", "--force", "--python", "3.12", "aider-chat==0.86.2")],
         "size": "~200 Mo (Python 3.12 compris s'il manque)",
         "where": "Outils Python de ce PC (uv tool) : commande aider",
         "after": "Réglez OPENAI_API_BASE (adresse de votre gateway suivie de /v1) et OPENAI_API_KEY, puis aider "
@@ -492,6 +548,7 @@ RECIPES: dict[str, dict] = {
         "votre clé.",
     },
     "app:meetily": {
+        "uninstall_name": "meetily",  # nom dans Paramètres > Applications (désinstallation silencieuse)
         "steps": [(PYTHON, SETUP, *MEETILY, "/S")],
         "show": [
             "Téléchargement de l'installateur officiel de Meetily 0.4.1 (GitHub, empreinte vérifiée)",
@@ -515,6 +572,7 @@ RECIPES: dict[str, dict] = {
         "after": "Branchez Lezard IA avec le guide « Zed ».",
     },
     "app:cherrystudio": {
+        "uninstall_name": "Cherry Studio",  # nom dans Paramètres > Applications (désinstallation silencieuse)
         "steps": [(PYTHON, SETUP, *CHERRY, "/S")],
         "show": [
             "Téléchargement de l'installateur officiel de Cherry Studio 2.1.7 (GitHub, empreinte vérifiée)",
@@ -526,6 +584,7 @@ RECIPES: dict[str, dict] = {
         "after": "Ouvrez Cherry Studio, puis branchez Lezard IA avec le guide « Cherry Studio ».",
     },
     "app:openhuman": {
+        "uninstall_name": "OpenHuman",  # nom dans Paramètres > Applications (désinstallation silencieuse)
         "steps": [(PYTHON, SETUP, *OPENHUMAN, "/S")],
         "show": [
             "Téléchargement de l'installateur officiel d'OpenHuman 0.64.15 (GitHub, empreinte vérifiée)",
@@ -537,27 +596,11 @@ RECIPES: dict[str, dict] = {
         "after": "Ouvrez OpenHuman depuis le menu Démarrer, puis connectez les services de votre choix.",
     },
     "app:openwebui": {
-        "steps": [
-            (
-                "docker",
-                "run",
-                "--detach",
-                "--name",
-                "open-webui",
-                "--restart",
-                "always",
-                "--publish",
-                "127.0.0.1:3000:8080",
-                "--volume",
-                "open-webui:/app/backend/data",
-                "--add-host",
-                "host.docker.internal:host-gateway",
-                OPENWEBUI_IMAGE,
-            )
-        ],
-        "size": "~2 Go (image Docker)",
-        "where": "Un conteneur Docker sur ce PC, ouvert sur http://localhost:3000",
-        "after": "Ouvrez http://localhost:3000, puis branchez Lezard IA avec le guide « Open WebUI ».",
+        # paquet Python lancé par Lezard IA (/openwebui), plus d'image Docker : rien d'autre à faire tourner
+        "steps": [("uv", "tool", "install", "--force", "--python", "3.12", f"open-webui=={OPENWEBUI_VERSION}")],
+        "size": "~1,8 Go (Python 3.12 compris s'il manque)",
+        "where": "Outils Python de ce PC (uv tool) : Open WebUI, lancé par Lezard IA sur http://localhost:3000",
+        "after": "Ses conversations et réglages restent dans le dossier de Lezard IA (outils/openwebui).",
     },
     "app:continue": {
         "steps": [("code", "--install-extension", "Continue.continue")],
@@ -592,7 +635,8 @@ RECIPES: dict[str, dict] = {
         "after": "Exemple de code : guide « Python ».",
     },
     "app:langchain": {
-        "steps": [_pip_user("langchain-openai<=1.7.2")],
+        # avec la même limite pour openai que le SDK seul (sinon pip prend sa toute dernière version)
+        "steps": [_pip_user("langchain-openai<=1.7.2", "openai<=3.35.1")],
         "size": "~10 Mo",
         "where": USER_PIP,
         "after": "Exemple de code : guide « LangChain ».",
@@ -617,11 +661,28 @@ def recipe(key: str) -> dict:
     return found
 
 
+def tool_dirs() -> list[str]:
+    """Dossiers de commandes que Windows ne met pas toujours dans le PATH : ceux de « uv tool install » (Serena,
+    Spec Kit, SuperClaude, MarkItDown, Aider ; uv ne l'ajoute pas lui-même) et les liens de winget."""
+    uv = os.environ.get("UV_TOOL_BIN_DIR") or os.environ.get("XDG_BIN_HOME") or str(Path.home() / ".local" / "bin")
+    links = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "WinGet", "Links")
+    return [d for d in (uv, links) if os.path.isdir(d)]
+
+
+def with_tool_dirs() -> None:
+    """Ces dossiers ajoutés au PATH de Lezard IA (et donc des outils et serveurs MCP qu'il lance)."""
+    known = {d.lower().rstrip(r"\/") for d in os.environ.get("PATH", "").split(os.pathsep)}
+    extra = [d for d in tool_dirs() if d.lower().rstrip(r"\/") not in known]
+    if extra:
+        os.environ["PATH"] = os.pathsep.join([*os.environ.get("PATH", "").split(os.pathsep), *extra])
+
+
 def program(name: str) -> str | None:
     if name == PYTHON:
         return sys.executable
     if os.path.isabs(name):
         return name if os.path.exists(name) else None
+    with_tool_dirs()
     return shutil.which(name) or (shutil.which(f"{name}.cmd") if sys.platform == "win32" else None)
 
 
@@ -642,8 +703,7 @@ def refresh_path() -> None:
                 found += os.path.expandvars(winreg.QueryValueEx(k, "Path")[0]).split(";")
         except OSError:
             pass
-    links = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "WinGet", "Links")
-    paths = [p for p in [*os.environ.get("PATH", "").split(";"), *found, links] if p]
+    paths = [p for p in [*os.environ.get("PATH", "").split(";"), *found, *tool_dirs()] if p]
     os.environ["PATH"] = ";".join(dict.fromkeys(paths))
 
 
@@ -748,7 +808,7 @@ def commands(key: str) -> list[list[str]]:
     return [resolve(argv) for argv in plan(key)]
 
 
-def _undo(argv) -> tuple[str, ...] | None | bool:
+def _undo(argv) -> tuple[str, ...] | list[tuple[str, ...]] | None | bool:
     """L'étape qui défait `argv` ; False : rien à défaire ; None : ne sait pas se défaire sans risque."""
     head, rest = argv[0], list(argv[1:])
     if head == "npm" and rest[:2] == ["install", "--global"]:
@@ -778,6 +838,12 @@ def _undo(argv) -> tuple[str, ...] | None | bool:
             if "user" in rest
             else ("claude", "mcp", "remove", name)
         )
+    if head == "npx" and rest[1].startswith("claude-mem@") and rest[2] == "telemetry":
+        return False  # réglage : part avec l'extension
+    if head == "npx" and rest[1].startswith("claude-mem@") and rest[2] == "uninstall":
+        return None
+    if head == "npx" and rest[1].startswith("claude-mem@"):  # son dossier de commandes, qu'il laisse dans le PATH
+        return [("npx", "--yes", rest[1], "uninstall"), (PYTHON, USER_PATH, "--remove", CLAUDE_MEM_BIN)]
     if head == "npx" and rest[1].startswith(("rea-agents@", "claude-mem@")):
         return ("npx", "--yes", rest[1], "uninstall")  # leurs données (mémoire, caches) sont gardées
     if head == "npx" and rest[1].startswith("skills@") and rest[2] == "add":
@@ -785,6 +851,12 @@ def _undo(argv) -> tuple[str, ...] | None | bool:
         return ("npx", "--yes", rest[1], "remove", skill, "--global", "--agent", "claude-code", "--yes")
     if head == "codegraph" and rest[:1] == ["install"]:
         return ("codegraph", "uninstall", "--keep-cli", "--yes")  # la commande elle-même part avec l'étape npm
+    if head == PYTHON and rest[:1] == [SETUP] and rest[1].endswith(".zip"):
+        return (PYTHON, SETUP, "--remove", rest[-1])  # application décompressée : son dossier dans Programs
+    if head == "superclaude" and rest[:1] == ["install"]:
+        return (PYTHON, CLAUDE_FILES, "--remove", "commands/sc")  # il n'a pas de commande pour les retirer
+    if head == PYTHON and rest[:1] == [NPM_NATIVE]:
+        return False  # réparation des modules de l'outil : partent avec lui (npm uninstall)
     if head == PYTHON and rest[:1] == [LIBRECHAT_SETUP]:
         return False  # le dossier (réglages, conversations) est gardé : l'arrêt des conteneurs suffit
     if head == "docker" and rest[:1] == ["compose"] and rest[-2:] == ["up", "--detach"]:
@@ -794,14 +866,103 @@ def _undo(argv) -> tuple[str, ...] | None | bool:
     return None  # pip (paquets partagés avec Lezard IA), installateurs Windows, scripts d'installation
 
 
+def replaced_first(argv) -> tuple[str, ...] | None:
+    """Avant une étape d'installation qui échouerait si l'élément existe déjà (réinstallation) : l'étape qui retire
+    l'ancien. « claude mcp add » refuse un nom déjà déclaré ; la nouvelle déclaration doit gagner (réglages à jour)."""
+    head, rest = argv[0], list(argv[1:])
+    if head == "claude" and rest[:2] == ["mcp", "add"]:
+        name = next(a for a in rest[2:] if not a.startswith("-") and a != "user")
+        try:
+            servers = json.loads((Path.home() / ".claude.json").read_text("utf-8")).get("mcpServers") or {}
+        except (OSError, ValueError):
+            return None
+        if name in servers:
+            return ("claude", "mcp", "remove", "--scope", "user", name)
+    return None
+
+
+def _tool_folder(argv) -> str | None:
+    """Dossier des fichiers que l'étape de désinstallation va supprimer (npm global, uv tool)."""
+    head, rest = argv[0], list(argv[1:])
+    if head == "npm" and rest[:2] == ["uninstall", "--global"]:
+        return os.path.join(os.environ.get("APPDATA", ""), "npm", "node_modules", *rest[-1].split("/"))
+    if head == "uv" and rest[:2] == ["tool", "uninstall"]:
+        tools = os.environ.get("UV_TOOL_DIR") or os.path.join(os.environ.get("APPDATA", ""), "uv", "tools")
+        return os.path.join(tools, rest[-1])
+    return None
+
+
+def stop_running(argv) -> list[int]:
+    """Avant de supprimer un outil : ses programmes encore lancés (service démarré depuis le chat, processus détaché
+    comme celui de Claude Code Router) sont arrêtés ; sinon Windows garde leurs fichiers verrouillés et la
+    désinstallation laisse des restes. Les processus arrêtés (identifiants)."""
+    folder = _tool_folder(argv)
+    if sys.platform != "win32" or not folder or not os.path.isdir(folder):
+        return []
+    script = (
+        "Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $PID -and "
+        "(($_.CommandLine -and $_.CommandLine.ToLower().Contains($env:LEZARD_DIR)) -or "
+        "($_.ExecutablePath -and $_.ExecutablePath.ToLower().StartsWith($env:LEZARD_DIR))) } | "
+        "ForEach-Object { $_.ProcessId }"
+    )
+    try:
+        out = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env={**os.environ, "LEZARD_DIR": os.path.normpath(folder).lower()},
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        ).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    pids = [int(p) for p in out.split() if p.isdigit() and int(p) != os.getpid()]
+    for pid in pids:
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(pid)], capture_output=True, check=False)
+    return pids
+
+
+def tidy_after(argv) -> None:
+    """Après « npm uninstall --global @org/paquet » : le dossier @org vide que npm laisse est retiré."""
+    folder = _tool_folder(argv)
+    if folder and argv[0] == "npm" and argv[-1].startswith("@"):
+        try:
+            os.rmdir(os.path.dirname(folder))  # seulement s'il est vide
+        except OSError:
+            pass
+
+
+def already_undone(argv) -> bool:
+    """Étape de désinstallation sans objet : ce qu'elle retire n'est déjà plus là (désinstallation reprise après un
+    échec, ou élément retiré à la main). Elle est sautée au lieu d'échouer."""
+    head, rest = argv[0], list(argv[1:])
+    if head == "claude" and rest[:2] == ["mcp", "remove"]:
+        try:
+            servers = json.loads((Path.home() / ".claude.json").read_text("utf-8")).get("mcpServers") or {}
+        except (OSError, ValueError):
+            return False
+        return rest[-1] not in servers
+    if head == "uv" and rest[:2] == ["tool", "uninstall"]:
+        tools = os.environ.get("UV_TOOL_DIR") or os.path.join(os.environ.get("APPDATA", ""), "uv", "tools")
+        return sys.platform == "win32" and not os.path.isdir(os.path.join(tools, rest[-1]))
+    return False
+
+
 def uninstall_steps(key: str) -> list[tuple[str, ...]] | None:
     """Les étapes qui défont la recette, dans l'ordre inverse ; None si une seule ne sait pas se défaire."""
     out = []
     for argv in reversed(recipe(key).get("steps", ())):
-        undo = _undo(argv)
+        windows_setup = argv[:2] == (PYTHON, SETUP) and not argv[2].endswith(".zip") and argv[2] != "--remove"
+        undo = (
+            (PYTHON, SETUP, "--uninstall", recipe(key)["uninstall_name"])
+            if windows_setup and recipe(key).get("uninstall_name")
+            else _undo(argv)
+        )
         if undo is None:
             return None
-        if undo:
+        if isinstance(undo, list):
+            out += undo
+        elif undo:
             out.append(undo)
     return out or None
 

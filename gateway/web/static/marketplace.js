@@ -723,6 +723,14 @@ function oneClick(it, entry, body, foot, route) {
       () => runInstall(`/v1/admin/marketplace/${route}/${encodeURIComponent(it.id)}/install`, b, body), entry.deps);
   }));
   if (entry.installed) uninstallButton(it, entry, body, foot, route);
+  if (entry.installed && entry.connect) {                 // déjà installée : la (re)brancher sur Lezard IA
+    foot.prepend(button("Brancher sur Lezard IA", "btn-ghost", async (b) => {
+      b.disabled = true;
+      const r = await api(`/v1/admin/marketplace/apps/${encodeURIComponent(it.id)}/connect`, { method: "POST" });
+      b.disabled = false;
+      message(r.ok ? r.data.message : r.data?.error?.message || "Branchement impossible.", r.ok && r.data.connected);
+    }));
+  }
 }
 
 /** Désinstaller ce qui est sur ce PC : étapes inverses de la recette, ou comment le faire soi-même. */

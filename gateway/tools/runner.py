@@ -304,7 +304,8 @@ async def run(
                             raise ToolError("Un autre agent contrôle déjà le PC.")
                         await PC_LOCK.acquire()
                         holds_pc = True
-                    if tool.confirm and acted:  # agir à l'aveugle : l'écran a changé depuis la capture
+                    # contrôle du PC : agir à l'aveugle, l'écran a changé depuis la capture (pas pour MCP, web…)
+                    if tool.level == "pc" and tool.confirm and acted:
                         raise ToolError(
                             "Ignorée : une seule action sur le PC par tour, regarder d'abord la nouvelle capture."
                         )
@@ -351,7 +352,7 @@ async def run(
                                 "Action refusée par l'utilisateur (ou sans réponse) : ne pas la retenter "
                                 "telle quelle, demander quoi faire."
                             )
-                    acted = acted or tool.confirm
+                    acted = acted or (tool.level == "pc" and tool.confirm)
                     learn = tool.confirm
                     if tool.level == "pc" and not tool.confirm:
                         decision = "sans validation (lecture de l'écran)" if name != "pc_app_guide" else "guide"
