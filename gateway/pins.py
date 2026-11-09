@@ -170,10 +170,9 @@ def downloads() -> list[dict]:
                 add(kind="winget", name=argv[argv.index("--id") + 1])
             elif argv[0] == installers.PYTHON and "webbrowser" in argv:
                 add(kind="page", name=key, url=argv[-1])
-    from . import librechat_setup as lc
+    from . import librechat_setup as lc  # sa base MongoDB : archive officielle (empreinte publiée à côté, .sha256)
 
-    add(kind="image", name=f"ghcr.io/librechat-ai/librechat:{installers.LIBRECHAT_TAG}")
-    add(kind="image", name=f"ghcr.io/librechat-ai/librechat-rag-api-dev-lite:{lc.RAG_TAG}")
+    add(kind="asset", name="app:librechat", url=lc.MONGO_URL, sha256=lc.MONGO_SHA256, size=lc.MONGO_SIZE)
     return out
 
 
@@ -204,6 +203,12 @@ async def _asset(client, d: dict, full: bool) -> str | None:
             async for chunk in s.aiter_bytes(1 << 20):
                 digest.update(chunk)
         return None if digest.hexdigest() == d["sha256"] else f"empreinte {digest.hexdigest()} (fichier recalculé)"
+    if not m:  # hors GitHub (MongoDB) : empreinte publiée par l'éditeur dans <fichier>.sha256
+        r = await client.get(d["url"] + ".sha256", timeout=30)
+        published = r.text.split()[0].lower() if r.status_code == 200 and r.text.strip() else None
+        if not published:
+            return f"empreinte publiée illisible ({r.status_code})"
+        return None if published == d["sha256"] else f"empreinte publiée {published} différente"
     rel = await client.get(
         f"https://api.github.com/repos/{m.group(1)}/releases/tags/{m.group(2)}", headers=github_headers(), timeout=30
     )

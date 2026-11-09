@@ -51,6 +51,10 @@ from ..plans import PlanError
 from ..validation import json_object
 
 log = logging.getLogger("gateway")
+# plantage d'un installateur Windows (0xC0000005 : module System.dll de vieux installateurs NSIS, au hasard sous
+# Windows 11), tel quel ou rapporté par winget : l'étape est relancée
+INSTALLER_CRASH = {3221225477, -1073741819, 2316632070}
+INSTALLER_RETRIES = 2
 PACK_MODULES = {"voix": ("faster_whisper", "kokoro_onnx"), "multi": ("crewai",)}
 PUBLIC_FETCHES = 20  # licences pas encore lues, par minute, pour l'ensemble des visiteurs
 SITE_ORIGINS = ("https://lezard-ia.fr", "https://www.lezard-ia.fr")  # marketplace publique du site
@@ -398,6 +402,7 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
         path.parent.mkdir(parents=True, exist_ok=True)
         env = {**os.environ, "CI": "1", "NO_COLOR": "1", "npm_config_fund": "false", "npm_config_audit": "false"}
         env.pop("ELECTRON_RUN_AS_NODE", None)  # héritée d'un terminal de VS Code : fausse les applis Electron
+        installer_env = installers.installer_env(env)  # comme un double-clic (CI=1 fait planter celui de Chatbox CE)
         code = 0
         if record is True:  # réinstallation : ce qui ferait échouer une étape (déjà déclaré) est retiré juste avant
             pre = await asyncio.to_thread(lambda: [installers.replaced_first(t) for t in steps])
@@ -418,28 +423,37 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
                     out.write(e.message + "\n")
                     code = -1
                     break
-                try:
-                    proc = await asyncio.to_thread(
-                        subprocess.Popen,
-                        argv,
-                        cwd=cwd,
-                        env=env,
-                        stdin=subprocess.DEVNULL,
-                        stdout=out,
-                        stderr=subprocess.STDOUT,
-                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                    )
-                except OSError as e:
-                    out.write(f"Lancement impossible : {e}\n")
-                    code = -1
-                    break
-                job["proc"] = proc
-                try:
-                    code = await asyncio.to_thread(proc.wait, STEP_TIMEOUT)
-                except subprocess.TimeoutExpired:
-                    proc.kill()
-                    out.write("Trop long : installation arrêtée.\n")
-                    code = -2
+                for attempt in range(1 + INSTALLER_RETRIES):
+                    try:
+                        proc = await asyncio.to_thread(
+                            subprocess.Popen,
+                            argv,
+                            cwd=cwd,
+                            env=installer_env if installers.windows_installer(template) else env,
+                            stdin=subprocess.DEVNULL,
+                            stdout=out,
+                            stderr=subprocess.STDOUT,
+                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                        )
+                    except OSError as e:
+                        out.write(f"Lancement impossible : {e}\n")
+                        code = -1
+                        break
+                    job["proc"] = proc
+                    try:
+                        code = await asyncio.to_thread(proc.wait, STEP_TIMEOUT)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        out.write("Trop long : installation arrêtée.\n")
+                        code = -2
+                    if code not in INSTALLER_CRASH or not installers.windows_installer(template):
+                        break
+                    if attempt < INSTALLER_RETRIES:
+                        out.write(
+                            "L'installateur s'est fermé brusquement (plantage connu de certains installateurs) : "
+                            "nouvel essai.\n"
+                        )
+                        out.flush()
                 if code:
                     break
                 if record == "forget":
@@ -452,6 +466,9 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
                 except marketplace.MarketplaceError as e:
                     out.write(e.message + "\n")
                     code = -3
+                except Exception:  # jamais une tâche laissée « en cours »
+                    log.exception("Marketplace : étape finale de %s", key)
+                    out.write("Étape finale impossible (voir le journal de Lezard IA).\n")
             out.write("Terminé.\n" if code == 0 else f"Échec (code {code}).\n")
         if code == 0 and record:
             done = done_installs()
@@ -462,7 +479,11 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
             holder["store"].set_setting(INSTALLED_SETTING, done)
         detection.forget()  # même après un échec : une partie des étapes a peut-être abouti
         if code == 0 and record is True:  # outil ou application installé : redémarrer seulement si c'est utile
-            job["restart"] = await asyncio.to_thread(needs_restart, key)
+            try:
+                job["restart"] = await asyncio.to_thread(needs_restart, key)
+            except Exception:  # simple conseil : jamais une installation réussie laissée « en cours »
+                log.exception("Marketplace : vérification après installation impossible")
+                job["restart"] = False
         job.update(state="done" if code == 0 else "error", code=code, proc=None)
 
     def needs_restart(key: str) -> bool:
@@ -554,6 +575,7 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
                     ctx.identity,
                     ctx.base_plan or ctx.plan,
                     holder["remote"].port,
+                    True,  # juste installée : ouverte par son installateur, elle peut être refermée
                 )
                 if note and not note.startswith("Branchement automatique impossible"):
                     use = marketplace.chat_usage(item)["use"] if item in marketplace.CHAT else None

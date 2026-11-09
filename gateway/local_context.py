@@ -12,6 +12,10 @@ messages, et un modèle 2k/4k choisi à tort. Sources, de la plus précise à la
 
 Capacités (16.2) : /api/show d'Ollama les liste (« capabilities » : completion, tools, vision, thinking…) ; le
 routeur n'envoie une requête avec outils qu'aux modèles qui les gèrent.
+
+Mémoire (« auto » et la carte graphique) : poids (taille d'/api/tags) + cache KV pour la fenêtre effective, calculé
+d'après l'architecture d'/api/show (couches, têtes KV, couches à fenêtre glissante de Gemma), + marge d'exécution ;
+un modèle déjà chargé donne la vérité (/api/ps : taille totale).
 """
 
 from __future__ import annotations
@@ -58,6 +62,43 @@ def ollama_window(show: dict) -> tuple[int, int | None]:
     return (min(effective, trained) if trained else effective), trained
 
 
+RUNTIME_BYTES = 0.5e9  # contexte CUDA, tampons de calcul
+KV_BYTES = 2  # cache KV en fp16 (défaut d'Ollama)
+SWA_GLOBAL_EVERY = 6  # Gemma 3 : une couche globale sur six quand le motif n'est pas publié
+
+
+def memory_need(show: dict, window: int, weights: int | None) -> int | None:
+    """Mémoire (octets) d'un modèle Ollama chargé avec `window` tokens : poids + cache KV + marge."""
+    if not weights:
+        return None
+    info = show.get("model_info") or {}
+    arch = info.get("general.architecture") or next(
+        (k.split(".")[0] for k in info if k.endswith(".block_count") and k.count(".") == 1), ""
+    )
+
+    def field(name: str):  # champ du modèle de texte (pas « gemma4.vision.block_count »)
+        return info.get(f"{arch}.{name}")
+
+    layers, kv_heads, heads = field("block_count"), field("attention.head_count_kv"), field("attention.head_count")
+    if isinstance(kv_heads, list):  # par couche (certains modèles)
+        kv_heads = max(kv_heads) if kv_heads else None
+    width = field("embedding_length")
+    k_len = field("attention.key_length") or (width // heads if width and heads else None)
+    v_len = field("attention.value_length") or k_len
+    if not (isinstance(layers, int) and isinstance(kv_heads, int) and k_len and v_len):
+        return int(weights + RUNTIME_BYTES)  # architecture inconnue : poids seuls
+    per_token = kv_heads * (k_len + v_len) * KV_BYTES
+    pattern, sliding = field("attention.sliding_window_pattern"), field("attention.sliding_window")
+    if isinstance(pattern, list) and pattern:  # True : couche à fenêtre glissante (cache limité à la fenêtre)
+        full = sum(1 for x in pattern if not x)
+    elif isinstance(sliding, int) and sliding:
+        full = max(1, layers // SWA_GLOBAL_EVERY)
+    else:
+        full, sliding = layers, 0
+    kv = full * per_token * window + (layers - full) * per_token * min(window, sliding or window)
+    return int(weights + kv + RUNTIME_BYTES)
+
+
 def looks_ollama(name: str, base_url: str) -> bool:
     return name.startswith("ollama") or ":11434" in base_url
 
@@ -74,25 +115,32 @@ async def probe(
     client: httpx.AsyncClient,
     headers: dict | None = None,
     caps: dict | None = None,
+    memory: dict | None = None,
 ) -> dict[str, int]:
     """Fenêtres connues des modèles `ids` d'un serveur local (vide si le serveur ne les expose pas). `caps` :
-    rempli avec les capacités annoncées par Ollama ({modèle: {"tools", "vision", …}}), quand il les donne."""
+    rempli avec les capacités annoncées par Ollama ({modèle: {"tools", "vision", …}}), quand il les donne.
+    `memory` : rempli avec la mémoire de chaque modèle chargé avec sa fenêtre ({modèle: octets}), mesurée s'il est
+    chargé, sinon estimée."""
     root, out = server_root(base_url), {}
     if looks_ollama(name, base_url):
         sem = asyncio.Semaphore(4)
         try:  # modèles déjà chargés : fenêtre EXACTE d'exécution
             r = await client.get(f"{root}/api/ps", headers=headers, timeout=2)
-            loaded = (
-                {
-                    m.get("name"): _valid(m.get("context_length"))
-                    for m in (r.json().get("models") or [])
-                    if isinstance(m, dict)
-                }
-                if r.status_code == 200
-                else {}
-            )
+            running = [m for m in (r.json().get("models") or []) if isinstance(m, dict)] if r.status_code == 200 else []
         except (httpx.HTTPError, ValueError, AttributeError):
-            loaded = {}
+            running = []
+        loaded = {m.get("name"): _valid(m.get("context_length")) for m in running}
+        weights: dict = {}
+        if memory is not None:
+            for m in running:  # chargé : mémoire réelle (sa part dans la carte dépend des autres modèles chargés)
+                if isinstance(m.get("size"), int) and m.get("name") in ids:
+                    memory[m["name"]] = m["size"]
+            try:
+                r = await client.get(f"{root}/api/tags", headers=headers, timeout=3)
+                tags = (r.json().get("models") or []) if r.status_code == 200 else []
+                weights = {t.get("name"): t.get("size") for t in tags if isinstance(t, dict)}
+            except (httpx.HTTPError, ValueError, AttributeError):
+                weights = {}
 
         async def show(mid: str):
             if loaded.get(mid):
@@ -105,6 +153,11 @@ async def probe(
                     data = r.json() if r.status_code == 200 else None
                     if isinstance(data, dict) and ("model_info" in data or "modelfile" in data):  # vraie réponse
                         out.setdefault(mid, ollama_window(data)[0])
+                        size = weights.get(mid)
+                        if memory is not None and mid not in memory and isinstance(size, int):
+                            need = memory_need(data, ollama_window(data)[0], size)
+                            if need:
+                                memory[mid] = need
                         found = data.get("capabilities")
                         if caps is not None and isinstance(found, list):  # Ollama 0.6+ ; absent avant
                             caps[mid] = {str(c).lower() for c in found}

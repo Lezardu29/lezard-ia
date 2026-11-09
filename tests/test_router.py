@@ -108,3 +108,36 @@ def test_candidates_filters_unknown_cloud_and_embeddings():
         {"ollama": "local", "openai": "cloud"},
     )
     assert {m.ref for m in ms} == {"ollama/llama3:8b", "openai/gpt-4o-mini"}
+
+
+# ----- « auto » et la carte graphique : un modèle local qui en déborde est écarté -----
+def _placed(fits: dict[str, int], vram_gb: float) -> ModelRegistry:
+    reg = ModelRegistry([])
+    reg.vram_budget = {"gpu": "RTX", "vram": vram_gb * 1e9}
+    reg.local_memory = {f"ollama/{m}": int(gb * 1e9) for m, gb in fits.items()}
+    return reg
+
+
+def test_auto_skips_local_model_that_overflows_the_card():
+    reg = _placed({"deepseek-r1:14b": 15.9, "gemma4:e4b": 11.1}, 12.0)
+    big, small = reg.get("ollama", "deepseek-r1:14b", "local"), reg.get("ollama", "gemma4:e4b", "local")
+    assert (big.fit, small.fit) == ("offload", "vram")
+    for mode in ("balanced", "economy", "speed"):
+        d = route(HARD, mode, [big, small])
+        assert d.ref == small.ref, mode
+        assert big.ref in d.alternatives  # reste en secours
+
+
+def test_overflowing_local_model_still_used_when_alone_or_against_paid_cloud():
+    reg = _placed({"deepseek-r1:14b": 15.9}, 12.0)
+    big = reg.get("ollama", "deepseek-r1:14b", "local")
+    assert route(SIMPLE, "balanced", [big]).ref == big.ref
+    assert route(SIMPLE, "economy", [big, HAIKU]).ref == big.ref  # jamais un cloud payant à sa place
+
+
+def test_unknown_memory_or_no_card_keeps_old_behaviour():
+    reg = _placed({}, 12.0)
+    assert reg.get("ollama", "deepseek-r1:14b", "local").fit == ""
+    reg = ModelRegistry([])
+    reg.local_memory = {"ollama/deepseek-r1:14b": int(16e9)}
+    assert reg.get("ollama", "deepseek-r1:14b", "local").fit == ""  # matériel pas encore relevé

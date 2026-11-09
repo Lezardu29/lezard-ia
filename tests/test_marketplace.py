@@ -353,7 +353,7 @@ def test_detection_reads_each_kind_of_recipe(tmp_path, monkeypatch):
     for key in (
         "tool:rea", "tool:claudemem", "tool:superpowers", "tool:findskills", "tool:agentmemory", "tool:ccusage",
         "tool:gws", "tool:markitdown", "app:continue", "app:goose", "app:jan", "app:cursor", "app:openwebui",
-        "app:librechat", "app:python",
+        "app:python",
     ):  # fmt: skip
         assert detection.state(key, facts) is True, key
     for key in ("tool:hyperframes", "tool:repomix", "tool:speckit", "app:cline", "app:zed", "tool:orca"):
@@ -368,7 +368,7 @@ def test_detection_covers_the_whole_catalog_and_says_when_it_cannot_know(tmp_pat
     facts.__dict__["windows_apps"] = set()
     states = {k: detection.state(k, facts) for k in installers.RECIPES if k.startswith(("tool:", "app:"))}
     # Docker arrêté et extension peut-être dans Firefox : on ne sait pas ; tout le reste a une réponse
-    assert {k for k, v in states.items() if v is None} == {"app:librechat", "app:pageassist"}
+    assert {k for k, v in states.items() if v is None} == {"app:pageassist"}
     assert not any(states.values())
 
 
@@ -577,9 +577,9 @@ def test_failed_install_stops_and_shows_the_log(client, monkeypatch, install_log
 def test_missing_programs_are_reported(client, monkeypatch, install_log):
     monkeypatch.setattr(installers, "program", lambda name: None)
     cat = client.get("/v1/admin/marketplace", headers=MASTER).json()
-    assert "docker" in next(a for a in cat["apps"] if a["id"] == "librechat")["missing"]
+    assert "git" in next(a for a in cat["apps"] if a["id"] == "librechat")["missing"]
     r = client.post("/v1/admin/marketplace/apps/librechat/install", headers=MASTER)
-    assert r.status_code == 409 and "docker" in r.json()["error"]["message"]
+    assert r.status_code == 409 and "git" in r.json()["error"]["message"]
 
 
 def test_missing_dependencies_are_installed_first(client, monkeypatch, install_log):
@@ -977,7 +977,7 @@ def test_items_added_on_2026_11_02_install_pinned(monkeypatch, tmp_path):
         assert argv[2].startswith("https://github.com/") and len(argv[3]) == 64 and argv[-1] == "/S", key
     assert installers.PROVIDER["uvx"] == "uv" and installers.PROVIDER["git"] == "git"  # installés par winget
     assert [d["id"] for d in installers.possible_dependencies("tool:serena")] == ["uv", "claude"]
-    assert {d["id"] for d in installers.possible_dependencies("app:librechat")} == {"git", "docker"}
+    assert {d["id"] for d in installers.possible_dependencies("app:librechat")} == {"git", "node"}
     assert "claude-lezard" in {b["id"] for b in marketplace.BUNDLES}
 
 
@@ -1193,30 +1193,41 @@ def test_web_searches_are_compared_in_their_details(client):
 
 
 def test_librechat_installs_pinned_with_its_own_secrets(tmp_path, monkeypatch):
+    """Sans Docker : dépôt figé, .env de ce PC (secrets, base MongoDB locale), MongoDB et construction à part."""
     from gateway import librechat_setup
 
     steps = installers.RECIPES["app:librechat"]["steps"]
-    assert steps[0][1].endswith("librechat_setup.py") and steps[0][2] == installers.LIBRECHAT_TAG
-    assert steps[1] == ("docker", "compose", "--project-directory", "LibreChat", "up", "--detach")
+    assert steps == [(installers.PYTHON, installers.LIBRECHAT_SETUP, installers.LIBRECHAT_TAG, "LibreChat")]
     assert installers.uninstall_steps("app:librechat") == [
-        ("docker", "compose", "--project-directory", "LibreChat", "down")
-    ]  # dossier et données gardés
-    example = "PORT=3080\nCREDS_KEY=\nCREDS_IV=\nJWT_SECRET=\nJWT_REFRESH_SECRET=\nMEILI_MASTER_KEY=\n# UID=1000\n"
+        (installers.PYTHON, installers.LIBRECHAT_SETUP, "--remove", "LibreChat")
+    ]
+    example = "HOST=localhost\nPORT=3080\nMONGO_URI=mongodb://127.0.0.1:27017/LibreChat\nCREDS_KEY=\nCREDS_IV=\n"
+    example += "JWT_SECRET=\nJWT_REFRESH_SECRET=\nMEILI_MASTER_KEY=\n# ENDPOINTS=openAI,google\nSEARCH=true\n"
     root = tmp_path / "LibreChat"
     root.mkdir()
-    (root / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")  # déjà téléchargé : pas de git
+    (root / "package.json").write_text("{}", encoding="utf-8")  # déjà téléchargé : pas de git
     (root / ".env.example").write_text(example, encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(librechat_setup.subprocess, "run", lambda *a, **k: pytest.fail("git relancé"))
-    assert librechat_setup.main("v0.8.8", "LibreChat") == 0
+    built = []
+    monkeypatch.setattr(librechat_setup, "mongo", lambda r: built.append("mongo") or 0)
+    monkeypatch.setattr(librechat_setup, "build", lambda r: built.append("build") or 0)
+    assert librechat_setup.main("v0.8.8", "LibreChat") == 0 and built == ["mongo", "build"]
     env = (root / ".env").read_text(encoding="utf-8")
     assert re.search(r"^CREDS_KEY=[0-9a-f]{64}$", env, re.M) and re.search(r"^CREDS_IV=[0-9a-f]{32}$", env, re.M)
-    assert re.search(r"^ADMIN_PANEL_SESSION_SECRET=[0-9a-f]{64}$", env, re.M) and "\nUID=1000\n" in env
-    override = (root / "docker-compose.override.yml").read_text(encoding="utf-8")
-    assert "librechat:v0.8.8" in override and "latest" not in override and 'profiles: ["admin"]' in override
+    assert re.search(r"^ADMIN_PANEL_SESSION_SECRET=[0-9a-f]{64}$", env, re.M)
+    for line in ("HOST=127.0.0.1", "MONGO_URI=mongodb://127.0.0.1:27018/LibreChat", "SEARCH=false"):
+        assert f"\n{line}\n" in env or env.startswith(line + "\n"), line
+    assert "\nENDPOINTS=custom,agents\n" in env and "27017" not in env
     assert librechat_setup.main("v0.8.8", "LibreChat") == 0
     assert (root / ".env").read_text(encoding="utf-8") == env  # réinstaller garde les secrets (données chiffrées)
     assert librechat_setup.main("main", "LibreChat") == 2 and librechat_setup.main("v0.8.8", "../x") == 2
+    for name in ("data-db", "node_modules", "mongodb"):
+        (root / name).mkdir()
+    (root / "librechat.yaml").write_text("x", encoding="utf-8")
+    assert librechat_setup.remove("LibreChat") == 0  # désinstallé : conversations, secrets et réglages gardés
+    assert sorted(p.name for p in root.iterdir()) == [".env", "data-db", "librechat.yaml"]
+    assert librechat_setup.remove("../x") == 2
 
 
 def test_link_check_covers_every_pinned_download():
@@ -1224,7 +1235,7 @@ def test_link_check_covers_every_pinned_download():
 
     found = pins.downloads()
     kinds = {d["kind"] for d in found}
-    assert kinds == {"npm", "pypi", "tag", "asset", "image", "vscode", "winget", "page"}
+    assert kinds == {"npm", "pypi", "tag", "asset", "vscode", "winget", "page"}  # plus d'images Docker
     assets = {d["name"]: d for d in found if d["kind"] == "asset"}
     assert set(assets) == {
         "tool:rea",  # Ghidra et Java 21
@@ -1235,12 +1246,9 @@ def test_link_check_covers_every_pinned_download():
         "app:meetily",
         "app:goose",
         "app:cherrystudio",
+        "app:librechat",  # sa base MongoDB (archive officielle, empreinte publiée par MongoDB)
     }
     assert all(len(d["sha256"]) == 64 and d["size"] > 0 for d in assets.values())  # empreinte et taille comparées
-    images = {d["name"] for d in found if d["kind"] == "image"}
-    assert f"ghcr.io/librechat-ai/librechat:{installers.LIBRECHAT_TAG}" in images and all(
-        "latest" not in i for i in images
-    )
     assert {"npm", "@modelcontextprotocol/server-memory"} <= {v for d in found for v in (d["kind"], d["name"])}
     assert marketplace.MCP_VERSION == "2.0.0"  # versions datées (2026.8.31) dépréciées sur npm
 

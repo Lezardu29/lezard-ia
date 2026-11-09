@@ -151,6 +151,8 @@ def available(store=None) -> list[dict]:
         seen = found.get(key) if key else None
         if spec["kind"] == "agent" and spec["runner"] == "claude":
             here = (seen if seen is not None else key in noted) and program("claude") is not None
+        elif spec.get("script"):  # lanceur livré avec Lezard IA (LibreChat) : l'application elle-même doit être là
+            here = seen if seen is not None else key in noted
         elif spec["kind"] in ("agent", "cli", "serve"):
             name = PROGRAMS.get(spec.get("runner"), spec.get("program"))
             here = program(name) is not None
@@ -325,10 +327,13 @@ class Runs:
             return self._detached(tool, spec)
         proc = self.services.get(tool)
         if not proc or proc.poll() is not None:
-            argv = program(spec["program"])
-            if not argv:
-                raise ChatToolError(409, "Programme introuvable sur ce PC.")
-            argv = [*argv, *spec.get("args", ())]
+            if spec.get("script"):  # lanceur livré avec Lezard IA (LibreChat : sa base MongoDB, puis son serveur)
+                argv = [sys.executable, installers._script(spec["script"]), str(Path.home() / spec["folder"])]
+            else:
+                argv = program(spec["program"])
+                if not argv:
+                    raise ChatToolError(409, "Programme introuvable sur ce PC.")
+                argv = [*argv, *spec.get("args", ())]
             work = home(tool)
             work.mkdir(parents=True, exist_ok=True)
             flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -349,7 +354,7 @@ class Runs:
                 stderr=subprocess.DEVNULL,
                 creationflags=flags,
             )
-            ready = " Il est prêt dans une minute environ." if spec.get("openwebui") else ""
+            ready = " Il est prêt dans une minute environ." if spec.get("openwebui") or spec.get("script") else ""
             return f"Démarré sur ce PC : {spec['url']} (adresse valable sur ce PC seulement).{ready}"
         return f"Déjà démarré sur ce PC : {spec['url']}."
 

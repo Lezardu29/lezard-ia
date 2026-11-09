@@ -340,7 +340,10 @@ def create_app(
                 try:
                     gw = holder["gw"]
                     hw = await gw.hardware.snapshot(list(gw.providers.values()), gw.client)
-                    gw.embedding_choice.budget = gw.stt_choice.budget = gw.tts_choice.budget = budget(hw)
+                    b = budget(hw)  # aussi pour « auto » : modèles de discussion qui débordent de la carte écartés
+                    gw.embedding_choice.budget = gw.stt_choice.budget = gw.tts_choice.budget = (
+                        gw.registry.vram_budget
+                    ) = b
                     holder["vectors"].refresh()
                 except Exception:
                     log.exception("Matériel : relevé impossible")

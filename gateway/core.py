@@ -296,10 +296,12 @@ class Gateway:
             if ask and todo and not p.cfg.owner and not p.cfg.base_url.startswith("builtin://"):
                 self._ctx_probed.update(f"{name}/{m}" for m in todo)
                 caps: dict[str, set[str]] = {}
+                memory: dict[str, int] | None = {} if this_pc(p.cfg.base_url) else None  # carte de CE PC
                 jobs.append(
                     (
                         name,
                         caps,
+                        memory,
                         local_context.probe(
                             name,
                             p.cfg.base_url,
@@ -307,14 +309,17 @@ class Gateway:
                             self.client,
                             {"Authorization": f"Bearer {k}"} if (k := p.cfg.resolved_key()) else None,
                             caps,
+                            memory,
                         ),
                     )
                 )
-        for (name, caps, _), found in zip(jobs, await asyncio.gather(*(j for _, _, j in jobs))):
+        for (name, caps, memory, _), found in zip(jobs, await asyncio.gather(*(j[3] for j in jobs))):
             for mid, ctx in found.items():
                 self.registry.local_context[f"{name}/{mid}"] = ctx
             for mid, found_caps in caps.items():  # outils, vision (16.2)
                 self.registry.local_caps[f"{name}/{mid}"] = found_caps
+            for mid, need in (memory or {}).items():  # tient dans la carte graphique ?
+                self.registry.local_memory[f"{name}/{mid}"] = need
 
     def _status(self) -> dict[str, dict]:
         results, cds = self._probed or {}, self.health.cooldowns()

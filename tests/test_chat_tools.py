@@ -231,8 +231,7 @@ def test_apps_open_on_this_pc(api, monkeypatch):
     monkeypatch.setattr(chat_tools.webbrowser, "open", opened.append)
     monkeypatch.setattr(chat_tools.installers, "program", lambda name: None)
     assert ask("jan", "")["text"] == "Jan est ouvert sur ce PC."
-    assert ask("librechat", "")["text"].startswith("Ouvert dans le navigateur de ce PC : http://localhost:3080")
-    assert opened == ["Jan", "http://localhost:3080"]
+    assert opened == ["Jan"]
 
 
 def test_a_request_can_be_stopped_and_checks(api, monkeypatch):

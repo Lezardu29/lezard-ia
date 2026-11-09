@@ -230,7 +230,8 @@ def _step(key: str, argv: tuple[str, ...], facts: Facts) -> bool | None:
             return facts.local_program_folder(rest[-1])
         return facts.windows_app(WINDOWS_NAMES[key])
     if head == installers.PYTHON and rest[:1] == [installers.LIBRECHAT_SETUP]:
-        return True  # son dossier reste après une désinstallation : les conteneurs font foi
+        root = Path.home() / rest[-1]  # construit (le dossier reste après une désinstallation : conversations)
+        return (root / ".lezard-build").is_file() and (root / "mongodb" / "mongod.exe").is_file()
     if head == installers.PYTHON and rest[:2] == ["-m", "webbrowser"]:
         return facts.browser_extension(rest[-1].rsplit("/", 1)[-1])
     if head == "docker" and rest[:1] == ["compose"]:

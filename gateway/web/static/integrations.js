@@ -109,9 +109,10 @@ export const GUIDES = [
     code: ({ base, key }) => `Nom      : Lezard IA\nBase URL : ${base}\nAPI Key  : ${key}\nModèle   : auto`,
   },
   {
-    id: "librechat", name: "LibreChat (Docker)", routes: ["/v1/models", "/v1/chat/completions"],
-    steps: ["Dans le dossier LibreChat : ajoutez LEZARD_API_KEY à .env (première ligne ci-dessous).",
-            "Collez le bloc dans librechat.yaml, puis docker compose restart.",
+    id: "librechat", name: "LibreChat", routes: ["/v1/models", "/v1/chat/completions"],
+    steps: ["Installé depuis la marketplace de Lezard IA : déjà branché, rien à faire (/librechat le démarre).",
+            "Installé autrement : ajoutez LEZARD_API_KEY à son .env (première ligne ci-dessous), collez le bloc dans "
+            + "librechat.yaml, puis redémarrez LibreChat.",
             "LibreChat dans Docker sur ce même PC : remplacez localhost par host.docker.internal dans baseURL."],
     code: ({ base, key }) => `# .env\nLEZARD_API_KEY=${key}\n\n# librechat.yaml\nversion: 1.2.1\nendpoints:\n  custom:\n` +
       `    - name: "Lezard IA"\n      apiKey: "\${LEZARD_API_KEY}"\n      baseURL: "${base}"\n` +

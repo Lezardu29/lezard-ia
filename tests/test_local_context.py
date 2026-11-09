@@ -210,3 +210,34 @@ def test_unreachable_native_api_keeps_default():
     with TestClient(app) as c:
         assert windows(c) == {"ollama/llama3.1:8b": 8192}
         assert chat(c, "ollama/llama3.1:8b", 12_000).status_code == 200
+
+
+def test_memory_need_counts_kv_cache_of_the_window():
+    from gateway.local_context import memory_need
+
+    qwen = {
+        "model_info": {
+            "general.architecture": "qwen2",
+            "qwen2.block_count": 48,
+            "qwen2.attention.head_count": 40,
+            "qwen2.attention.head_count_kv": 8,
+            "qwen2.embedding_length": 5120,
+        }
+    }
+    # deepseek-r1:14b : 9 Go de poids + 6,4 Go de cache à 32 768 tokens
+    assert 15.5e9 < memory_need(qwen, 32768, int(9e9)) < 16.5e9
+    assert memory_need(qwen, 4096, int(9e9)) < 10.5e9
+    gemma = {  # Gemma : couches à fenêtre glissante, cache limité à la fenêtre
+        "model_info": {
+            "general.architecture": "gemma3",
+            "gemma3.block_count": 48,
+            "gemma3.attention.head_count_kv": 8,
+            "gemma3.attention.key_length": 256,
+            "gemma3.attention.value_length": 256,
+            "gemma3.attention.sliding_window": 1024,
+            "gemma3.vision.block_count": 27,
+        }
+    }
+    assert memory_need(gemma, 32768, int(8.2e9)) < 12e9
+    assert memory_need({}, 4096, int(5e9)) == int(5.5e9)  # architecture inconnue : poids + marge
+    assert memory_need(qwen, 4096, None) is None

@@ -47,6 +47,7 @@ class ModelInfo:
     cache_read_per_mtok_usd: float | None = None  # prompt caching (3.3) ; None = prix input
     cache_write_per_mtok_usd: float | None = None
     free: bool = False  # offre gratuite officielle (13.8) : cloud à 0 €, dans la limite des quotas
+    fit: str = ""  # modèle local de CE PC : « vram » (tient dans la carte), « offload » (déborde en RAM, lent)
 
     @property
     def ref(self) -> str:
@@ -245,6 +246,10 @@ class ModelRegistry:
         self._models: dict[str, ModelInfo] = {}
         self.local_context: dict[str, int] = {}  # fenêtre réelle des modèles locaux, mesurée à la détection (10.6)
         self.local_caps: dict[str, set[str]] = {}  # capacités annoncées par le serveur local (Ollama, 16.2)
+        # mémoire (octets) des modèles des serveurs de CE PC (local_context.probe) et mémoire de la carte
+        # graphique utilisable (model_catalog.budget) : « auto » écarte les modèles qui débordent de la carte
+        self.local_memory: dict[str, int] = {}
+        self.vram_budget: dict | None = None
         for m in models if models is not None else CLOUD_MODELS:
             self.add(m)
         self.builtin = dict(self._models)  # grille d'origine (retour arrière d'un prix, 6.2)
@@ -311,10 +316,20 @@ class ModelRegistry:
                 info = replace(info, tools="tools" in caps, vision="vision" in caps)
             if model_id.lower().startswith(NO_TOOL_CALLING):
                 info = replace(info, tools=False)
+            where = self.placement(info.ref)
+            if where:
+                info = replace(info, fit=where)
             if is_ollama_cloud(model_id):  # passe par l'Ollama de ce PC mais tourne chez Ollama : jamais « local »
                 info = replace(info, hosting="cloud", context_window=max(info.context_window, 32_768))
             return info
         return ModelInfo(model_id, provider, hosting)
+
+    def placement(self, ref: str) -> str:
+        """« vram » ou « offload » pour un modèle de CE PC dont la mémoire est connue, sinon "" (inconnu)."""
+        need, b = self.local_memory.get(ref), self.vram_budget
+        if not need or not b or not b.get("gpu"):
+            return ""
+        return "vram" if need <= b["vram"] else "offload"
 
     def find_bare(self, model_id: str) -> ModelInfo | None:
         for m in self._models.values():

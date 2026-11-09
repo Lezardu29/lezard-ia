@@ -156,6 +156,15 @@ def route(
             rejected.append(f"{m.ref}: tools")
             continue
         eligible.append(Candidate(m, m.cost_usd(cls.prompt_tokens, out_tokens), latency.get(m.ref) or m.ttft_ms))
+    # modèle local de ce PC qui déborde de la carte graphique (poids + cache de sa fenêtre) : des minutes par réponse ;
+    # « auto » lui préfère un autre modèle gratuit (local qui tient dans la carte, offre gratuite), jamais un cloud
+    # payant à sa place ; il reste en secours
+    spill = [c for c in eligible if c.info.fit == "offload"]
+    if any(c.info.hosting == "local" or c.info.free for c in eligible if c not in spill):
+        rejected += [f"{c.info.ref}: déborde de la carte graphique" for c in spill]
+        eligible = [c for c in eligible if c not in spill]
+    else:
+        spill = []
     # sortie structurée (16.3) : modèles à response_format natif privilégiés ; à défaut, les autres (consigne
     # dans le prompt et contrôle de la réponse par la gateway)
     if json_required and any(c.info.json_mode for c in eligible):
@@ -217,7 +226,7 @@ def route(
     if relaxed:
         reason += " · plancher qualité assoupli"
     # alternatives : reste du classement, puis les autres éligibles (pour le fallback)
-    rest = [c.info.ref for c in ranked[1:]] + [c.info.ref for c in eligible if c not in ranked]
+    rest = [c.info.ref for c in ranked[1:]] + [c.info.ref for c in eligible + spill if c not in ranked]
     return RouteDecision(
         best.info.ref, best.info.provider, best.info.id, mode, reason, best.est_cost_usd, rest[:5], effort
     )

@@ -42,7 +42,7 @@ CLAUDE_FILES = _script("claude_files")  # retire un dossier écrit dans ~/.claud
 USER_PATH = _script("user_path")  # retire un dossier du PATH de l'utilisateur (désinstallation de claude-mem)
 CLAUDE_MEM_BIN = r"%LOCALAPPDATA%\claude-mem\bin"
 SETUP = _script("setup_download")  # installateur officiel figé, vérifié, lancé sans question
-LIBRECHAT_SETUP = _script("librechat_setup")  # dépôt figé, secrets de ce PC, images figées
+LIBRECHAT_SETUP = _script("librechat_setup")  # dépôt figé, secrets de ce PC, MongoDB figé, construit sans Docker
 ORCA = (
     "https://github.com/stablyai/orca/releases/download/v1.4.229/orca-windows-setup.exe",  # publiée le 2026-10-17
     "fb759053a56ad019a2d52882abaf9c797e2adddf6f217a36f0b64505446d007d",
@@ -462,25 +462,22 @@ RECIPES: dict[str, dict] = {
         "size": "407 Mo",
         "where": "Programmes de Windows (dossier de l'utilisateur), avec son raccourci dans le menu Démarrer",
         "windows": True,
-        "after": "Ouvrez AnythingLLM, puis fournisseur « Generic OpenAI » : adresse de votre gateway suivie de /v1 et "
-        "votre clé.",
+        "after": "Branché d'office sur Lezard IA (fournisseur « Generic OpenAI », modèle « auto ») : ouvrez AnythingLLM.",
     },
     "app:librechat": {
-        "steps": [
-            (PYTHON, LIBRECHAT_SETUP, LIBRECHAT_TAG, "LibreChat"),
-            ("docker", "compose", "--project-directory", "LibreChat", "up", "--detach"),
-        ],
+        "steps": [(PYTHON, LIBRECHAT_SETUP, LIBRECHAT_TAG, "LibreChat")],
         "show": [
             f"Téléchargement de LibreChat {LIBRECHAT_TAG} (dépôt officiel, dans le dossier LibreChat de votre dossier "
             "personnel)",
-            "Réglages créés : secrets tirés au hasard pour ce PC (.env), images Docker à version figée",
-            "docker compose up --detach : LibreChat démarre sur http://localhost:3080",
+            "Réglages créés : secrets tirés au hasard pour ce PC (.env), écoute sur ce PC seulement",
+            "MongoDB 8.0.34 (base de données de LibreChat) : archive officielle, empreinte vérifiée, mongod.exe seul",
+            "npm ci puis npm run frontend : LibreChat construit sur ce PC (quelques minutes), sans Docker",
         ],
-        "requires": ("git", "docker"),
-        "size": "~50 Mo, puis ~3 Go d'images Docker",
-        "where": "Le dossier LibreChat de votre dossier personnel, et des conteneurs Docker (http://localhost:3080)",
-        "after": "Ouvrez http://localhost:3080 et créez votre compte, puis branchez Lezard IA avec le guide "
-        "« LibreChat » (librechat.yaml).",
+        "requires": ("git", "node"),
+        "size": "~810 Mo à télécharger (dont 808 Mo pour MongoDB), ~2 Go sur le disque",
+        "where": "Le dossier LibreChat de votre dossier personnel ; Lezard IA le démarre (/librechat dans le chat)",
+        "after": "Démarrez-le avec /librechat dans le chat de Lezard IA, puis ouvrez http://localhost:3080 et créez "
+        "votre compte : Lezard IA y est déjà branché.",
     },
     "app:jan": {
         "uninstall_name": "Jan",  # nom dans Paramètres > Applications (désinstallation silencieuse)
@@ -492,21 +489,19 @@ RECIPES: dict[str, dict] = {
         "size": "556 Mo",
         "where": "Programmes de Windows (dossier de l'utilisateur), avec son raccourci dans le menu Démarrer",
         "windows": True,
-        "after": "Ouvrez Jan, puis Réglages > Fournisseurs : ajoutez Lezard IA (adresse de votre gateway suivie de /v1 "
-        "et votre clé).",
+        "after": "Branché d'office sur Lezard IA (fournisseur « Lezard IA », modèle « auto ») : ouvrez Jan.",
     },
     "app:cline": {
         "steps": [("code", "--install-extension", "saoudrizwan.claude-dev")],
         "size": "~30 Mo",
         "where": "Dans VS Code (extensions)",
-        "after": "Dans Cline : fournisseur « OpenAI Compatible », adresse de votre gateway suivie de /v1 et votre clé.",
+        "after": "Branché d'office sur Lezard IA (fournisseur « OpenAI Compatible », modèle « auto ») : rechargez VS Code.",
     },
     "app:kilocode": {
         "steps": [("code", "--install-extension", "kilocode.Kilo-Code")],
         "size": "~40 Mo",
         "where": "Dans VS Code (extensions)",
-        "after": "Dans Kilo Code : fournisseur « OpenAI Compatible », adresse de votre gateway suivie de /v1 et votre "
-        "clé.",
+        "after": "Branché d'office sur Lezard IA (fournisseur « Lezard IA », modèle « auto ») : rechargez VS Code.",
     },
     "app:aider": {
         "steps": [("uv", "tool", "install", "--force", "--python", "3.12", "aider-chat==0.86.2")],
@@ -544,8 +539,7 @@ RECIPES: dict[str, dict] = {
         "steps": [_winget("Bin-Huang.Chatbox.CommunityEdition")],
         "size": "~100 Mo",
         "where": WINGET,
-        "after": "Ouvrez Chatbox, puis Réglages : fournisseur compatible OpenAI avec l'adresse de votre gateway et "
-        "votre clé.",
+        "after": "Branché d'office sur Lezard IA (modèle « auto ») : ouvrez Chatbox.",
     },
     "app:meetily": {
         "uninstall_name": "meetily",  # nom dans Paramètres > Applications (désinstallation silencieuse)
@@ -581,7 +575,7 @@ RECIPES: dict[str, dict] = {
         "size": "311 Mo",
         "where": "Programmes de Windows (dossier de l'utilisateur), avec son raccourci dans le menu Démarrer",
         "windows": True,
-        "after": "Ouvrez Cherry Studio, puis branchez Lezard IA avec le guide « Cherry Studio ».",
+        "after": "Branché d'office sur Lezard IA (fournisseur « Lezard IA », modèle « auto ») : ouvrez Cherry Studio.",
     },
     "app:openhuman": {
         "uninstall_name": "OpenHuman",  # nom dans Paramètres > Applications (désinstallation silencieuse)
@@ -858,12 +852,36 @@ def _undo(argv) -> tuple[str, ...] | list[tuple[str, ...]] | None | bool:
     if head == PYTHON and rest[:1] == [NPM_NATIVE]:
         return False  # réparation des modules de l'outil : partent avec lui (npm uninstall)
     if head == PYTHON and rest[:1] == [LIBRECHAT_SETUP]:
-        return False  # le dossier (réglages, conversations) est gardé : l'arrêt des conteneurs suffit
+        return (PYTHON, LIBRECHAT_SETUP, "--remove", rest[-1])  # conversations (data-db) et secrets (.env) gardés
     if head == "docker" and rest[:1] == ["compose"] and rest[-2:] == ["up", "--detach"]:
         return ("docker", *rest[:-2], "down")  # volumes (données) gardés
     if head == "docker" and rest[:1] == ["run"]:
         return ("docker", "rm", "--force", rest[rest.index("--name") + 1])  # le volume (données) est gardé
     return None  # pip (paquets partagés avec Lezard IA), installateurs Windows, scripts d'installation
+
+
+# variables d'un programme lancé depuis l'Explorateur (double-clic) : rien d'autre pour un installateur Windows
+WINDOWS_ENV = (
+    "ALLUSERSPROFILE", "APPDATA", "COMMONPROGRAMFILES", "COMMONPROGRAMFILES(X86)", "COMMONPROGRAMW6432", "COMPUTERNAME",
+    "COMSPEC", "DRIVERDATA", "HOMEDRIVE", "HOMEPATH", "LOCALAPPDATA", "LOGONSERVER", "NUMBER_OF_PROCESSORS", "OS",
+    "PATH", "PATHEXT", "PROCESSOR_ARCHITECTURE", "PROCESSOR_IDENTIFIER", "PROCESSOR_LEVEL", "PROCESSOR_REVISION",
+    "PROGRAMDATA", "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMW6432", "PSMODULEPATH", "PUBLIC", "SESSIONNAME",
+    "SYSTEMDRIVE", "SYSTEMROOT", "TEMP", "TMP", "USERDOMAIN", "USERDOMAIN_ROAMINGPROFILE", "USERNAME",
+    "USERPROFILE", "WINDIR", "ONEDRIVE",
+)  # fmt: skip
+
+
+def installer_env(env: dict) -> dict:
+    """Environnement d'un installateur Windows : celui d'un double-clic, sans les réglages de Lezard IA, de npm (CI)
+    ni du terminal (de vieux installateurs NSIS, comme celui de Chatbox CE, plantent avec certaines variables)."""
+    return {k: v for k, v in env.items() if k.upper() in WINDOWS_ENV}
+
+
+def windows_installer(argv) -> bool:
+    """Étape qui lance l'installateur d'une application Windows (winget, ou installateur officiel téléchargé)."""
+    return (argv[0] == "winget" and tuple(argv[1:2]) == ("install",)) or (
+        tuple(argv[:2]) == (PYTHON, SETUP) and argv[2].startswith("https://") and not argv[2].endswith(".zip")
+    )
 
 
 def replaced_first(argv) -> tuple[str, ...] | None:
@@ -882,8 +900,10 @@ def replaced_first(argv) -> tuple[str, ...] | None:
 
 
 def _tool_folder(argv) -> str | None:
-    """Dossier des fichiers que l'étape de désinstallation va supprimer (npm global, uv tool)."""
+    """Dossier des fichiers que l'étape de désinstallation va supprimer (npm global, uv tool, LibreChat)."""
     head, rest = argv[0], list(argv[1:])
+    if head == PYTHON and rest[:2] == [LIBRECHAT_SETUP, "--remove"]:
+        return str(Path.home() / rest[-1])  # son serveur Node.js et sa base MongoDB, lancés depuis ce dossier
     if head == "npm" and rest[:2] == ["uninstall", "--global"]:
         return os.path.join(os.environ.get("APPDATA", ""), "npm", "node_modules", *rest[-1].split("/"))
     if head == "uv" and rest[:2] == ["tool", "uninstall"]:
@@ -945,6 +965,9 @@ def already_undone(argv) -> bool:
     if head == "uv" and rest[:2] == ["tool", "uninstall"]:
         tools = os.environ.get("UV_TOOL_DIR") or os.path.join(os.environ.get("APPDATA", ""), "uv", "tools")
         return sys.platform == "win32" and not os.path.isdir(os.path.join(tools, rest[-1]))
+    if head == "code" and rest[:1] == ["--uninstall-extension"]:  # extension de VS Code : son dossier
+        folder = Path.home() / ".vscode" / "extensions"
+        return folder.is_dir() and not any(p.name.lower().startswith(rest[1].lower() + "-") for p in folder.iterdir())
     return False
 
 

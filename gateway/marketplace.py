@@ -1119,15 +1119,11 @@ APPS = (
     {
         "id": "librechat",
         "name": "LibreChat",
-        "description": "Interface de chat complète et multi-utilisateurs (Docker), alternative à Open WebUI : agents, "
-        "recherche, fichiers ; Lezard IA s'y ajoute en « custom endpoint ».",
+        "description": "Interface de chat complète et multi-utilisateurs, alternative à Open WebUI : agents, "
+        "fichiers, conversations ; installée sans Docker et déjà branchée sur Lezard IA.",
         "commands": [
+            _cmd("/librechat", "Le démarrer depuis le chat de Lezard IA (sa base MongoDB, puis lui).", where="chat"),
             _cmd("http://localhost:3080", "Ouvrir LibreChat (première fois : créez votre compte).", where="browser"),
-            _cmd(
-                "docker compose --project-directory LibreChat down",
-                "L'arrêter, depuis votre dossier personnel ; up --detach à la place de down le relance.",
-                where="terminal",
-            ),
         ],
         "guide": "librechat",
         "url": "https://github.com/LibreChat-AI/LibreChat",
@@ -2301,7 +2297,8 @@ CHAT = {
         "url": "http://localhost:3000",
         "openwebui": True,
     },
-    "librechat": {"kind": "open", "url": "http://localhost:3080"},
+    # lancé par Lezard IA sans Docker (librechat_run.py : MongoDB puis Node.js), branché d'office (app_connect)
+    "librechat": {"kind": "serve", "script": "librechat_run", "folder": "LibreChat", "url": "http://localhost:3080"},
     "continue": {"kind": "open", "vscode": True},
     "cline": {"kind": "open", "vscode": True},
     "kilocode": {"kind": "open", "vscode": True},
