@@ -1695,7 +1695,7 @@ AGENT_TOOLS = (
             _cmd(
                 "/orchestre <demande>",
                 "Claude annonce son plan (étape, modèle, pourquoi), confie les étapes simples aux modèles locaux, "
-                "vérifie, reprend ce qui bloque, et termine par un bilan.",
+                "vérifie, reprend ce qui bloque, et termine par une vérification de l'ensemble et un bilan.",
                 "/orchestre documente chaque module du dossier src dans docs/modules.md",
                 "claude",
             ),
@@ -1706,13 +1706,144 @@ AGENT_TOOLS = (
                 "Résume ces dix fichiers de journal en déléguant aux petits modèles.",
                 "claude",
             ),
-            _cmd("/mcp", "Vérifier que orchestre est bien connecté (outils modeles et confier_etape).", where="claude"),
+            _cmd(
+                "/mcp",
+                "Vérifier que orchestre est bien connecté (outils modeles, confier_etape et bilan).",
+                where="claude",
+            ),
         ],
         "needs": "Claude Code, et Ollama avec au moins un modèle (bundle « Pour bien démarrer »).",
         "lezard": "Écrit par Lezard IA. Les étapes confiées tournent dans l'Ollama de ce PC : rien ne sort, rien ne "
         "coûte. Le modèle déjà chargé est pris d'abord, pour ne pas en charger deux sur la carte graphique. Les "
         "fichiers sont lus et écrits dans le projet ouvert seulement. Avec les variables LEZARD_IA_URL et "
         "LEZARD_IA_KEY, les étapes passent par Lezard IA (tous ses modèles, « auto » compris).",
+        "url": "https://github.com/Lezardu29/lezard-ia",
+        "license": _lic(
+            "Lezard IA", "Lezard IA", "https://github.com/Lezardu29/lezard-ia", summary="Fonction de Lezard IA."
+        ),
+    },
+    {
+        "id": "interrupteur",
+        "name": "Interrupteur Lezard IA",
+        "description": "Une commande dans Claude Code pour choisir comment la session travaille : /lezard on met "
+        "Lezard IA entre Claude et vos modèles locaux (résumés de fichiers, étapes confiées, brouillons contrôlés et "
+        "retouchés, vérification finale), /lezard off revient à Claude seul. Éteint, il ne pèse presque rien.",
+        "install": "claude mcp add --scope user lezard -- python mcp_orchestre.py --serveur lezard . (serveur MCP "
+        "fourni avec Lezard IA), puis les méthodes « lezard » et « orchestre » dans les compétences de Claude Code",
+        "commands": [
+            _cmd("/lezard on", "Active les outils de Lezard IA pour cette session.", where="claude"),
+            _cmd("/lezard off", "Revient à Claude seul, comme d'habitude.", where="claude"),
+            _cmd("/lezard", "Dit si Lezard IA est actif ou éteint.", where="claude"),
+            _cmd(
+                "/lezard toujours",
+                "Actif dans toutes les nouvelles sessions ; /lezard jamais pour revenir à éteint par défaut.",
+                where="claude",
+            ),
+        ],
+        "needs": "Claude Code, et Ollama avec au moins un modèle.",
+        "lezard": "Écrit par Lezard IA. Réunit le chef d'orchestre, la mémoire des résumés et l'atelier de "
+        "brouillons derrière un seul interrupteur : inutile d'installer ces fiches en plus. Le modèle reste "
+        "Claude, sur votre compte ; seul ce qu'il confie part vers l'Ollama de ce PC.",
+        "url": "https://github.com/Lezardu29/lezard-ia",
+        "license": _lic(
+            "Lezard IA", "Lezard IA", "https://github.com/Lezardu29/lezard-ia", summary="Fonction de Lezard IA."
+        ),
+    },
+    {
+        "id": "resumes",
+        "name": "Mémoire des résumés",
+        "description": "Claude Code ne relit plus vos gros fichiers : un modèle local en écrit le résumé (rôle, "
+        "éléments principaux avec leur ligne), gardé en mémoire tant que le fichier ne change pas. Les sessions "
+        "suivantes le reprennent tout de suite, sans dépenser un token.",
+        "install": "claude mcp add --scope user resumes -- python mcp_orchestre.py --serveur resumes . (serveur MCP "
+        "fourni avec Lezard IA)",
+        "commands": [
+            _cmd(
+                "Demandez-le en langage naturel",
+                "Claude appelle resumer_fichier ou resumer_dossier (40 fichiers en un appel) au lieu de lire.",
+                "Résume le dossier src sans le lire, puis dis-moi où est gérée la connexion.",
+                "claude",
+            ),
+            _cmd("/mcp", "Vérifier que resumes est bien connecté.", where="claude"),
+        ],
+        "needs": "Claude Code, et Ollama avec au moins un modèle.",
+        "lezard": "Écrit par Lezard IA. Les résumés sont faits par l'Ollama de ce PC et rangés dans votre dossier "
+        "utilisateur (.lezard-ia/resumes), par empreinte du fichier : un fichier modifié est résumé de nouveau. "
+        "Seuls les fichiers du projet ouvert sont lus.",
+        "url": "https://github.com/Lezardu29/lezard-ia",
+        "license": _lic(
+            "Lezard IA", "Lezard IA", "https://github.com/Lezardu29/lezard-ia", summary="Fonction de Lezard IA."
+        ),
+    },
+    {
+        "id": "brouillons",
+        "name": "Atelier de brouillons",
+        "description": "Deux outils pour que Claude Code ne réécrive pas ce qu'un modèle moins fort a produit : un "
+        "contrôle sans IA (chaque nom cité existe-t-il dans le code, à la bonne ligne ?) et une retouche confiée à "
+        "un modèle local, d'après quelques lignes de corrections.",
+        "install": "claude mcp add --scope user brouillons -- python mcp_orchestre.py --serveur brouillons . "
+        "(serveur MCP fourni avec Lezard IA)",
+        "commands": [
+            _cmd(
+                "Demandez-le en langage naturel",
+                "Claude appelle controler (écarts seulement) puis retoucher (le fichier est corrigé sur place).",
+                "Contrôle docs/architecture.md contre les fichiers de src et fais corriger ce qui est faux.",
+                "claude",
+            ),
+            _cmd("/mcp", "Vérifier que brouillons est bien connecté.", where="claude"),
+        ],
+        "needs": "Claude Code ; Ollama avec au moins un modèle pour la retouche (le contrôle marche sans).",
+        "lezard": "Écrit par Lezard IA. Le contrôle ne juge pas le sens des phrases, seulement l'existence des noms "
+        "et des lignes cités. Seuls les fichiers du projet ouvert sont lus et modifiés.",
+        "url": "https://github.com/Lezardu29/lezard-ia",
+        "license": _lic(
+            "Lezard IA", "Lezard IA", "https://github.com/Lezardu29/lezard-ia", summary="Fonction de Lezard IA."
+        ),
+    },
+    {
+        "id": "claude-etapes",
+        "name": "Assistants Claude moins chers",
+        "description": "Deux assistants pour Claude Code : « etape-moyenne » (Claude Sonnet) et « etape-simple » "
+        "(Claude Haiku). Le modèle fort leur confie ce qui est trop difficile pour un modèle local mais ne demande "
+        "pas le meilleur modèle, et garde le plan et la vérification.",
+        "install": "Deux fichiers écrits dans les assistants de Claude Code (.claude/agents de votre dossier "
+        "utilisateur) : etape-moyenne.md et etape-simple.md",
+        "commands": [
+            _cmd(
+                "Demandez-le en langage naturel",
+                "Claude confie l'étape à l'assistant voulu, qui rend un compte rendu court ou dit qu'il bloque.",
+                "Écris les tests de ce module avec l'assistant etape-moyenne.",
+                "claude",
+            ),
+            _cmd("/agents", "Voir les assistants installés et leur modèle.", where="claude"),
+        ],
+        "needs": "Claude Code avec un compte ou une clé qui donne accès à Sonnet et Haiku.",
+        "lezard": "Écrit par Lezard IA. Ces assistants tournent chez Anthropic, sur des modèles moins chers : ils "
+        "consomment votre compte Claude, moins que le modèle fort.",
+        "url": "https://github.com/Lezardu29/lezard-ia",
+        "license": _lic(
+            "Lezard IA", "Lezard IA", "https://github.com/Lezardu29/lezard-ia", summary="Fonction de Lezard IA."
+        ),
+    },
+    {
+        "id": "claude-allege",
+        "name": "Claude Code allégé",
+        "description": "Coupe les connecteurs de votre compte claude.ai dans Claude Code : leurs outils (parfois "
+        "plusieurs centaines) alourdissent chaque session, même quand ils ne servent pas. Indispensable pour "
+        "faire tourner Claude Code sur un modèle local.",
+        "install": "Variable de votre compte Windows : ENABLE_CLAUDEAI_MCP_SERVERS=false",
+        "commands": [
+            _cmd(
+                "Rien à taper",
+                "Après l'installation, fermez puis rouvrez VS Code et vos terminaux : Claude Code démarre sans les "
+                "connecteurs de claude.ai. Désinstallez pour les retrouver.",
+                where="claude",
+            ),
+            _cmd("/mcp", "Vérifier que les connecteurs « claude.ai » n'apparaissent plus.", where="claude"),
+        ],
+        "needs": "Windows et Claude Code.",
+        "lezard": "Écrit par Lezard IA. Vos serveurs MCP installés sur ce PC ne sont pas touchés ; seuls les "
+        "connecteurs de claude.ai (Google Drive, ElevenLabs…) sont coupés, dans Claude Code seulement.",
         "url": "https://github.com/Lezardu29/lezard-ia",
         "license": _lic(
             "Lezard IA", "Lezard IA", "https://github.com/Lezardu29/lezard-ia", summary="Fonction de Lezard IA."
@@ -1942,6 +2073,12 @@ AGENT_TOOLS = (
     },
 )
 
+# Fiches écrites et testées, pas encore affichées : mesurées le 2026-11-11, aucune n'a montré de gain dans une
+# vraie session (résumés jamais appelés, assistants et réglage jamais essayés pour de vrai). Leurs recettes
+# restent dans installers ; retirer un nom d'ici suffit à publier la fiche.
+EN_ATTENTE = ("resumes", "claude-etapes", "claude-allege")
+AGENT_TOOLS = tuple(t for t in AGENT_TOOLS if t["id"] not in EN_ATTENTE)
+
 
 # ---------- bundles : plusieurs éléments à installer ensemble, proposés selon ce PC ----------
 # « when » : ram_gb (mémoire vive totale), vram_gb (carte graphique), windows, programs (au moins un trouvé sur ce PC),
@@ -2051,11 +2188,17 @@ BUNDLES = (
     {
         "id": "claude-econome",
         "name": "Claude Code économe",
-        "description": "Claude Code garde le travail difficile et confie le reste aux modèles locaux de ce PC "
-        "(chef d'orchestre), avec la carte de votre code et le suivi de sa consommation : bien moins de tokens "
-        "pour le même résultat.",
+        "description": "Claude Code garde le travail difficile et confie le reste, quand vous l'activez par "
+        "/lezard on : étapes simples aux modèles locaux, brouillons contrôlés sans dépenser un token, vérification "
+        "finale ; avec la carte de votre code et le suivi de sa consommation.",
         "for": "Ceux qui utilisent Claude Code sur ce PC, avec une carte graphique qui fait tourner un modèle local.",
-        "items": ("component:ollama", "model:chat", "tool:orchestre", "tool:codegraph", "tool:ccusage"),
+        "items": (
+            "component:ollama",
+            "model:chat",
+            "tool:interrupteur",
+            "tool:codegraph",
+            "tool:ccusage",
+        ),
         "when": {"programs": ("claude",), "fast": True},
     },
     {

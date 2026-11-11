@@ -316,6 +316,79 @@ RECIPES: dict[str, dict] = {
         "after": "Redémarrez Claude Code, puis /orchestre suivi de votre demande : les étapes simples partent vers "
         "vos modèles locaux.",
     },
+    "tool:interrupteur": {
+        "steps": [
+            ("claude", "mcp", "add", "--scope", "user", "lezard", "--", PYTHON, ORCHESTRE, "--serveur", "lezard", "."),
+            (PYTHON, ORCHESTRE, "--skill", "lezard"),
+            (PYTHON, ORCHESTRE, "--skill"),  # la méthode d'orchestration, suivie quand l'interrupteur est actif
+        ],
+        "requires": ("claude",),
+        "size": "moins de 1 Mo",
+        "where": "Serveur MCP et compétences de Claude Code (pour tous vos projets)",
+        "after": "Redémarrez Claude Code. /lezard on active les outils de Lezard IA dans la session, /lezard off "
+        "revient à Claude seul ; /lezard toujours les active pour toutes les nouvelles sessions.",
+    },
+    "tool:resumes": {
+        "steps": [
+            (
+                "claude",
+                "mcp",
+                "add",
+                "--scope",
+                "user",
+                "resumes",
+                "--",
+                PYTHON,
+                ORCHESTRE,
+                "--serveur",
+                "resumes",
+                ".",
+            ),
+        ],
+        "requires": ("claude",),
+        "size": "moins de 1 Mo",
+        "where": "Serveur MCP de Claude Code (pour tous vos projets)",
+        "after": "Redémarrez Claude Code : demandez-lui de résumer un fichier ou un dossier au lieu de le lire.",
+    },
+    "tool:brouillons": {
+        "steps": [
+            (
+                "claude",
+                "mcp",
+                "add",
+                "--scope",
+                "user",
+                "brouillons",
+                "--",
+                PYTHON,
+                ORCHESTRE,
+                "--serveur",
+                "brouillons",
+                ".",
+            ),
+        ],
+        "requires": ("claude",),
+        "size": "moins de 1 Mo",
+        "where": "Serveur MCP de Claude Code (pour tous vos projets)",
+        "after": "Redémarrez Claude Code : il peut contrôler et faire retoucher un document sans le réécrire.",
+    },
+    "tool:claude-etapes": {
+        "steps": [(PYTHON, ORCHESTRE, "--agents")],
+        "requires": ("claude",),
+        "size": "moins de 1 Mo",
+        "where": "Assistants de Claude Code (pour tous vos projets)",
+        "after": "Redémarrez Claude Code : les assistants etape-moyenne (Sonnet) et etape-simple (Haiku) sont dans "
+        "/agents.",
+    },
+    "tool:claude-allege": {
+        "steps": [(PYTHON, ORCHESTRE, "--env", "ENABLE_CLAUDEAI_MCP_SERVERS", "false")],
+        "requires": ("claude",),
+        "size": "aucune",
+        "where": "Variable de votre compte Windows",
+        "windows": True,
+        "after": "Fermez puis rouvrez VS Code et vos terminaux : Claude Code démarre sans les connecteurs de "
+        "claude.ai.",
+    },
     "tool:ccrouter": {
         "steps": [
             ("npm", "install", "--global", "--ignore-scripts", "@musistudio/claude-code-router@3.1.3"),
@@ -867,7 +940,11 @@ def _undo(argv) -> tuple[str, ...] | list[tuple[str, ...]] | None | bool:
     if head == PYTHON and rest[:1] == [NPM_NATIVE]:
         return False  # réparation des modules de l'outil : partent avec lui (npm uninstall)
     if head == PYTHON and rest[:2] == [ORCHESTRE, "--skill"]:
-        return (PYTHON, ORCHESTRE, "--remove-skill")
+        return (PYTHON, ORCHESTRE, "--remove-skill", *rest[2:3])
+    if head == PYTHON and rest[:2] == [ORCHESTRE, "--agents"]:
+        return (PYTHON, ORCHESTRE, "--remove-agents")
+    if head == PYTHON and rest[:2] == [ORCHESTRE, "--env"]:
+        return (PYTHON, ORCHESTRE, "--env-remove", rest[2])
     if head == PYTHON and rest[:1] == [LIBRECHAT_SETUP]:
         return (PYTHON, LIBRECHAT_SETUP, "--remove", rest[-1])  # conversations (data-db) et secrets (.env) gardés
     if head == "docker" and rest[:1] == ["compose"] and rest[-2:] == ["up", "--detach"]:

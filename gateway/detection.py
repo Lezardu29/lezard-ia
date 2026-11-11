@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import subprocess
 import threading
 import time
@@ -123,6 +124,22 @@ class Facts:
     def skill(self, name: str) -> bool:
         return (self._claude_dir / "skills" / name).exists()
 
+    def claude_agent(self, name: str) -> bool:
+        return (self._claude_dir / "agents" / f"{name}.md").is_file()
+
+    def user_env(self, name: str) -> str | None:
+        """Variable d'environnement enregistrée pour l'utilisateur (Windows : registre, vue des programmes ouverts
+        ensuite) ; ailleurs, celle de ce processus."""
+        if sys.platform != "win32":
+            return os.environ.get(name)
+        import winreg
+
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
+                return str(winreg.QueryValueEx(key, name)[0])
+        except OSError:
+            return None
+
     @cached_property
     def vscode(self) -> set[str] | None:
         found = _read_json(Path.home() / ".vscode" / "extensions" / "extensions.json")
@@ -230,7 +247,11 @@ def _step(key: str, argv: tuple[str, ...], facts: Facts) -> bool | None:
             return facts.local_program_folder(rest[-1])
         return facts.windows_app(WINDOWS_NAMES[key])
     if head == installers.PYTHON and rest[:2] == [installers.ORCHESTRE, "--skill"]:
-        return facts.skill("orchestre")
+        return facts.skill(rest[2] if len(rest) > 2 else "orchestre")
+    if head == installers.PYTHON and rest[:2] == [installers.ORCHESTRE, "--agents"]:
+        return facts.claude_agent("etape-moyenne")
+    if head == installers.PYTHON and rest[:2] == [installers.ORCHESTRE, "--env"]:
+        return facts.user_env(rest[2]) == rest[3]
     if head == installers.PYTHON and rest[:1] == [installers.LIBRECHAT_SETUP]:
         root = Path.home() / rest[-1]  # construit (le dossier reste après une désinstallation : conversations)
         return (root / ".lezard-build").is_file() and (root / "mongodb" / "mongod.exe").is_file()
