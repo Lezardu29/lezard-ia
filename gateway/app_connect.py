@@ -688,7 +688,26 @@ APPS = {
     "anythingllm": anythingllm,
     "chatbox": chatbox,
 }
-TOOLS = {"claudemem": claudemem, "ccrouter": ccrouter}  # outils pour agents branchés de même, après leur installation
+
+
+def interrupteur(store, owner: str, plan: str, port: int) -> str:
+    """Interrupteur Lezard IA (serveur MCP de Claude Code) : une clé dédiée et l'adresse de ce PC dans
+    ~/.lezard-ia/orchestre.json, que le serveur lit quand l'utilisateur choisit /lezard eco, rapide ou equilibre
+    (étapes confiées par Lezard IA, modèles cloud compris). En /lezard local, il parle à Ollama sans ce fichier.
+    Pas de copie « .avant-lezard » : elle garderait l'ancienne clé, révoquée."""
+    path = Path.home() / ".lezard-ia" / "orchestre.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    key = new_key(store, owner, plan, "Application : Interrupteur Lezard IA (Claude Code)")
+    path.write_text(json.dumps({"url": f"http://127.0.0.1:{port}", "key": key}) + "\n", encoding="utf-8")
+    return (
+        "Dans Claude Code : /lezard on confie les étapes simples aux modèles locaux d'Ollama ; /lezard eco ou "
+        "/lezard rapide les fait passer par Lezard IA (tous vos modèles, cloud compris) ; /lezard local revient "
+        "à Ollama seul."
+    )
+
+
+# outils pour agents branchés de même, après leur installation
+TOOLS = {"claudemem": claudemem, "ccrouter": ccrouter, "interrupteur": interrupteur}
 
 
 def connect(app: str, store, owner: str, plan: str, port: int, fresh: bool = False) -> str | None:

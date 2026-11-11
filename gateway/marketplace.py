@@ -1735,6 +1735,13 @@ AGENT_TOOLS = (
             _cmd("/lezard off", "Revient à Claude seul, comme d'habitude.", where="claude"),
             _cmd("/lezard", "Dit si Lezard IA est actif ou éteint.", where="claude"),
             _cmd(
+                "/lezard eco",
+                "Les étapes confiées passent par Lezard IA, qui prend le modèle le moins cher capable (local "
+                "d'abord, cloud s'il le faut) ; /lezard rapide prend le plus rapide, /lezard local revient à "
+                "Ollama seul.",
+                where="claude",
+            ),
+            _cmd(
                 "/lezard toujours",
                 "Actif dans toutes les nouvelles sessions ; /lezard jamais pour revenir à éteint par défaut.",
                 where="claude",
@@ -1779,8 +1786,9 @@ AGENT_TOOLS = (
         "id": "brouillons",
         "name": "Atelier de brouillons",
         "description": "Deux outils pour que Claude Code ne réécrive pas ce qu'un modèle moins fort a produit : un "
-        "contrôle sans IA (chaque nom cité existe-t-il dans le code, à la bonne ligne ?) et une retouche confiée à "
-        "un modèle local, d'après quelques lignes de corrections.",
+        "contrôle sans IA (chaque nom cité existe-t-il dans le code, à la bonne ligne ? les numéros de ligne faux "
+        "sont corrigés tout seuls) et une retouche confiée à un modèle local, d'après quelques lignes de "
+        "corrections.",
         "install": "claude mcp add --scope user brouillons -- python mcp_orchestre.py --serveur brouillons . "
         "(serveur MCP fourni avec Lezard IA)",
         "commands": [

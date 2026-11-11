@@ -61,7 +61,8 @@ def test_lists_text_models_lightest_first_and_prefers_the_loaded_one(ollama):
     assert text.endswith("Par défaut : petit:4b")
     ollama["loaded"] = ["moyen:12b"]  # déjà sur la carte graphique : pas de rechargement
     text = tool("modeles", {})[1]
-    assert "moyen:12b : 8.0 Go, 12B — déjà chargé" in text and text.endswith("Par défaut : moyen:12b")
+    assert "moyen:12b : 8.0 Go, 12B, lit environ 3900 lignes de code à la fois (65536 tokens) — déjà chargé" in text
+    assert text.endswith("Par défaut : moyen:12b")
 
 
 def test_step_reads_files_itself_and_tells_the_worker_how_to_say_it_is_stuck(ollama, tmp_path):
@@ -91,7 +92,9 @@ def test_stuck_step_comes_back_to_the_orchestrator_and_writes_nothing(ollama, tm
 def test_overflowing_or_cut_answers_are_stuck_too(ollama, monkeypatch, tmp_path):
     monkeypatch.setenv("ORCHESTRE_FENETRE", "40")
     text = tool("confier_etape", {"consigne": "x"})[1]
-    assert text.startswith("ÉTAPE BLOQUÉE : demande plus longue que la fenêtre (40 tokens)") and "Résumé." in text
+    # refusée avant l'appel : Ollama couperait en silence et le modèle ne verrait que la fin
+    assert text.startswith("ÉTAPE BLOQUÉE : demande trop longue pour") and "fenêtre en lit 40" in text
+    assert "Résumé." not in text
     monkeypatch.delenv("ORCHESTRE_FENETRE")
     ollama["done"] = "length"
     text = tool("confier_etape", {"consigne": "x", "ecrire_dans": "a.txt", "max_tokens": 5}, [tmp_path])[1]
@@ -286,7 +289,10 @@ def test_draft_is_checked_against_the_sources_without_any_model(ollama, tmp_path
     bad = good + "- `sauver` (ligne 9) : écrit.\n- `MAX` (ligne 1) : limite.\n"
     (tmp_path / "doc.md").write_text(bad, encoding="utf-8")
     text = call_on("brouillons", "controler", {"brouillon": "doc.md", "sources": ["code.py"]}, [tmp_path])[1]
-    assert "ABSENTS des sources (1) : sauver" in text and "PAS à la ligne citée (1) : MAX (ligne 1)" in text
+    assert (
+        "ABSENTS des sources (1) : sauver" in text
+        and "PAS à la ligne citée (1) : MAX (ligne 1, défini ligne 8)" in text
+    )
     assert not ollama["sent"]  # aucun modèle appelé
     assert call_on("brouillons", "controler", {"brouillon": "doc.md"}, [tmp_path])[0]
 
@@ -436,3 +442,269 @@ def test_controle_accepte_les_noms_de_methode_avec_leur_classe():
     assert not m._cited_in("Runs.invente", src)
     assert m._cited_in("Runs.start", "    def start(self):", near=True)
     assert not m._cited_in("Runs.start", "class Runs:", near=True)
+
+
+def test_les_fichiers_confies_arrivent_numerotes_et_les_lignes_fausses_sont_recalees(tmp_path, monkeypatch):
+    """Mesure du 2026-11-11 : qwen2.5-coder:14b citait toutes ses lignes fausses, il recevait les fichiers sans
+    numéros. Ils arrivent numérotés ; un numéro encore faux est recalé sans modèle sur la définition du nom."""
+    from gateway import mcp_orchestre as m
+
+    (tmp_path / "code.py").write_text("MAX = 3\n\n\n\ndef charger(chemin):\n    return chemin\n", encoding="utf-8")
+    seen = {}
+
+    def fake(model, messages, limit):
+        seen["system"], seen["user"] = messages[0]["content"], messages[1]["content"]
+        return (
+            "- `charger(chemin)` (ligne 40) : lit.\n- `MAX` (ligne 1) : limite.\n- `absent` (ligne 9) : rien.",
+            10,
+            5,
+            "",
+        )
+
+    monkeypatch.setattr(m, "models", lambda: [{"name": "petit", "size": 1, "params": "1B", "loaded": True}])
+    monkeypatch.setattr(m, "generate", fake)
+    out = m.delegate({"consigne": "Liste.", "modele": "petit", "fichiers": ["code.py"]}, [tmp_path])
+    assert "5\tdef charger(chemin):" in seen["user"] and "recopie le numéro" in seen["system"]
+    assert "`charger(chemin)` (ligne 5)" in out and "`MAX` (ligne 1)" in out and "`absent` (ligne 9)" in out
+    assert "1 numéro(s) de ligne recalé(s) sans modèle" in out
+
+    m.delegate({"consigne": "Recopie.", "modele": "petit", "fichiers": ["code.py"], "sans_numeros": True}, [tmp_path])
+    assert "5\tdef" not in seen["user"] and "def charger(chemin):" in seen["user"]
+    assert "recopie le numéro" not in seen["system"]
+
+
+def test_controler_recale_les_lignes_sur_demande(tmp_path):
+    from gateway import mcp_orchestre as m
+
+    (tmp_path / "code.py").write_text(
+        "x = 1\n\n\nclass Runs:\n    def start(self):\n        return 1\n", encoding="utf-8"
+    )
+    doc = tmp_path / "doc.md"
+    doc.write_text("- `Runs.start` (ligne 70) : lance.\n- `Runs` (lignes 90-95) : la classe.\n", encoding="utf-8")
+    args = {"brouillon": "doc.md", "sources": ["code.py"]}
+    assert "lignes FAUSSES" in m.check_draft(args, [tmp_path]) or "ligne" in m.check_draft(args, [tmp_path])
+    assert "(ligne 70)" in doc.read_text(encoding="utf-8")  # sans « recaler », le fichier n'est pas touché
+    text = m.check_draft({**args, "recaler": True}, [tmp_path])
+    assert "1 numéro(s) de ligne recalé(s)" in text
+    assert "`Runs.start` (ligne 5)" in doc.read_text(encoding="utf-8")
+    assert "(lignes 90-95)" in doc.read_text(encoding="utf-8")  # une plage n'est pas devinée
+
+
+def test_une_demande_trop_longue_est_refusee_avant_l_appel_et_une_plage_de_lignes_passe(tmp_path, monkeypatch):
+    """Essai du 2026-11-11 : un fichier de 2 427 lignes dépassait la fenêtre réelle de qwen2.5-coder:14b (32 768),
+    Ollama coupait en silence et le modèle ne décrivait que la fin du fichier."""
+    from gateway import mcp_orchestre as m
+
+    calls = []
+
+    def fake_call(url, body=None, timeout=0, key=""):
+        calls.append(url.rsplit("/", 1)[-1])
+        if url.endswith("/api/show"):
+            return {"model_info": {"qwen2.context_length": 2000, "general.parameter_count": 14}}
+        return {"message": {"content": "- `f7` (ligne 7) : rien."}, "prompt_eval_count": 300, "eval_count": 9}
+
+    monkeypatch.setattr(m, "call", fake_call)
+    monkeypatch.setattr(m, "models", lambda: [{"name": "petit", "size": 1, "params": "1B", "loaded": True}])
+    monkeypatch.setattr(m, "_CONTEXT", {})
+    monkeypatch.setenv("ORCHESTRE_FENETRE", "64000")
+    monkeypatch.delenv("LEZARD_IA_URL", raising=False)
+    assert m.window_of("petit") == 2000  # le réglage ne dépasse pas ce que le modèle sait lire
+    (tmp_path / "gros.py").write_text("".join(f"def f{i}(): return {i}\n" for i in range(1, 801)), encoding="utf-8")
+    out = m.delegate({"consigne": "Liste.", "modele": "petit", "fichiers": ["gros.py"]}, [tmp_path])
+    assert out.startswith("ÉTAPE BLOQUÉE : demande trop longue pour petit") and "gros.py:1-800" not in out
+    assert "plage" in out and "chat" not in calls  # refusée avant d'appeler le modèle
+
+    out = m.delegate(
+        {"consigne": "Liste.", "modele": "petit", "fichiers": ["gros.py:5-9"], "max_tokens": 50}, [tmp_path]
+    )
+    assert "`f7` (ligne 7)" in out and "chat" in calls
+    assert m.line_range("C:/a b/x.py:12-40") == ("C:/a b/x.py", 12, 40) and m.line_range("x.py") == ("x.py", 0, 0)
+    assert m.numbered("a\nb", 5) == "5\ta\n6\tb"
+
+
+def test_relecture_avant_la_1_0_21(tmp_path, monkeypatch):
+    """Ce que la relecture a trouvé : fenêtre qui grandit avec la demande, délai rendu à l'IA qui orchestre, retouche
+    tronquée refusée, fins de ligne gardées, oubli limité à nos résumés, gros fichier résumé par morceaux."""
+    from gateway import mcp_orchestre as m
+
+    monkeypatch.delenv("ORCHESTRE_FENETRE", raising=False)
+    monkeypatch.delenv("LEZARD_IA_URL", raising=False)
+    monkeypatch.setattr(m, "_CONTEXT", {"petit": 40000, "inconnu": 0})
+    assert m.window_of("petit", 900) == 16384 and m.window_of("petit", 20000) == 32768
+    assert m.window_of("petit", 10**9) == 40000 and m.window_of("inconnu", 10**9) == 65536
+    monkeypatch.setenv("ORCHESTRE_FENETRE", "8000")
+    assert m.window_of("petit", 20000) == 8000  # réglé par l'utilisateur : jamais dépassé
+    monkeypatch.delenv("ORCHESTRE_FENETRE")
+
+    # délai dépassé : l'étape revient bloquée, avec quoi faire
+    monkeypatch.setattr(m, "models", lambda: [{"name": "petit", "size": 1, "params": "1B", "loaded": True}])
+
+    def slow(model, messages, limit):
+        raise m.Slow("pas de réponse en 25 min : trop lent pour cette étape.")
+
+    monkeypatch.setattr(m, "generate", slow)
+    out = m.delegate({"consigne": "x", "modele": "petit"}, [tmp_path])
+    assert out.startswith("ÉTAPE BLOQUÉE : pas de réponse en 25 min") and m.STEPS[-1]["state"] == "bloquée"
+
+    # retouche : un document rendu tronqué ne remplace pas le brouillon ; les fins de ligne LF sont gardées
+    doc = tmp_path / "doc.md"
+    doc.write_bytes(("\n".join(f"ligne {i}" for i in range(20)) + "\n").encode())
+    monkeypatch.setattr(m, "generate", lambda model, messages, limit: ("ligne 0\nrésumé", 5, 5, ""))
+    out = m.revise({"fichier": "doc.md", "corrections": "x"}, [tmp_path])
+    assert out.startswith("ÉTAPE BLOQUÉE : petit a rendu 2 lignes au lieu de 20") and b"ligne 19" in doc.read_bytes()
+    full = "\n".join(f"LIGNE {i}" for i in range(20))
+    monkeypatch.setattr(m, "generate", lambda model, messages, limit: (full, 5, 5, ""))
+    assert "retouché" in m.revise({"fichier": "doc.md", "corrections": "x"}, [tmp_path])
+    assert b"\r\n" not in doc.read_bytes() and b"LIGNE 19\n" in doc.read_bytes()
+
+    # oubli : seulement nos résumés
+    memory = tmp_path / "memoire"
+    memory.mkdir()
+    (memory / ("a" * 32 + ".md")).write_text("résumé", encoding="utf-8")
+    (memory / "notes.md").write_text("à moi", encoding="utf-8")
+    monkeypatch.setenv("ORCHESTRE_MEMOIRE", str(memory))
+    assert m.forget({}, [tmp_path]) == "1 résumé(s) oublié(s)." and (memory / "notes.md").exists()
+
+    # gros fichier : résumé par morceaux, chaque morceau numéroté à partir de sa vraie ligne
+    monkeypatch.setattr(m, "_CONTEXT", {"petit": 4000})
+    big = tmp_path / "gros.py"
+    big.write_text("".join(f"def f{i}(): return {i}\n" for i in range(1, 601)), encoding="utf-8")
+    seen = []
+
+    def fake(model, messages, limit):
+        seen.append(messages[1]["content"])
+        return f"morceau {len(seen)}", 10, 5, ""
+
+    monkeypatch.setattr(m, "generate", fake)
+    text, cached, detail = m.summarize(big, "", "petit")
+    assert len(seen) >= 2 and f"en {len(seen)} morceaux" in detail and not cached
+    assert text.startswith("### Lignes 1 à ") and "\tdef f600()" in seen[-1] and "extrait du fichier" in seen[-1]
+    second = int(seen[1].split("lignes ")[1].split(" ")[0])
+    assert f"\n{second}\tdef f{second}()" in seen[1]
+    assert m.summarize(big, "", "petit")[1] is True  # gardé en mémoire d'un seul tenant
+
+    # recalage : d'autres langages que Python
+    js = "const a = 1;\n\nexport async function charger(x) {}\nfunc (s *Srv) Lancer() {}\npub fn lire() {}\n"
+    fixed, moved = m.realign("- `charger` (ligne 9)\n- `Lancer` (ligne 9)\n- `lire` (ligne 1)\n", [js])
+    assert (
+        moved == 3 and "`charger` (ligne 3)" in fixed and "`Lancer` (ligne 4)" in fixed and "`lire` (ligne 5)" in fixed
+    )
+
+
+def test_les_methodes_installees_suivent_la_version_sans_rien_installer(tmp_path, monkeypatch):
+    from gateway import mcp_orchestre as m
+
+    monkeypatch.setattr(m, "skill_folder", lambda name="orchestre": tmp_path / name)
+    assert m.refresh_skills() == 0 and not (tmp_path / "lezard").exists()  # rien d'installé : rien d'écrit
+    (tmp_path / "lezard").mkdir()
+    (tmp_path / "lezard" / "SKILL.md").write_text("ancienne version", encoding="utf-8")
+    # l'interrupteur suit la méthode « orchestre » : elle revient si la fiche « Chef d'orchestre » l'a retirée
+    assert m.refresh_skills() == 2 and (tmp_path / "orchestre" / "SKILL.md").read_text(encoding="utf-8") == m.SKILL
+    assert (tmp_path / "lezard" / "SKILL.md").read_text(encoding="utf-8") == m.SKILL_LEZARD
+    assert m.refresh_skills() == 0
+
+
+def test_etapes_par_lezard_ia_selon_le_routage_et_bilan_avec_temps_et_cout(tmp_path, monkeypatch):
+    """/lezard eco, rapide : les étapes passent par Lezard IA (modèles locaux et cloud), avec son mode de routage ;
+    le bilan dit le temps de chaque étape et ce que le cloud a coûté. /lezard local : Ollama, direct."""
+    from gateway import mcp_orchestre as m
+
+    monkeypatch.setenv("LEZARD_IA_MODE", str(tmp_path / "mode.json"))
+    monkeypatch.setenv("LEZARD_IA_LIEN", str(tmp_path / "orchestre.json"))
+    for name in ("LEZARD_IA_URL", "LEZARD_IA_KEY", "ORCHESTRE_MODE", "ORCHESTRE_MODELE"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(m, "ROUTE", {"mode": None})
+    monkeypatch.setattr(m, "ACTIVE", {"on": None})
+    monkeypatch.setattr(m, "STEPS", [])
+    assert m.route() == "local" and m.lezard() is None
+
+    # pas reliée : le routage par Lezard IA est refusé, avec quoi faire
+    try:
+        m.switch({"action": "activer", "routage": "eco"}, [])
+        raise AssertionError("aurait dû refuser")
+    except ValueError as e:
+        assert "n'est pas reliée" in str(e) and m.route() == "local"
+
+    (tmp_path / "orchestre.json").write_text(json.dumps({"url": "http://127.0.0.1:8000/v1", "key": "sk-test"}), "utf-8")
+    sent = []
+
+    def fake_call(url, body=None, timeout=0, key=""):
+        sent.append((url, body, key))
+        if url.endswith("/v1/models"):
+            return {
+                "data": [
+                    {"id": "ollama/petit", "metadata": {"hosting": "local", "context_window": 32768, "chat": True}},
+                    {"id": "groq/vite", "metadata": {"hosting": "cloud", "free": True, "context_window": 131072}},
+                    {"id": "openai/cher", "metadata": {"hosting": "cloud", "input_per_mtok_usd": 2.0}},
+                    {"id": "ollama/bge-m3", "metadata": {"hosting": "local"}},
+                ]
+            }
+        return {
+            "choices": [{"message": {"content": "Fait."}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 50, "completion_tokens": 4},
+            "x_gateway": {"model": "vite", "hosting": "cloud", "cost_usd": 0.0012},
+        }
+
+    monkeypatch.setattr(m, "call", fake_call)
+    text = m.switch({"action": "activer", "routage": "rapide", "par_defaut": True}, [])
+    assert "ACTIF" in text and "mode rapide" in text and m.route() == "rapide"
+    assert json.loads((tmp_path / "mode.json").read_text("utf-8")) == {"routage": "rapide", "actif": True}
+    assert m.lezard() == ("http://127.0.0.1:8000", "sk-test")
+
+    listed = m.listing()
+    assert "ollama/petit : local, gratuit, lit environ 1900 lignes" in listed and "groq/vite : cloud, gratuit" in listed
+    assert "openai/cher : cloud, payant" in listed and "bge" not in listed and listed.endswith("Par défaut : auto")
+
+    out = m.delegate({"consigne": "Résume."}, [tmp_path])
+    url, body, key = sent[-1]
+    assert url == "http://127.0.0.1:8000/v1/chat/completions" and key == "sk-test"
+    assert body["model"] == "auto" and body["mode"] == "speed"
+    assert out.startswith("Fait.") and "modèle : vite (cloud, 0.0012 $)" in out
+    m.delegate({"consigne": "Autre.", "modele": "ollama/petit"}, [tmp_path])
+    assert "mode" not in sent[-1][1]  # un modèle nommé : pas de mode, c'est lui qui répond
+    report = m.report()
+    assert "0.0024 $ de modèles cloud" in report and "· 0.0012 $ (cloud)" in report
+
+    # /lezard local : retour à Ollama, sans Lezard IA ; le défaut des prochaines sessions n'a pas bougé
+    m.switch({"action": "activer", "routage": "local"}, [])
+    assert m.route() == "local" and m.lezard() is None
+    monkeypatch.setattr(m, "ROUTE", {"mode": None})
+    assert m.route() == "rapide"  # une nouvelle session reprend le défaut gardé
+
+
+def test_la_marketplace_relie_l_interrupteur_a_lezard_ia_avec_une_cle_dediee(tmp_path, monkeypatch):
+    from gateway import app_connect
+    from gateway import mcp_orchestre as m
+
+    monkeypatch.setattr(app_connect.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(
+        app_connect, "new_key", lambda store, owner, plan, name: "sk-dediee" if "Interrupteur" in name else ""
+    )
+    note = app_connect.connect("interrupteur", None, "moi", "local", 8000)
+    assert "/lezard eco" in note
+    monkeypatch.setenv("LEZARD_IA_LIEN", str(tmp_path / ".lezard-ia" / "orchestre.json"))
+    monkeypatch.delenv("LEZARD_IA_URL", raising=False)
+    assert m.link() == ("http://127.0.0.1:8000", "sk-dediee")
+    assert not list((tmp_path / ".lezard-ia").glob("*.avant-lezard"))  # aucune copie de la clé
+    monkeypatch.setattr(m, "skill_folder", lambda name="orchestre": tmp_path / "skills" / name)
+    assert m.remove_skill("lezard") == 0 and m.link() is None  # désinstallé : la clé écrite est retirée
+
+
+def test_un_nom_defini_une_fois_doit_etre_cite_a_sa_ligne_exacte(tmp_path):
+    """Mesure du 2026-11-11 : `CHAT` cité ligne 2199 pour 2198 passait le contrôle, et un nom simplement utilisé près
+    de la ligne citée aussi. L'IA qui orchestre devait tout revérifier à la main."""
+    from gateway import mcp_orchestre as m
+
+    code = "MAX = 3\n\ndef charger(x):\n    return x\n\nprint(charger(MAX))\nprint(MAX)\n"
+    (tmp_path / "code.py").write_text(code, encoding="utf-8")
+    doc = tmp_path / "doc.md"
+    doc.write_text(
+        "- `charger` (ligne 4) : lit.\n- `MAX` (ligne 5) : limite.\n- `print` (ligne 7) : affiche.\n", "utf-8"
+    )
+    args = {"brouillon": "doc.md", "sources": ["code.py"]}
+    text = m.check_draft(args, [tmp_path])
+    assert "PAS à la ligne citée (2)" in text and "charger (ligne 4, défini ligne 3)" in text
+    assert "MAX (ligne 5, défini ligne 1)" in text and "print" not in text  # seulement utilisé : à deux lignes près
+    text = m.check_draft({**args, "recaler": True}, [tmp_path])
+    assert "2 numéro(s) de ligne recalé(s)" in text and "Tout existe" in text
+    assert "`charger` (ligne 3)" in doc.read_text("utf-8") and "`MAX` (ligne 1)" in doc.read_text("utf-8")

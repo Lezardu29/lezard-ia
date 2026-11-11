@@ -23,8 +23,11 @@ Outils :
 Lancé comme un script (aucune dépendance, pas même le paquet gateway) ; un message JSON par ligne. Fichiers : lus et
 écrits seulement dans les dossiers donnés en arguments (« . » : le dossier du projet ouvert) ; sans argument, aucun.
 Réglages (variables d'environnement) : OLLAMA_HOST ; ORCHESTRE_MODELE (modèle par défaut) ; ORCHESTRE_FENETRE (tokens
-de contexte des modèles d'Ollama, 16 384 par défaut) ; LEZARD_IA_URL et LEZARD_IA_KEY (les étapes passent alors par
-Lezard IA : tous ses modèles, « auto » compris, et son suivi des coûts).
+de contexte des modèles d'Ollama ; sans réglage : 16 384, doublés tant que la demande n'y tient pas, jusqu'à 65 536
+ou la fenêtre réelle du modèle) ; ORCHESTRE_DELAI (secondes par étape, 1 500) ; ORCHESTRE_MODE (local, eco, rapide,
+equilibre : qui choisit le modèle des étapes, voir /lezard) ; ORCHESTRE_MEMOIRE (dossier des
+résumés) ; LEZARD_IA_URL et LEZARD_IA_KEY (les étapes passent alors par Lezard IA : tous ses modèles, « auto »
+compris, et son suivi des coûts).
 """
 
 import hashlib
@@ -33,6 +36,7 @@ import os
 import re
 import shutil
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -41,6 +45,8 @@ PROTOCOL = "2024-11-05"
 EMBEDDINGS = ("embed", "bge", "minilm", "e5-", "gte-")  # modèles de vecteurs : ils n'écrivent pas de texte
 MAX_FILE_CHARS = 200_000  # par fichier lu ; au-delà, le début seulement (signalé au modèle)
 DEFAULT_WINDOW = 16_384
+SOLID_BYTES = 2_000_000_000  # en dessous (modèles de 1 milliard de paramètres), trop d'inventions pour une étape
+CODE_NAMES = ("coder", "code", "devstral", "codestral")
 BLOCKED = re.compile(r"^\W{0,3}BLOQU[EÉ]E?\b\W*", re.IGNORECASE)
 WORKER_RULES = (
     "Tu exécutes UNE étape d'un travail plus grand, confiée par une IA qui orchestre. Fais exactement ce que la "
@@ -49,6 +55,11 @@ WORKER_RULES = (
     "ambiguë, tâche au-dessus de tes moyens), n'invente rien : réponds seulement « BLOQUE: » suivi de la raison "
     "précise et de ce qu'il te faudrait. Ne cite jamais un nom (fonction, fichier, option) que tu ne vois pas "
     "écrit tel quel dans ce qui t'est donné."
+)
+NUMBERED_RULE = (
+    "Dans chaque fichier donné, une ligne commence par son numéro, puis une tabulation : ce numéro ne fait pas "
+    "partie du fichier. Pour citer une ligne, recopie le numéro écrit devant elle, ne le calcule jamais. "
+    "N'écris pas ces numéros dans du code que tu produis."
 )
 SKILL = """---
 name: orchestre
@@ -75,7 +86,11 @@ tâche, dis-le en une phrase à l'utilisateur et fais-la directement, même s'il
 2. **Répartis.** Garde pour toi : architecture, décisions, raisonnement difficile, code délicat, sécurité,
    vérification finale. Confie : lire et résumer de longs fichiers, extraire, trier, reformuler, traduire,
    documenter, écrire du code répétitif ou des tests simples d'après un modèle clair.
-3. **Choisis un modèle par étape** : appelle `modeles` une seule fois, puis prends le plus léger capable de l'étape
+3. **Choisis un modèle par étape** : appelle `modeles` une seule fois. S'il propose « auto », laisse « auto » :
+   Lezard IA choisit selon le mode voulu par l'utilisateur (éco, rapide) ; ne nomme un modèle « cloud, payant »
+   que si une étape reste bloquée. Sinon (modèles locaux seulement) prends le plus léger capable de l'étape
+   et dont la fenêtre contient le fichier (`modeles` dit combien de lignes chacun lit ; au-delà, confie le fichier
+   en plusieurs plages « fichier.py:1-800 », une étape par plage)
    (celui déjà chargé si possible : aucun rechargement). Un modèle « code » pour du code.
 4. **Écris une consigne autonome par étape** : le modèle ne voit rien de la conversation. Donne l'objectif, le
    format de sortie exact, les contraintes, un exemple si utile. Pour tout ce qu'il tire d'un fichier, exige le
@@ -104,8 +119,9 @@ Mesuré : sans cette règle, ils restent inutilisés et tu refais leur travail a
 
 - `resumer_fichier`, `resumer_dossier` : à l'étape 1, à la place de lire un gros fichier ou de confier son résumé.
   Un fichier déjà résumé ne coûte plus rien.
-- `controler` : aux étapes 6 et 8, sur chaque document écrit par un modèle moins fort, AVANT toute recherche ou
-  lecture de ta part. Il ne consomme aucun token et rend la liste exacte des noms absents et des lignes fausses.
+- `controler` avec « recaler » à true : aux étapes 6 et 8, sur chaque document écrit par un modèle moins fort,
+  AVANT toute recherche ou lecture de ta part. Il ne consomme aucun token, corrige lui-même les numéros de ligne
+  faux et rend la liste exacte de ce qui reste : noms absents, lignes qu'il n'a pas su retrouver.
 - `retoucher` : pour corriger ce que `controler` a signalé, au lieu de réécrire le passage toi-même. Une seule
   retouche par document ; s'il reste des erreurs après elle, corrige-les à la main.
 
@@ -123,13 +139,76 @@ def host() -> str:
     return raw.replace("://0.0.0.0", "://127.0.0.1")  # adresse d'écoute, pas d'appel
 
 
-def lezard() -> tuple[str, str] | None:
-    """(adresse, clé) de Lezard IA si les étapes doivent passer par elle."""
+ROUTES = ("local", "eco", "rapide", "equilibre")  # qui choisit le modèle d'une étape, et comment
+GATEWAY_MODE = {"eco": "economy", "rapide": "speed", "equilibre": "balanced"}
+ROUTE_HELP = {
+    "local": "modèles de l'Ollama de ce PC, gratuits",
+    "eco": "par Lezard IA, mode éco : le moins cher capable (local d'abord, cloud seulement s'il le faut)",
+    "rapide": "par Lezard IA, mode rapide : le plus rapide capable (souvent un modèle cloud, qui peut être payant)",
+    "equilibre": "par Lezard IA, mode équilibré : compromis entre le prix et la vitesse",
+}
+ROUTE: dict[str, str | None] = {"mode": None}  # choix de CETTE session ; None : le défaut vaut
+
+
+def mode_file() -> Path:
+    return Path(os.environ.get("LEZARD_IA_MODE") or Path.home() / ".lezard-ia" / "mode.json")
+
+
+def saved_mode() -> dict:
+    """Ce que valent les nouvelles sessions : {"actif": bool, "routage": "local" | "eco" | …}."""
+    try:
+        data = json.loads(mode_file().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def link_file() -> Path:
+    return Path(os.environ.get("LEZARD_IA_LIEN") or Path.home() / ".lezard-ia" / "orchestre.json")
+
+
+def link() -> tuple[str, str] | None:
+    """(adresse, clé) de la Lezard IA de ce PC : variables LEZARD_IA_URL et LEZARD_IA_KEY, sinon le fichier écrit
+    par sa marketplace à l'installation de l'interrupteur (clé dédiée, sans droits d'administration)."""
     url, key = (os.environ.get("LEZARD_IA_URL") or "").strip(), (os.environ.get("LEZARD_IA_KEY") or "").strip()
+    if not (url and key):
+        try:
+            data = json.loads(link_file().read_text(encoding="utf-8"))
+            url, key = str(data.get("url") or "").strip(), str(data.get("key") or "").strip()
+        except (OSError, ValueError, AttributeError):
+            return None
     return (url.rstrip("/").removesuffix("/v1"), key) if url and key else None
 
 
-def call(url: str, body: dict | None = None, timeout: float = 14400, key: str = "") -> dict:
+def route() -> str:
+    """Routage des étapes : celui de la session (/lezard eco…), sinon ORCHESTRE_MODE, sinon le défaut gardé,
+    sinon « local »."""
+    wanted = ROUTE["mode"] or (os.environ.get("ORCHESTRE_MODE") or "").strip().lower() or saved_mode().get("routage")
+    return wanted if wanted in ROUTES else "local"
+
+
+def lezard() -> tuple[str, str] | None:
+    """(adresse, clé) de Lezard IA si les étapes passent par elle : routage éco, rapide ou équilibré, ou bien les
+    deux variables d'environnement données à la main (comportement d'origine). En « local » : Ollama, direct."""
+    by_hand = (os.environ.get("LEZARD_IA_URL") or "").strip() and (os.environ.get("LEZARD_IA_KEY") or "").strip()
+    return link() if by_hand or route() != "local" else None
+
+
+class Slow(RuntimeError):
+    """Le modèle n'a pas fini dans le délai : la connexion est fermée, ce qui arrête son calcul."""
+
+
+def step_timeout() -> float:
+    """Délai d'une étape (ORCHESTRE_DELAI, secondes) : 25 minutes, moins que les 30 après lesquelles Claude Code
+    abandonne un outil sans rien dire au serveur, qui continuerait à occuper la carte graphique."""
+    try:
+        return max(30.0, float(os.environ.get("ORCHESTRE_DELAI") or 1500))
+    except ValueError:
+        return 1500.0
+
+
+def call(url: str, body: dict | None = None, timeout: float = 0, key: str = "") -> dict:
+    timeout = timeout or step_timeout()
     data = json.dumps(body).encode() if body is not None else None
     headers = {"Content-Type": "application/json", **({"Authorization": f"Bearer {key}"} if key else {})}
     req = urllib.request.Request(url, data=data, headers=headers)  # noqa: S310 (adresse réglée par l'utilisateur)
@@ -140,6 +219,11 @@ def call(url: str, body: dict | None = None, timeout: float = 14400, key: str = 
         detail = e.read().decode("utf-8", "replace")[:300]
         raise RuntimeError(f"refus du serveur de modèles ({e.code}) : {detail}") from None
     except (urllib.error.URLError, OSError) as e:
+        if isinstance(e, TimeoutError) or isinstance(getattr(e, "reason", None), TimeoutError):
+            raise Slow(
+                f"pas de réponse en {int(timeout / 60)} min : trop lent pour cette étape. Prends un modèle plus "
+                "léger ou déjà chargé, ou une plage de lignes plus courte."
+            ) from None
         raise RuntimeError(f"le serveur de modèles ne répond pas à {url} ({e}). Est-il lancé ?") from None
 
 
@@ -149,8 +233,19 @@ def models() -> list[dict]:
     via = lezard()
     if via:
         data = call(f"{via[0]}/v1/models", timeout=20, key=via[1]).get("data") or []
-        names = [m.get("id") or "" for m in data]
-        return [{"name": n, "size": 0, "params": "", "loaded": False} for n in names if _writes_text(n)]
+        found = []
+        for m in data:
+            name, meta = m.get("id") or "", m.get("metadata") or {}
+            if not _writes_text(name) or meta.get("chat") is False:
+                continue
+            local = meta.get("hosting") == "local"
+            price = (meta.get("input_per_mtok_usd") or 0) + (meta.get("output_per_mtok_usd") or 0)
+            kind = "local, gratuit" if local else "cloud, gratuit" if meta.get("free") or not price else "cloud, payant"
+            found.append(
+                {"name": name, "size": 0, "params": "", "loaded": False, "kind": kind}
+                | {"window": int(meta.get("context_window") or 0)}
+            )
+        return found
     tags = call(f"{host()}/api/tags", timeout=10).get("models") or []
     try:
         loaded = {m.get("name") for m in call(f"{host()}/api/ps", timeout=10).get("models") or []}
@@ -182,7 +277,9 @@ def default_model(found: list[dict]) -> str | None:
     if lezard():
         return "auto"
     ready = [m for m in found if m["loaded"]]
-    return (ready or found)[0]["name"] if found else None
+    # rien de chargé : un modèle minuscule invente trop, le plus léger d'au moins 2 Go s'il y en a un
+    solid = [m for m in found if m["size"] >= SOLID_BYTES]
+    return (ready or solid or found)[0]["name"] if found else None
 
 
 def inside(raw: str, roots: list[Path], why: str) -> Path:
@@ -206,10 +303,62 @@ def read_file(raw: str, roots: list[Path]) -> tuple[str, str]:
     return path.name, text
 
 
+def write_like(path: Path, text: str) -> None:
+    """Écrit `text` en gardant les fins de ligne du fichier déjà là : un fichier en LF ne devient pas CRLF sous
+    Windows (tout le fichier apparaîtrait modifié dans Git)."""
+    newline = None
+    if path.is_file():
+        with path.open("rb") as f:
+            newline = "\r\n" if b"\r\n" in f.read(65536) else "\n"
+    with path.open("w", encoding="utf-8", newline=newline) as f:
+        f.write(text)
+
+
 def unfenced(text: str) -> str:
     """Le contenu d'une réponse faite d'un seul bloc de code (```…```), sans ses clôtures ; sinon la réponse."""
     m = re.fullmatch(r"\s*```[^\n]*\n(.*?)\n?```\s*", text, re.DOTALL)
     return m.group(1) if m else text
+
+
+CHARS_PER_TOKEN = 3.4  # mesuré sur du code Python commenté en français : 3,6 ; un peu moins, par prudence
+_CONTEXT: dict[str, int] = {}
+
+
+def context_of(model: str) -> int:
+    """Fenêtre maximale du modèle d'après Ollama (0 : inconnue). qwen2.5-coder : 32 768, quelle que soit la
+    fenêtre demandée."""
+    if model not in _CONTEXT:
+        try:
+            info = call(f"{host()}/api/show", {"model": model}, timeout=20).get("model_info") or {}
+        except RuntimeError:
+            return 0
+        sizes = [v for k, v in info.items() if k.endswith(".context_length") and isinstance(v, int)]
+        _CONTEXT[model] = max(sizes, default=0)
+    return _CONTEXT[model]
+
+
+MAX_AUTO_WINDOW = 65_536  # sans réglage, la fenêtre ne grandit pas au-delà : la mémoire du PC a ses limites
+
+
+def window_of(model: str, need: int = 0) -> int:
+    """Fenêtre demandée à Ollama pour une demande de `need` tokens, sans dépasser ce que le modèle sait lire.
+    ORCHESTRE_FENETRE réglé : cette valeur, toujours. Sinon 16 384 (rapide, tient sur la carte graphique), doublée
+    tant que la demande n'y tient pas, jusqu'à 65 536."""
+    real = context_of(model)
+    try:
+        fixed = int(os.environ.get("ORCHESTRE_FENETRE") or 0)
+    except ValueError:
+        fixed = 0
+    if fixed > 0:
+        return min(fixed, real) if real else fixed
+    top = min(real, MAX_AUTO_WINDOW) if real else MAX_AUTO_WINDOW
+    window = DEFAULT_WINDOW
+    while window < need and window < top:
+        window *= 2
+    return min(window, top)
+
+
+LAST: dict = {"usd": 0.0, "where": "local"}  # coût et hébergement du dernier appel, pour le bilan
 
 
 def generate(model: str, messages: list[dict], max_tokens: int | None) -> tuple[str, int, int, str]:
@@ -217,22 +366,46 @@ def generate(model: str, messages: list[dict], max_tokens: int | None) -> tuple[
     via = lezard()
     if via:
         body = {"model": model, "messages": messages, **({"max_tokens": max_tokens} if max_tokens else {})}
+        if model == "auto" and route() in GATEWAY_MODE:
+            body["mode"] = GATEWAY_MODE[route()]
         r = call(f"{via[0]}/v1/chat/completions", body, key=via[1])
         choice, usage = (r.get("choices") or [{}])[0], r.get("usage") or {}
         cut = "réponse coupée (max_tokens atteint)." if choice.get("finish_reason") == "length" else ""
-        used = (r.get("x_gateway") or {}).get("model") or model
+        meta = r.get("x_gateway") or {}
+        used, usd = meta.get("model") or model, float(meta.get("cost_usd") or 0)
+        where = "local" if meta.get("hosting") == "local" else "cloud"
+        LAST.update(usd=usd, where=where, model=used)
+        note = f"modèle : {used} ({where}" + (f", {usd:.4f} $)" if usd else ", gratuit)")
         answer = (choice.get("message") or {}).get("content") or ""
-        return answer, usage.get("prompt_tokens") or 0, usage.get("completion_tokens") or 0, cut or f"modèle : {used}"
-    try:
-        window = int(os.environ.get("ORCHESTRE_FENETRE") or DEFAULT_WINDOW)
-    except ValueError:
-        window = DEFAULT_WINDOW
+        return answer, usage.get("prompt_tokens") or 0, usage.get("completion_tokens") or 0, cut or note
+    LAST.update(usd=0.0, where="local", model=model)
+    guess = int(sum(len(m.get("content") or "") for m in messages) / CHARS_PER_TOKEN)
+    window = window_of(model, guess + (max_tokens or 512))
+    too_long = (
+        f"demande trop longue pour {model} : environ {guess} tokens, sa fenêtre en lit {window}. Donne une plage "
+        "de lignes (« fichier.py:1-800 », plusieurs étapes), ou prends un modèle à plus grande fenêtre (outil "
+        "modeles)."
+    )
+    if guess + (max_tokens or 512) > window:  # Ollama couperait en silence : le modèle ne verrait que la fin
+        return "", 0, 0, too_long
     options = {"num_ctx": window, **({"num_predict": max_tokens} if max_tokens else {})}
-    r = call(f"{host()}/api/chat", {"model": model, "messages": messages, "stream": False, "options": options})
+    # « think » à false : un modèle qui réfléchit (deepseek-r1, Qwen 3.8) passerait des minutes à raisonner sur une
+    # étape simple ; un Ollama trop ancien pour ce réglage le refuse, la demande repart alors sans lui
+    body = {"model": model, "messages": messages, "stream": False, "options": options}
+    try:
+        r = call(f"{host()}/api/chat", {**body, "think": False})
+    except Slow:
+        raise
+    except RuntimeError as e:
+        if "think" not in str(e).lower():
+            raise
+        r = call(f"{host()}/api/chat", body)
     seen, written = r.get("prompt_eval_count") or 0, r.get("eval_count") or 0
     alert = ""
-    if seen >= window - 16:  # Ollama coupe en silence ce qui dépasse sa fenêtre
-        alert = f"demande plus longue que la fenêtre ({window} tokens) : le début n'a pas été lu."
+    if seen >= window - 16 or (
+        guess > window * 0.5 and seen < guess * 0.5
+    ):  # coupé quand même : bien moins de tokens lus que prévu
+        alert = too_long
     elif r.get("done_reason") == "length":
         alert = "réponse coupée (longueur maximale atteinte)."
     return (r.get("message") or {}).get("content") or "", seen, written, alert
@@ -241,8 +414,11 @@ def generate(model: str, messages: list[dict], max_tokens: int | None) -> tuple[
 STEPS: list[dict] = []  # étapes confiées depuis le lancement du serveur (une session de l'IA qui orchestre)
 
 
-def _record(model: str, prompt: str, state: str, target: Path | None = None) -> None:
-    STEPS.append({"model": model, "task": " ".join(prompt.split())[:80], "state": state, "file": target})
+def _record(model: str, prompt: str, state: str, target: Path | None = None, seconds: float = 0) -> None:
+    STEPS.append(
+        {"model": model, "task": " ".join(prompt.split())[:80], "state": state, "file": target}
+        | {"seconds": seconds, "usd": LAST["usd"] if state == "faite" else 0.0, "where": LAST["where"]}
+    )
 
 
 def report() -> str:
@@ -251,7 +427,9 @@ def report() -> str:
         return "Aucune étape confiée dans cette session : rien à vérifier de ce côté."
     lines = []
     for i, step in enumerate(STEPS, 1):
-        line = f"{i}. [{step['state']}] {step['model']} — {step['task']}"
+        took = f" · {step['seconds']:.0f} s" if (step.get("seconds") or 0) >= 1 else ""
+        paid = f" · {step['usd']:.4f} $ (cloud)" if step.get("usd") else ""
+        line = f"{i}. [{step['state']}] {step['model']}{took}{paid} — {step['task']}"
         if step["file"] is not None:
             f = step["file"]
             line += f"\n   fichier : {f} " + (
@@ -261,7 +439,9 @@ def report() -> str:
     stuck = sum(1 for x in STEPS if x["state"] == "bloquée")
     files = sum(1 for x in STEPS if x["file"] is not None)
     return (
-        f"{len(STEPS)} étape(s) confiée(s), {stuck} bloquée(s), {files} fichier(s) écrit(s) par un modèle moins fort :\n"
+        f"{len(STEPS)} étape(s) confiée(s), {stuck} bloquée(s), {files} fichier(s) écrit(s) par un modèle moins fort, "
+        f"{sum(x.get('seconds') or 0 for x in STEPS) / 60:.1f} min de calcul, "
+        f"{sum(x.get('usd') or 0 for x in STEPS):.4f} $ de modèles cloud :\n"
         + "\n".join(lines)
         + "\n\nVérification finale, à faire maintenant : reprends la demande d'origine point par point ; contrôle "
         "chaque fichier ci-dessus (tests ou commande qui le prouve, sinon recherche des noms cités et lecture de "
@@ -282,34 +462,68 @@ def delegate(args: dict, roots: list[Path]) -> str:
     if model not in names and model not in ("auto", (os.environ.get("ORCHESTRE_MODELE") or "").strip()):
         raise ValueError(f"modèle « {model} » absent. Disponibles : {', '.join(m['name'] for m in found)}.")
     target = inside(str(args["ecrire_dans"]), roots, "écriture de fichiers") if args.get("ecrire_dans") else None
-    parts = []
+    parts, texts = [], []
+    plain = bool(args.get("sans_numeros"))
     for raw in args.get("fichiers") or []:
-        name, text = read_file(str(raw), roots)
-        parts.append(f"<fichier nom={json.dumps(name, ensure_ascii=False)}>\n{text}\n</fichier>")
-    system = WORKER_RULES + (f"\n\nRôle : {args['role']}" if args.get("role") else "")
+        path, first, last = line_range(str(raw))
+        name, text = read_file(path, roots)
+        texts.append(text)  # le fichier entier : le recalage des lignes cherche partout
+        if first:
+            every = text.splitlines()
+            if first > len(every):
+                raise ValueError(f"{raw} : le fichier n'a que {len(every)} lignes.")
+            text = "\n".join(every[first - 1 : last])
+            name = f"{name} (lignes {first} à {min(last, len(every))} sur {len(every)})"
+        shown = text if plain else numbered(text, first or 1)
+        parts.append(f"<fichier nom={json.dumps(name, ensure_ascii=False)}>\n{shown}\n</fichier>")
+    system = WORKER_RULES + (f" {NUMBERED_RULE}" if texts and not plain else "")
+    system += f"\n\nRôle : {args['role']}" if args.get("role") else ""
     messages = [{"role": "system", "content": system}, {"role": "user", "content": "\n\n".join([*parts, prompt])}]
     limit = args["max_tokens"] if isinstance(args.get("max_tokens"), int) and args["max_tokens"] > 0 else None
-    answer, seen, written, alert = generate(model, messages, limit)
-    answer = answer.strip()
-    cost = f"[{model} · {seen} tokens lus, {written} écrits]"
     advice = "À toi : précise la consigne ou donne ce qui manque et relance, prends un modèle plus fort, ou fais-la."
+    started = time.monotonic()
+    try:
+        answer, seen, written, alert = generate(model, messages, limit)
+    except Slow as e:
+        _record(model, prompt, "bloquée", seconds=time.monotonic() - started)
+        return f"ÉTAPE BLOQUÉE : {e}\n{advice}\n[{model}]"
+    took = time.monotonic() - started
+    answer = answer.strip()
+    if model == "auto" and LAST.get("model") not in (None, "auto"):  # le bilan nomme le modèle que Lezard IA a pris
+        model = f"auto → {LAST['model']}"
+    cost = f"[{model} · {seen} tokens lus, {written} écrits · {took:.0f} s]"
     if BLOCKED.match(answer) or not answer:
-        reason = BLOCKED.sub("", answer, count=1).strip() or "réponse vide."
-        _record(model, prompt, "bloquée")
+        reason = BLOCKED.sub("", answer, count=1).strip() or alert or "réponse vide."
+        _record(model, prompt, "bloquée", seconds=took)
         return f"ÉTAPE BLOQUÉE : {reason}\n{advice}\n{cost}"
     if alert and not alert.startswith("modèle :"):
-        _record(model, prompt, "bloquée")
+        _record(model, prompt, "bloquée", seconds=took)
         return f"ÉTAPE BLOQUÉE : {alert}\n{advice}\n{cost}" + ("" if target else f"\n\nRéponse partielle :\n{answer}")
     cost = cost if not alert else f"{cost[:-1]} · {alert}]"
-    _record(model, prompt, "faite", target)
+    if texts and not plain:  # un numéro de ligne faux à côté d'un nom défini une seule fois : recalé sans modèle
+        answer, moved = realign(answer, texts)
+        cost = cost if not moved else f"{cost[:-1]} · {moved} numéro(s) de ligne recalé(s) sans modèle]"
+    _record(model, prompt, "faite", target, took)
     if target is None:
         return f"{answer}\n\n{cost}"
     content = unfenced(answer)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(content + ("" if content.endswith("\n") else "\n"), encoding="utf-8")
+    write_like(target, content + ("" if content.endswith("\n") else "\n"))
     lines = content.splitlines()
     head = "\n".join(lines[:5])
     return f"Écrit dans {target} : {len(lines)} lignes, {len(content)} caractères. Début :\n{head}\n\n{cost}"
+
+
+def _fit(window: int) -> int:
+    """Lignes de code numérotées (55 caractères) qui tiennent dans une fenêtre, en gardant de quoi répondre."""
+    return max(int((window - 1500) * CHARS_PER_TOKEN / 55 / 100) * 100, 100)
+
+
+def _lines_fit(model: str) -> str:
+    """« environ 2 000 lignes de code » : ce qui tient dans la fenêtre du modèle, en gardant de quoi répondre."""
+    window = window_of(model, 10**9)  # la plus grande fenêtre possible pour ce modèle
+    lines = int((window - 1500) * CHARS_PER_TOKEN / 55 / 100) * 100  # 55 caractères par ligne numérotée
+    return f"environ {max(lines, 100)} lignes de code à la fois ({window} tokens)"
 
 
 def listing() -> str:
@@ -318,10 +532,23 @@ def listing() -> str:
         return "Aucun modèle disponible."
     chosen = default_model(found)
     if lezard():
-        names = "\n".join(f"- {m['name']}" for m in found)
-        return f"Modèles de Lezard IA (« auto » : elle choisit le moins cher capable) :\n- auto\n{names}\nPar défaut : {chosen}"
+        rows = []
+        for m in found:
+            fit = f", lit environ {_fit(m['window'])} lignes de code" if m.get("window") else ""
+            rows.append(f"- {m['name']} : {m.get('kind') or 'modèle de Lezard IA'}{fit}")
+        how = ROUTE_HELP[route()] if route() in GATEWAY_MODE else "par Lezard IA (« auto » : le moins cher capable)"
+        return (
+            f"Étapes confiées {how}.\n"
+            "Nomme un modèle précis seulement pour une raison (étape bloquée, code délicat) ; un modèle « cloud, "
+            "payant » coûte de l'argent à l'utilisateur.\n"
+            "- auto : Lezard IA choisit le modèle de chaque étape (à préférer)\n"
+            + "\n".join(rows)
+            + f"\nPar défaut : {chosen}"
+        )
     lines = [
-        f"- {m['name']} : {m['size'] / 1e9:.1f} Go, {m['params']}" + (" — déjà chargé" if m["loaded"] else "")
+        f"- {m['name']} : {m['size'] / 1e9:.1f} Go, {m['params']}, lit {_lines_fit(m['name'])}"
+        + (", fait pour le code" if any(k in m["name"].lower() for k in CODE_NAMES) else "")
+        + (" — déjà chargé" if m["loaded"] else "")
         for m in found
     ]
     return (
@@ -366,13 +593,20 @@ TOOLS = [
                 "fichiers": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Fichiers texte à lui faire lire (chemins dans le projet).",
+                    "description": "Fichiers texte à lui faire lire (chemins dans le projet). Pour un fichier trop "
+                    "long pour la fenêtre du modèle, une plage de lignes : « src/a.py:1-800 ».",
                 },
                 "ecrire_dans": {
                     "type": "string",
                     "description": "Fichier du projet où écrire sa réponse (remplacé s'il existe) au lieu de te la rendre.",
                 },
                 "role": {"type": "string", "description": "Rôle ou style à lui donner, facultatif."},
+                "sans_numeros": {
+                    "type": "boolean",
+                    "description": "Les fichiers lui arrivent avec un numéro devant chaque ligne (il peut ainsi "
+                    "citer la bonne ligne). true pour les donner tels quels, par exemple s'il doit recopier "
+                    "tout un fichier.",
+                },
                 "max_tokens": {"type": "integer", "description": "Longueur maximale de sa réponse, facultatif."},
             },
             "required": ["consigne"],
@@ -382,8 +616,10 @@ TOOLS = [
 
 
 # ---------- mémoire des résumés (serveur « resumes ») ----------
-CACHE_VERSION = "1"  # à changer si la forme des résumés change : les anciens ne sont plus repris
+CACHE_VERSION = "2"  # à changer si la forme des résumés change : les anciens ne sont plus repris
 MAX_GROUP = 40  # fichiers résumés en un appel, au plus
+FOLDER_BUDGET = 1200  # secondes : au-delà, le reste du dossier attend l'appel suivant
+STORED = re.compile(r"[0-9a-f]{32}\.md")  # nos résumés, et rien d'autre dans le dossier de mémoire
 SUMMARY_ASK = (
     "Résume ce fichier pour une IA qui doit travailler dessus sans le lire : son rôle en deux lignes, puis ses "
     "éléments principaux (fonctions, classes, constantes, sections) au format « `nom` (ligne N) : ce qu'il fait », "
@@ -395,8 +631,16 @@ def cache_dir() -> Path:
     return Path(os.environ.get("ORCHESTRE_MEMOIRE") or Path.home() / ".lezard-ia" / "resumes")
 
 
-def numbered(text: str) -> str:
-    return "\n".join(f"{i}\t{line}" for i, line in enumerate(text.splitlines(), 1))
+def numbered(text: str, first: int = 1) -> str:
+    return "\n".join(f"{i}\t{line}" for i, line in enumerate(text.splitlines(), first))
+
+
+def line_range(raw: str) -> tuple[str, int, int]:
+    """« src/a.py:120-480 » → (« src/a.py », 120, 480) ; sans plage : (chemin, 0, 0)."""
+    m = re.fullmatch(r"(.+?):(\d+)-(\d+)", raw.strip())
+    if not m or int(m.group(2)) < 1 or int(m.group(3)) < int(m.group(2)):
+        return raw, 0, 0
+    return m.group(1), int(m.group(2)), int(m.group(3))
 
 
 def pick_model(wanted: str) -> str:
@@ -416,10 +660,28 @@ def worker(model: str, content: str) -> tuple[str, str]:
     answer, seen, written, alert = generate(model, messages, None)
     answer = answer.strip()
     if BLOCKED.match(answer) or not answer:
-        raise RuntimeError(f"{model} bloque : {BLOCKED.sub('', answer, count=1).strip() or 'réponse vide.'}")
+        raise RuntimeError(f"{model} bloque : {BLOCKED.sub('', answer, count=1).strip() or alert or 'réponse vide.'}")
     if alert and not alert.startswith("modèle :"):
         raise RuntimeError(f"{model} : {alert}")
     return answer, f"{model}, {seen} tokens lus, {written} écrits"
+
+
+def chunks(lines: list[str], model: str, reserved: int) -> list[tuple[int, int]]:
+    """Plages de lignes (première, dernière) qui tiennent chacune dans la fenêtre du modèle ; une seule si tout le
+    fichier tient. Par Lezard IA, une seule : elle connaît ses modèles et découpe elle-même."""
+    if not lines or lezard():
+        return [(1, max(len(lines), 1))]
+    budget = (window_of(model, 10**9) - 2500) * CHARS_PER_TOKEN - reserved - len(WORKER_RULES)
+    budget = max(budget, 4000)
+    out, first, size = [], 1, 0
+    for i, line in enumerate(lines, 1):
+        cost = len(line) + 8  # le numéro, la tabulation, le saut de ligne
+        if size + cost > budget and i > first:
+            out.append((first, i - 1))
+            first, size = i, 0
+        size += cost
+    out.append((first, len(lines)))
+    return out
 
 
 def summarize(path: Path, question: str, wanted: str) -> tuple[str, bool, str]:
@@ -434,8 +696,21 @@ def summarize(path: Path, question: str, wanted: str) -> tuple[str, bool, str]:
     text = data.decode("utf-8", errors="replace")
     if len(text) > MAX_FILE_CHARS:
         text = text[:MAX_FILE_CHARS] + "\n[… fichier coupé ici]"
-    name = json.dumps(path.name, ensure_ascii=False)
-    answer, cost = worker(pick_model(wanted), f"<fichier nom={name}>\n{numbered(text)}\n</fichier>\n\n{ask}")
+    model = pick_model(wanted)
+    every = text.splitlines()
+    pieces, costs = [], []
+    for first, last in chunks(every, model, len(ask)):
+        whole = first == 1 and last == len(every)
+        label = path.name if whole else f"{path.name} (lignes {first} à {last} sur {len(every)})"
+        extra = "" if whole else " Ceci est un extrait du fichier : décris seulement ce que tu y vois."
+        body = numbered("\n".join(every[first - 1 : last]), first)
+        name = json.dumps(label, ensure_ascii=False)
+        part, cost = worker(model, f"<fichier nom={name}>\n{body}\n</fichier>\n\n{ask}{extra}")
+        pieces.append(part if whole else f"### Lignes {first} à {last}\n{part}")
+        costs.append(cost)
+    answer = "\n\n".join(pieces)
+    answer, _ = realign(answer, [text])  # numéros de ligne faux recalés sans modèle, avant de garder en mémoire
+    cost = costs[0] if len(costs) == 1 else f"{model}, en {len(costs)} morceaux (fichier plus long que sa fenêtre)"
     stored.parent.mkdir(parents=True, exist_ok=True)
     stored.write_text(answer, encoding="utf-8")
     return answer, False, f"calculé par {cost}, gardé en mémoire"
@@ -465,9 +740,14 @@ def summarize_folder(args: dict, roots: list[Path]) -> str:
         raise ValueError(f"aucun fichier ne correspond à {pattern}.")
     if len(files) > MAX_GROUP:
         raise ValueError(f"{len(files)} fichiers pour {pattern} : {MAX_GROUP} au plus par appel, resserrez le motif.")
-    parts, reused, failed = [], 0, 0
+    parts, reused, failed, late = [], 0, 0, 0
+    started = time.monotonic()
     for f in files:
         rel = f.relative_to(roots[0]).as_posix()
+        if time.monotonic() - started > FOLDER_BUDGET:  # rendre la main avant que le client n'abandonne l'appel
+            late += 1
+            parts.append(f"## {rel}\nPAS ENCORE RÉSUMÉ : relance le même appel, ce qui est fait reste en mémoire.")
+            continue
         try:
             text, cached, detail = summarize(f, str(args.get("question") or ""), str(args.get("modele") or ""))
             reused += cached
@@ -475,14 +755,17 @@ def summarize_folder(args: dict, roots: list[Path]) -> str:
         except (RuntimeError, OSError) as e:
             failed += 1
             parts.append(f"## {rel}\nRÉSUMÉ IMPOSSIBLE : {e}")
-    done = len(files) - failed - reused
+    done = len(files) - failed - reused - late
     foot = f"{len(files)} fichier(s) : {reused} repris de la mémoire, {done} résumé(s) maintenant, {failed} en échec."
+    if late:
+        foot += f" {late} pas encore résumé(s), faute de temps : relance le même appel."
     return "\n\n".join(parts) + f"\n\n{foot}"
 
 
 def forget(args: dict, roots: list[Path]) -> str:
     folder = cache_dir()
-    stored = list(folder.glob("*.md")) if folder.is_dir() else []
+    # seulement nos fichiers : ORCHESTRE_MEMOIRE peut désigner un dossier où l'utilisateur garde d'autres .md
+    stored = [f for f in folder.glob("*.md") if STORED.fullmatch(f.name)] if folder.is_dir() else []
     for f in stored:
         f.unlink()
     return f"{len(stored)} résumé(s) oublié(s)."
@@ -547,6 +830,58 @@ def _cited_in(name: str, text: str, near: bool = False) -> bool:
     return parts[-1] in text if near else all(x in text for x in parts)
 
 
+# une définition : Python, JavaScript et TypeScript, Go, Rust, Java et C#, puis une affectation « nom = »
+DEFINES = (
+    r"^\s*(?:(?:export|default|public|private|protected|static|abstract|final|pub|async)\s+)*"
+    r"(?:def|class|function\*?|func|fn|const|let|var|type|interface|struct|enum|trait|impl|module)\s+{0}\b"
+    r"|^\s*(?:func\s+\([^)]*\)\s*){0}\s*\("
+    r"|^\s*{0}\s*(?::[^=\n]+)?=(?!=)"
+)
+
+
+def defined_at(name: str, lines: list[list[str]]) -> list[int]:
+    """Lignes où le nom est défini (def, class, function, affectation…), toutes sources confondues."""
+    pattern = re.compile(DEFINES.format(re.escape(name.rsplit(".", 1)[-1])))
+    return [i for ls in lines for i, line in enumerate(ls, 1) if pattern.search(line)]
+
+
+def _on_line(name: str, n: int, lines: list[list[str]]) -> bool:
+    leaf = name.rsplit(".", 1)[-1]
+    return any(0 < n <= len(ls) and leaf in ls[n - 1] for ls in lines)
+
+
+def line_ok(name: str, n: int, lines: list[list[str]]) -> bool:
+    """La ligne citée est-elle la bonne ? Nom défini une seule fois : sa ligne exacte (une IA qui lit « ligne 2199 »
+    ira à cette ligne). Défini plusieurs fois, ou seulement utilisé : écrit à deux lignes près de la ligne citée."""
+    hits = defined_at(name, lines)
+    if len(hits) == 1:  # ou le nom écrit sur la ligne citée elle-même (son import dans un autre fichier)
+        return n == hits[0] or _on_line(name, n, lines)
+    return any(_cited_in(name, "\n".join(ls[max(0, n - 3) : n + 2]), near=True) for ls in lines)
+
+
+def realign(draft: str, texts: list[str]) -> tuple[str, int]:
+    """Sans modèle : un numéro de ligne cité qui n'est pas celle où le nom est défini (def, class, affectation…) est
+    remplacé par cette ligne, si elle est unique dans les sources. Rend (texte, numéros recalés).
+    Un nom absent ou défini plusieurs fois n'est pas touché : `controler` le signalera."""
+    lines = [t.splitlines() for t in texts]
+    moved = 0
+
+    def fix(m: re.Match) -> str:
+        nonlocal moved
+        whole = m.group(0)
+        core = NAME.match(m.group(1).strip())
+        if not m.group(2) or not core or not whole.endswith(")"):  # pas de ligne, ou une plage « 47-52 »
+            return whole
+        name, n = core.group().rstrip("."), int(m.group(2))
+        hits = defined_at(name, lines)
+        if len(hits) != 1 or hits[0] == n or _on_line(name, n, lines):
+            return whole
+        moved += 1
+        return whole[: m.start(2) - m.start()] + str(hits[0]) + whole[m.end(2) - m.start() :]
+
+    return CITED.sub(fix, draft), moved
+
+
 def check_draft(args: dict, roots: list[Path]) -> str:
     """Sans aucun modèle : chaque nom écrit entre accents graves dans le brouillon existe-t-il dans les sources, et
     à la ligne citée (à deux lignes près) ?"""
@@ -556,6 +891,11 @@ def check_draft(args: dict, roots: list[Path]) -> str:
         raise ValueError("« brouillon » et « sources » sont requis.")
     draft = read_file(raw, roots)[1]
     texts = [inside(x, roots, "lecture de fichiers").read_text(encoding="utf-8", errors="replace") for x in sources]
+    moved = 0
+    if args.get("recaler"):
+        draft, moved = realign(draft, texts)
+        if moved:
+            write_like(inside(raw, roots, "écriture de fichiers"), draft)
     lines = [t.splitlines() for t in texts]
     known = {Path(x).name for x in sources} | {Path(x).as_posix() for x in sources}  # les sources elles-mêmes
     names, missing, wrong_line, checked_lines = set(), [], [], 0
@@ -572,9 +912,12 @@ def check_draft(args: dict, roots: list[Path]) -> str:
         if m.group(2) and name not in missing:
             checked_lines += 1
             n = int(m.group(2))
-            if not any(_cited_in(name, "\n".join(ls[max(0, n - 3) : n + 2]), near=True) for ls in lines):
-                wrong_line.append(f"{name} (ligne {n})")
+            if not line_ok(name, n, lines):
+                at = defined_at(name, lines)
+                wrong_line.append(f"{name} (ligne {n}" + (f", défini ligne {at[0]})" if len(at) == 1 else ")"))
     head = f"{len(names)} nom(s) cité(s), {checked_lines} ligne(s) citée(s) contrôlée(s)."
+    if moved:
+        head += f" {moved} numéro(s) de ligne recalé(s) dans le fichier, sans modèle."
     if not missing and not wrong_line:
         return f"{head} Tout existe dans les sources. Ce contrôle ne dit rien de la justesse des descriptions."
     out = [head]
@@ -611,9 +954,15 @@ def revise(args: dict, roots: list[Path]) -> str:
         _record(model, f"retouche de {target.name}", "bloquée")
         return f"ÉTAPE BLOQUÉE : {e}\nLe fichier n'a pas été modifié. À toi : précise les corrections, ou fais-les."
     content = unfenced(answer)
-    target.write_text(content + ("" if content.endswith("\n") else "\n"), encoding="utf-8")
-    _record(model, f"retouche de {target.name}", "faite", target)
     before, after = len(draft.splitlines()), len(content.splitlines())
+    if before >= 10 and after < before * 0.6:  # un petit modèle rend parfois un résumé au lieu du document
+        _record(model, f"retouche de {target.name}", "bloquée")
+        return (
+            f"ÉTAPE BLOQUÉE : {model} a rendu {after} lignes au lieu de {before}, le document serait tronqué.\n"
+            "Le fichier n'a pas été modifié. À toi : fais ces corrections, ou prends un modèle plus fort."
+        )
+    write_like(target, content + ("" if content.endswith("\n") else "\n"))
+    _record(model, f"retouche de {target.name}", "faite", target)
     return f"{target.name} retouché : {before} lignes avant, {after} après.\n[{cost}]"
 
 
@@ -631,6 +980,11 @@ TOOLS_BROUILLONS = [
                     "type": "array",
                     "items": {"type": "string"},
                     "description": "Les fichiers dont le document parle.",
+                },
+                "recaler": {
+                    "type": "boolean",
+                    "description": "true : corrige d'abord dans le document, sans modèle, chaque numéro de ligne "
+                    "faux dont le nom est défini une seule fois dans les sources. À mettre presque toujours.",
                 },
             },
             "required": ["brouillon", "sources"],
@@ -760,16 +1114,9 @@ OUTBOX: list[dict] = []  # messages à envoyer au client après la réponse en c
 ACTIVE: dict[str, bool | None] = {"on": None}  # état de CETTE session ; None : pas encore choisi, le défaut vaut
 
 
-def mode_file() -> Path:
-    return Path(os.environ.get("LEZARD_IA_MODE") or Path.home() / ".lezard-ia" / "mode.json")
-
-
 def default_on() -> bool:
     """Ce que valent les nouvelles sessions (« /lezard toujours » ou « jamais ») : éteint tant que rien n'est choisi."""
-    try:
-        return bool(json.loads(mode_file().read_text(encoding="utf-8")).get("actif"))
-    except (OSError, ValueError, AttributeError):
-        return False
+    return bool(saved_mode().get("actif"))
 
 
 def is_on() -> bool:
@@ -786,9 +1133,17 @@ SWITCH_TOOL = {
         "type": "object",
         "properties": {
             "action": {"type": "string", "enum": ["activer", "desactiver", "etat"]},
+            "routage": {
+                "type": "string",
+                "enum": list(ROUTES),
+                "description": "Qui fait les étapes confiées. local : l'Ollama de ce PC, gratuit. eco : Lezard IA "
+                "choisit le moins cher capable (local d'abord, cloud s'il le faut). rapide : le plus rapide "
+                "(souvent du cloud, parfois payant). equilibre : entre les deux. À ne changer que si "
+                "l'utilisateur le demande.",
+            },
             "par_defaut": {
                 "type": "boolean",
-                "description": "Avec activer ou desactiver : garder aussi ce choix pour les prochaines sessions.",
+                "description": "Garder aussi ce choix (actif ou éteint, routage) pour les prochaines sessions.",
             },
         },
         "required": ["action"],
@@ -800,20 +1155,33 @@ def switch(args: dict, roots: list[Path]) -> str:
     action = str(args.get("action") or "etat")
     if action not in ("activer", "desactiver", "etat"):
         raise ValueError("« action » : activer, desactiver ou etat.")
+    keep, wanted_route = dict(saved_mode()), args.get("routage")
+    if wanted_route is not None:
+        if wanted_route not in ROUTES:
+            raise ValueError(f"« routage » : {', '.join(ROUTES)}.")
+        if wanted_route != "local" and link() is None:
+            raise ValueError(
+                "Lezard IA n'est pas reliée à cet interrupteur : installez « Interrupteur Lezard IA » depuis la "
+                "marketplace de Lezard IA (elle crée la clé), puis recommencez. En attendant : routage local."
+            )
+        ROUTE["mode"] = wanted_route
+        keep["routage"] = wanted_route
     if action != "etat":
         before, wanted = is_on(), action == "activer"
         ACTIVE["on"] = wanted
-        if args.get("par_defaut") is True:
-            mode_file().parent.mkdir(parents=True, exist_ok=True)
-            mode_file().write_text(json.dumps({"actif": wanted}), encoding="utf-8")
+        keep["actif"] = wanted
         if before != wanted:
             OUTBOX.append({"jsonrpc": "2.0", "method": "notifications/tools/list_changed"})
-    later = "actifs" if default_on() else "éteints"
+    if args.get("par_defaut") is True and (action != "etat" or wanted_route is not None):
+        mode_file().parent.mkdir(parents=True, exist_ok=True)
+        mode_file().write_text(json.dumps(keep), encoding="utf-8")
+    later = ("actifs" if default_on() else "éteints") + f", routage {saved_mode().get('routage') or 'local'}"
     if is_on():
         names = ", ".join(t["name"] for t in ALL_TOOLS)
         return (
-            f"Lezard IA : ACTIF dans cette session. Outils : {names}. Sers-t'en dès qu'il y a de gros fichiers à "
-            "lire ou du texte répétitif à produire ; fais directement les petites tâches. "
+            f"Lezard IA : ACTIF dans cette session. Étapes confiées : {ROUTE_HELP[route()]}. Outils : {names}. "
+            "Sers-t'en dès qu'il y a de gros fichiers à lire ou du texte répétitif à produire ; fais directement "
+            "les petites tâches. "
             f"Nouvelles sessions : outils {later}."
         )
     return (
@@ -862,6 +1230,13 @@ dépenses moins de tokens en confiant ce qui est simple.
 | `/lezard`, `/lezard etat` | action « etat » |
 | `/lezard toujours` | action « activer », par_defaut true |
 | `/lezard jamais` | action « desactiver », par_defaut true |
+| `/lezard local` | action « activer », routage « local » : étapes confiées à l'Ollama de ce PC, gratuit |
+| `/lezard eco` | action « activer », routage « eco » : Lezard IA prend le moins cher capable, local d'abord |
+| `/lezard rapide` | action « activer », routage « rapide » : le plus rapide, souvent du cloud |
+| `/lezard equilibre` | action « activer », routage « equilibre » |
+
+« toujours » après un routage (`/lezard eco toujours`) : ajoute par_defaut true. Si l'outil répond que Lezard IA
+n'est pas reliée, dis-le à l'utilisateur tel quel et reste en routage local.
 
 Réponds ensuite en UNE ligne : actif ou éteint, et ce que valent les prochaines sessions.
 
@@ -871,7 +1246,10 @@ Réponds ensuite en UNE ligne : actif ou éteint, et ce que valent les prochaine
   seulement les lignes utiles.
 - Travail en plusieurs étapes avec beaucoup à lire ou à écrire : suis la méthode « orchestre » (`confier_etape`,
   puis `bilan` et vérification finale).
-- Document produit par un modèle moins fort : `controler`, puis `retoucher` plutôt que de le réécrire.
+- Document produit par un modèle moins fort : `controler` avec « recaler » à true (il corrige lui-même les numéros
+  de ligne faux), puis `retoucher` pour ce qui reste, plutôt que de le réécrire.
+- Fichier trop long pour un modèle local (`modeles` dit combien de lignes chacun lit) : confie-le par plages,
+  « fichier.py:1-800 ».
 - Petite tâche : fais-la directement, ces outils n'y font rien gagner.
 
 ## Quand il est éteint
@@ -932,6 +1310,8 @@ def remove_skill(name: str = "orchestre") -> int:
     if name not in SKILLS:
         print(f"méthode inconnue : {name}")
         return 2
+    if name == "lezard" and link_file().is_file():  # la clé dédiée écrite par la marketplace ne sert plus
+        link_file().unlink()
     folder = skill_folder(name)
     if folder.exists():
         shutil.rmtree(folder)
@@ -941,8 +1321,34 @@ def remove_skill(name: str = "orchestre") -> int:
     return 0
 
 
+def refresh_skills() -> int:
+    """Les méthodes déjà installées dans Claude Code suivent la version de Lezard IA : après une mise à jour, le
+    serveur est neuf mais le fichier SKILL.md écrit à l'installation ne l'était pas. Seules celles qui existent
+    sont réécrites ; rien n'est installé ici. Rend le nombre de méthodes mises à jour."""
+    done = 0
+    switch_installed = (skill_folder("lezard") / "SKILL.md").is_file()
+    for name, text in SKILLS.items():
+        f = skill_folder(name) / "SKILL.md"
+        try:
+            if name == "orchestre" and switch_installed and not f.is_file():
+                # l'interrupteur suit cette méthode ; désinstaller la fiche « Chef d'orchestre » l'avait retirée
+                f.parent.mkdir(parents=True, exist_ok=True)
+                f.write_text(text(), encoding="utf-8")
+                done += 1
+            elif f.is_file() and f.read_text(encoding="utf-8") != text():
+                f.write_text(text(), encoding="utf-8")
+                done += 1
+        except OSError:
+            pass  # dossier protégé : l'ancienne méthode reste, le serveur démarre quand même
+    return done
+
+
 def serve(argv: list[str], server: str = "orchestre") -> int:
-    roots = [Path(a).expanduser().resolve() for a in argv]
+    # « . » : le dossier du projet. Claude Code lance le serveur depuis ce dossier et le nomme aussi dans
+    # CLAUDE_PROJECT_DIR ; cette variable l'emporte si le serveur a été lancé d'ailleurs.
+    project = (os.environ.get("CLAUDE_PROJECT_DIR") or "").strip()
+    roots = [Path(project if a == "." and project else a).expanduser().resolve() for a in argv]
+    refresh_skills()
     stdin = open(sys.stdin.fileno(), encoding="utf-8", errors="replace", closefd=False)  # noqa: SIM115
     stdout = open(sys.stdout.fileno(), "w", encoding="utf-8", newline="\n", closefd=False)  # noqa: SIM115
     for line in stdin:
