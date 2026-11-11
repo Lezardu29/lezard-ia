@@ -229,6 +229,8 @@ def _step(key: str, argv: tuple[str, ...], facts: Facts) -> bool | None:
         if any(a.endswith(".zip") for a in rest):
             return facts.local_program_folder(rest[-1])
         return facts.windows_app(WINDOWS_NAMES[key])
+    if head == installers.PYTHON and rest[:2] == [installers.ORCHESTRE, "--skill"]:
+        return facts.skill("orchestre")
     if head == installers.PYTHON and rest[:1] == [installers.LIBRECHAT_SETUP]:
         root = Path.home() / rest[-1]  # construit (le dossier reste après une désinstallation : conversations)
         return (root / ".lezard-build").is_file() and (root / "mongodb" / "mongod.exe").is_file()

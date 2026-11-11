@@ -925,6 +925,7 @@ function bundleDetail(it, body, foot) {
     ["Déjà là", b.parts.filter((p) => p.installed).map(partName).join(", ") || null],
     ["Ordre", "L'un après l'autre ; un échec n'arrête pas les suivants"],
   ], () => installBundle(b, todo, btn, body), [...new Map(todo.flatMap((p) => entryOf(p.it || {})?.deps || []).map((d) => [d.name, d])).values()])));
+  guideButton(it.bundle, foot);   // fichier de réglages de l'outil du bundle (Claude Code avec Qwen)
 }
 
 /** Attend la fin de l'installation en cours (une à la fois) : son état final. */

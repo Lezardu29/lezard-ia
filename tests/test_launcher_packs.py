@@ -189,3 +189,43 @@ def test_uninstall_leaves_another_installation_alone(lz, tmp_path, monkeypatch):
         except OSError:
             pass
     assert not lz.registered_here(tmp_path)  # pas d'entrée : rien à retirer
+
+
+CPU_ONLY = 'level=INFO msg="inference compute" id=cpu library=cpu name=cpu total="31.8 GiB"\n'
+WITH_CARD = 'level=INFO msg="inference compute" id=GPU-1 library=CUDA name=CUDA0 total="12.0 GiB"\n'
+
+
+def test_ollama_that_saw_only_the_processor_is_spotted_in_its_fresh_log(lz, tmp_path, monkeypatch):
+    log = tmp_path / "ollama.log"
+    log.write_text(WITH_CARD, encoding="utf-8")  # lancement précédent : ne compte pas
+    start = log.stat().st_size
+    monkeypatch.setattr(lz, "has_nvidia", lambda: True)
+    assert lz.ollama_missed_gpu(log, start, timeout=0.2) is False  # journal muet : on ne relance pas
+    with log.open("a", encoding="utf-8") as f:
+        f.write(CPU_ONLY)
+    assert lz.ollama_missed_gpu(log, start, timeout=5) is True
+    with log.open("a", encoding="utf-8") as f:
+        f.write(WITH_CARD)
+    assert lz.ollama_missed_gpu(log, start, timeout=5) is False
+    monkeypatch.setattr(lz, "has_nvidia", lambda: False)  # PC sans carte NVIDIA : le processeur est normal
+    assert lz.ollama_missed_gpu(log, log.stat().st_size - len(WITH_CARD) - len(CPU_ONLY), timeout=5) is False
+
+
+def test_ollama_is_restarted_until_it_sees_the_card(lz, tmp_path, monkeypatch):
+    (tmp_path / "logs").mkdir()
+    started, killed, missed = [], [], iter([True, False])
+
+    class Proc:
+        pass
+
+    monkeypatch.setattr(lz, "url_ok", lambda *a, **k: False)
+    monkeypatch.setattr(lz, "ollama_exe", lambda: "ollama.exe")
+    monkeypatch.setattr(lz.subprocess, "Popen", lambda *a, **k: started.append(a[0]) or Proc())
+    monkeypatch.setattr(lz, "ollama_missed_gpu", lambda log, start: next(missed))
+    service = lz.Supervisor.__new__(lz.Supervisor)
+    service.children = []
+    service.kill = killed.append
+    service.wait = lambda seconds: False
+    service.start_ollama({})
+    assert len(started) == 2 and len(killed) == 1 and len(service.children) == 1
+    assert service.children[0] is not killed[0]

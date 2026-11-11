@@ -95,6 +95,7 @@ CATALOG = (
         "mistral-small:24b", "Mistral Small 24B", 23.6, 14.0, ("chat",), "mistralai/Mistral-Small-24B-Instruct-2501"
     ),
     CatalogModel("gemma3:27b", "Gemma 3 27B", 27.4, 17.0, ("chat", "vision"), "google/gemma-3-27b-it", 0.8),
+    CatalogModel("qwen3.8:27b", "Qwen 3.8 27B", 27.3, 18.0, ("chat", "vision", "reasoning"), "Qwen/Qwen3.8-27B", 0.9),
     CatalogModel("qwen2.5:32b", "Qwen 2.5 32B", 32.8, 20.0, ("chat",), "Qwen/Qwen2.5-32B-Instruct"),
     CatalogModel("qwen2.5-coder:32b", "Qwen 2.5 Coder 32B", 32.8, 20.0, ("code",), "Qwen/Qwen2.5-Coder-32B-Instruct"),
     CatalogModel(

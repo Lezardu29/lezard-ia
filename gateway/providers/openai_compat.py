@@ -102,6 +102,12 @@ class OpenAICompatProvider(Provider):
             h["Authorization"] = f"Bearer {key}"
         return h
 
+    def _patience(self) -> float:
+        """Attente maximale sans rien recevoir. Un gros modèle local qui déborde de la carte graphique relit une
+        longue demande (Claude Code : ~20 000 tokens) à quelques dizaines de tokens par seconde avant son premier
+        mot : 10 minutes le coupaient en plein calcul (essai réel, Qwen 3.8 27B sur 12 Go)."""
+        return 14400 if self.hosting == "local" else 600
+
     def _url(self, path: str) -> str:
         return self.cfg.base_url.rstrip("/") + path
 
@@ -136,7 +142,7 @@ class OpenAICompatProvider(Provider):
                     self._native_url() if native else self._url("/chat/completions"),
                     headers=self._headers(),
                     json=native or payload,
-                    timeout=600,
+                    timeout=self._patience(),
                 )
             except httpx.HTTPError as e:
                 raise ProviderError(503, f"{type(e).__name__}: {e}", self.name)
@@ -247,7 +253,7 @@ class OpenAICompatProvider(Provider):
         """Flux NDJSON de /api/chat retraduit en fragments OpenAI."""
         try:
             async with self.client.stream(
-                "POST", self._native_url(), headers=self._headers(), json=body, timeout=600
+                "POST", self._native_url(), headers=self._headers(), json=body, timeout=self._patience()
             ) as r:
                 if r.status_code >= 400:
                     await r.aread()
@@ -271,7 +277,7 @@ class OpenAICompatProvider(Provider):
     async def _stream(self, payload: dict) -> AsyncIterator[dict]:
         try:
             async with self.client.stream(
-                "POST", self._url("/chat/completions"), headers=self._headers(), json=payload, timeout=600
+                "POST", self._url("/chat/completions"), headers=self._headers(), json=payload, timeout=self._patience()
             ) as r:
                 if r.status_code >= 400:
                     await r.aread()

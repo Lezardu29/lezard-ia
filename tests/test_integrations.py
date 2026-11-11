@@ -18,6 +18,7 @@ MASTER = {"Authorization": "Bearer master"}
 EXPECTED = {"openwebui", "continue", "cursor", "python", "javascript", "langchain", "curl", "openclaw"}
 EXPECTED |= {
     "ccrouter",
+    "claudecode",
     "cline",
     "kilocode",
     "anythingllm",

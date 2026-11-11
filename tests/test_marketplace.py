@@ -837,7 +837,7 @@ def test_new_license_lookups_by_visitors_are_limited(client, monkeypatch):
 
 # ---------- copie publique sur lezard-ia.fr (site/marketplace) ----------
 SITE = Path(__file__).resolve().parents[1] / "site"
-needs_site = pytest.mark.skipif(not SITE.is_dir(), reason="site/ : seulement dans le dépôt privé")
+needs_site = pytest.mark.skipif(not (SITE / "index.html").is_file(), reason="site/ : seulement dans le dépôt privé")
 
 
 def test_static_catalog_lists_every_item_with_its_install_steps():

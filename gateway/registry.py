@@ -224,7 +224,9 @@ def infer_local(provider: str, model_id: str) -> ModelInfo:
     quality = 0.35 if size <= 4 else 0.5 if size <= 9 else 0.6 if size <= 15 else 0.7 if size <= 35 else 0.8
     ttft = int(150 + size * 25)  # plus gros = plus lent sur matériel grand public
     name = model_id.lower()
-    vision = any(k in name for k in ("llava", "vision", "-vl", "vl:", "gemma3", "gemma4", "minicpm-v", "bakllava"))
+    vision = any(
+        k in name for k in ("llava", "vision", "-vl", "vl:", "gemma3", "gemma4", "qwen3.8", "minicpm-v", "bakllava")
+    )
     reasoning = bool(_REASONING_NAME.search(name))
     tools = not _NO_TOOLS_NAME.search(name)
     return ModelInfo(

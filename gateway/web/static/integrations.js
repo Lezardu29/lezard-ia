@@ -4,7 +4,54 @@
 
 const sh = (s) => `'${String(s).replaceAll("'", "'\\''")}'`;          // argument shell entre apostrophes
 
+// Réglages de Claude Code (terminal et extension VS Code) pour un modèle local servi par Lezard IA, au plus près de
+// l'usage avec Opus : un seul modèle pour tous les rôles (principal, rapide, sous-agents : rien à recharger sur la
+// carte graphique), fenêtre de contexte annoncée (Claude Code résume avant de la dépasser), longues attentes
+// acceptées, en-tête d'attribution retiré (il change à chaque demande et empêcherait Ollama de réutiliser le début
+// de la conversation déjà calculé), aucune fonction d'essai propre aux modèles d'Anthropic, rien envoyé à Anthropic.
+// Essais réels (Qwen 3.8 27B, carte de 12 Go, 3,9 tokens/s) : sans API_FORCE_IDLE_TIMEOUT=0, Claude Code coupe une
+// réflexion de plus de 5 minutes ; les connecteurs du compte claude.ai pèsent jusqu'à 228 000 tokens et ne se
+// coupent PAS depuis ce fichier (ENABLE_CLAUDEAI_MCP_SERVERS n'y a aucun effet) : variable de Windows, étape du guide.
+export const CLAUDE_MODEL = "qwen3.8:27b", CLAUDE_CONTEXT = 64000;
+function claudeSettings(base, key) {
+  const model = Object.fromEntries(["ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL", "ANTHROPIC_DEFAULT_FABLE_MODEL", "CLAUDE_CODE_SUBAGENT_MODEL"].map((n) => [n, CLAUDE_MODEL]));
+  return JSON.stringify({
+    env: {
+      ANTHROPIC_BASE_URL: base.replace(/\/v1$/, ""),   // Claude Code ajoute lui-même /v1/messages
+      ANTHROPIC_AUTH_TOKEN: key,
+      ...model,
+      ANTHROPIC_DEFAULT_OPUS_MODEL_NAME: "Qwen 3.8 27B (Lezard IA)",
+      ANTHROPIC_DEFAULT_OPUS_MODEL_SUPPORTED_CAPABILITIES: "effort,thinking",
+      CLAUDE_CODE_MAX_CONTEXT_TOKENS: String(CLAUDE_CONTEXT),
+      CLAUDE_CODE_MAX_OUTPUT_TOKENS: "16384",
+      API_TIMEOUT_MS: "3600000",
+      API_FORCE_IDLE_TIMEOUT: "0",   // un modèle lent réfléchit plus de 5 minutes sans rien envoyer : ne pas couper
+      CLAUDE_CODE_ATTRIBUTION_HEADER: "0",
+      CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: "1",
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
+      DISABLE_TELEMETRY: "1",
+    },
+  }, null, 2);
+}
+
 export const GUIDES = [
+  {
+    // Claude Code branché directement (sans routeur) : route /v1/messages, au format d'Anthropic
+    id: "claudecode", name: "Claude Code (terminal et extension VS Code)", routes: ["/v1/messages"], file: "settings.json",
+    steps: ["Installez le bundle « Claude Code avec Qwen 3.8 » de la marketplace (le modèle qwen3.8:27b et ses outils).",
+            "« Créer le fichier » ci-dessous, puis rangez settings.json dans le dossier .claude de votre projet "
+            + "(ce projet seulement) ou dans le dossier .claude de votre dossier utilisateur (tous vos projets).",
+            "Rechargez VS Code (ou relancez claude) : l'extension passe par Lezard IA et Qwen reçoit tous les outils "
+            + "de Claude Code. Pour revenir à votre compte Claude, supprimez le bloc « env » du fichier.",
+            "Fenêtre de contexte : le fichier annonce 64 000 tokens. Donnez la même à Ollama (variable "
+            + "OLLAMA_CONTEXT_LENGTH=64000, et « Context length » à 64k dans l'application Ollama), sinon il coupe "
+            + "les longues demandes en silence.",
+            "Connecteurs de votre compte claude.ai (s'il en a) : leurs outils dépassent la fenêtre du modèle. Coupez-les "
+            + "avec la variable de Windows ENABLE_CLAUDEAI_MCP_SERVERS=false (PowerShell : setx "
+            + "ENABLE_CLAUDEAI_MCP_SERVERS false), puis rouvrez VS Code ; supprimez-la pour les retrouver."],
+    code: ({ base, key }) => claudeSettings(`${base}`, `${key}`),
+  },
   {
     id: "openwebui", name: "Open WebUI", routes: ["/v1/models", "/v1/chat/completions"],
     steps: ["Réglages d'administration → Connexions → API OpenAI → « + » (ajouter une connexion).",
@@ -236,7 +283,9 @@ export function mountGuides(root, { initial = "openwebui" } = {}) {
   const title = el("span");
   const btn = el("button", "btn btn-ghost btn-inline", "Copier");
   btn.type = "button";
-  head.append(title, btn);
+  const save = el("button", "btn btn-ghost btn-inline", "Créer le fichier");   // guides à fichier (settings.json)
+  save.type = "button";
+  head.append(title, save, btn);
   const pre = el("pre", "guide-code");
   const block = el("div", "share-block");
   block.append(head, pre);
@@ -247,6 +296,8 @@ export function mountGuides(root, { initial = "openwebui" } = {}) {
     for (const b of pick.children) b.setAttribute("aria-selected", String(b.dataset.id === current.id));
     steps.replaceChildren(...current.steps.map((s) => el("li", "", s)));
     title.textContent = current.name;
+    save.hidden = !current.file;
+    save.textContent = current.file ? `Créer ${current.file}` : "";
     pre.textContent = url ? guideText(current, url, key) : "";
     warn.hidden = !(current.public && ["local", "lan", "tailscale"].includes(kind));
     warn.textContent = "Cette adresse n'est pas joignable depuis Internet : choisissez l'adresse « Internet » "
@@ -261,6 +312,13 @@ export function mountGuides(root, { initial = "openwebui" } = {}) {
     pick.append(b);
   }
   btn.addEventListener("click", () => copy(btn, pre.textContent));
+  save.addEventListener("click", () => {   // le fichier est fabriqué dans la page : la clé ne part nulle part
+    const link = el("a");
+    link.href = URL.createObjectURL(new Blob([pre.textContent + "\n"], { type: "application/json" }));
+    link.download = current.file;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  });
   render();
   return (u, k, kd = "") => { url = u; key = k; kind = kd; render(); };
 }

@@ -65,6 +65,7 @@ STOP_FILE = DATA / "launcher.stop"
 STATE_FILE = DATA / "launcher.json"
 DEFAULT_PORT = 8000
 OLLAMA_URL = "http://127.0.0.1:11434/api/tags"
+OLLAMA_GPU_TRIES = 3  # lancements d'Ollama au plus, tant qu'il ne voit pas la carte graphique
 OLLAMA_DOWNLOAD = "https://ollama.com/download"
 CREATE_NO_WINDOW = 0x08000000
 CREATE_NEW_CONSOLE = 0x00000010
@@ -125,6 +126,31 @@ def port() -> int:
         return int(read_env().get("GATEWAY_PORT", DEFAULT_PORT))
     except ValueError:
         return DEFAULT_PORT
+
+
+def has_nvidia() -> bool:
+    """Ce PC a une carte NVIDIA : son outil nvidia-smi est installé avec le pilote."""
+    system = Path(os.environ.get("SYSTEMROOT", r"C:\Windows")) / "System32" / "nvidia-smi.exe"
+    return bool(shutil.which("nvidia-smi")) or system.exists()
+
+
+def ollama_missed_gpu(log: Path, start: int, timeout: float = 30) -> bool:
+    """Ollama, tout juste lancé, n'a trouvé que le processeur alors que ce PC a une carte NVIDIA. Lu dans la partie
+    de son journal écrite depuis `start` (lignes « inference compute », une par carte ou « cpu »)."""
+    if not has_nvidia():
+        return False
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        try:
+            with log.open("rb") as f:
+                f.seek(start)
+                found = [x for x in f.read().decode("utf-8", "replace").splitlines() if 'msg="inference compute"' in x]
+        except OSError:
+            return False
+        if found:
+            return all("library=cpu" in x for x in found)
+        time.sleep(1)
+    return False  # journal muet : on ne sait pas, on ne relance pas
 
 
 def url_ok(url: str, timeout: float = 2) -> bool:
@@ -274,10 +300,20 @@ class Supervisor:
         if not exe:
             say("Ollama non installé (facultatif : page Modèles ou marketplace)")
             return
-        out = (LOGS / "ollama.log").open("ab")
-        self.children.append(
-            subprocess.Popen([exe, "serve"], stdout=out, stderr=out, env=env, creationflags=CREATE_NO_WINDOW)
-        )
+        log = LOGS / "ollama.log"
+        for attempt in range(OLLAMA_GPU_TRIES):
+            start = log.stat().st_size if log.exists() else 0
+            out = log.open("ab")
+            proc = subprocess.Popen([exe, "serve"], stdout=out, stderr=out, env=env, creationflags=CREATE_NO_WINDOW)
+            if attempt == OLLAMA_GPU_TRIES - 1 or not ollama_missed_gpu(log, start):
+                break
+            # ouverture de session : le pilote de la carte n'est pas toujours prêt, et Ollama ne cherche les cartes
+            # qu'à son lancement — sans cela, tous les modèles tournent sur le processeur jusqu'au prochain démarrage
+            say("Ollama n'a pas vu la carte graphique (pilote pas encore prêt) : relancé dans 15 s")
+            self.kill(proc)
+            if self.wait(15):
+                return
+        self.children.append(proc)
         say("Ollama démarré")
 
     def run(self, delay: int) -> int:

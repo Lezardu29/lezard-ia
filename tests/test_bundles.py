@@ -45,7 +45,9 @@ def test_every_bundle_points_at_the_catalog():
         assert b["name"] and b["description"] and b["for"] and len(b["items"]) >= 2
         for key in b["items"]:
             kind, _, item = key.partition(":")
+            item, _, pinned = item.partition("=")  # « model:code=qwen3.8:27b » : modèle fixé, présent au catalogue
             assert item in known[kind], key
+            assert not pinned or pinned in {m.model for m in model_catalog.CATALOG}, key
         models = [i for i in b["items"] if i.startswith("model:")]
         if models:  # le moteur d'abord : les modèles s'installent dans Ollama
             assert b["items"].index("component:ollama") < b["items"].index(models[0]), b["id"]
@@ -174,3 +176,23 @@ def test_local_page_installs_a_bundle_one_element_after_another():
     assert "!it.hidden" in js  # bundle pas adapté à ce PC : pas proposé
     for route in ("/components/", "/mcp/", "/tools/", "/apps/"):  # les routes habituelles, une à la fois
         assert f"/v1/admin/marketplace{route}" in js
+
+
+def test_claude_qwen_bundle_pins_its_model_and_warns_when_it_overflows_the_card():
+    """Le modèle du bundle est Qwen 3.8 27B quel que soit le PC : prévenu s'il déborde de la carte, écarté s'il ne
+    tient pas ; son guide (fichier de réglages de Claude Code) existe dans « Brancher un outil »."""
+    pinned = {"model": "qwen3.8:27b", "label": "Qwen 3.8 27B"}
+    r = reco()
+    slow = judged(BIG, ("claude",), r={**r, "models": [*r["models"], {**pinned, "fit": "offload"}]})["claude-qwen"]
+    part = next(p for p in slow["parts"] if p["kind"] == "model")
+    assert (part["tag"], part["id"], part["label"]) == ("qwen3.8:27b", "qwen3.8", "Qwen 3.8 27B")
+    assert slow["suggested"] and any("lentement" in w for w in slow["why"])
+    fast = judged(BIG, ("claude",), r={**r, "models": [*r["models"], {**pinned, "fit": "vram"}]})["claude-qwen"]
+    assert fast["suggested"] and not any("lentement" in w for w in fast["why"])
+    big = judged(BIG, ("claude",), r={**r, "models": [*r["models"], {**pinned, "fit": "too_big"}]})["claude-qwen"]
+    assert not big["suggested"]
+    assert not judged(BIG, r=r)["claude-qwen"]["suggested"]  # sans Claude Code
+    public = next(b for b in marketplace.public_bundles() if b["id"] == "claude-qwen")
+    assert next(p for p in public["parts"] if p["kind"] == "model")["tag"] == "qwen3.8:27b"
+    source = (STATIC / "integrations.js").read_text(encoding="utf-8")
+    assert f'id: "{public["guide"]}"' in source and 'CLAUDE_MODEL = "qwen3.8:27b"' in source

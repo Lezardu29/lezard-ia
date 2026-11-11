@@ -34,7 +34,7 @@ import httpx
 
 from . import mcp
 from .gpus import usable
-from .model_catalog import USE_LABELS
+from .model_catalog import CATALOG, USE_LABELS
 
 REGISTRY = "https://registry.ollama.ai/v2/library"
 MANIFEST_TYPE = "application/vnd.docker.distribution.manifest.v2+json"
@@ -1683,6 +1683,42 @@ AGENT_TOOLS = (
         "license": _lic("MIT", "ryoppippi", "https://github.com/ccusage/ccusage", summary=MIT_NOTE),
     },
     {
+        "id": "orchestre",
+        "name": "Chef d'orchestre",
+        "description": "Claude Code dépense moins de tokens : le modèle fort (Fable, Opus) découpe le travail, écrit "
+        "la consigne de chaque étape et choisit son modèle ; les étapes simples partent vers les modèles locaux de "
+        "ce PC, gratuits. Une étape que son modèle ne sait pas faire revient au modèle fort, qui l'aide ou la "
+        "reprend.",
+        "install": "claude mcp add --scope user orchestre -- python mcp_orchestre.py . (serveur MCP fourni avec "
+        "Lezard IA), puis la méthode « orchestre » écrite dans les compétences de Claude Code",
+        "commands": [
+            _cmd(
+                "/orchestre <demande>",
+                "Claude annonce son plan (étape, modèle, pourquoi), confie les étapes simples aux modèles locaux, "
+                "vérifie, reprend ce qui bloque, et termine par un bilan.",
+                "/orchestre documente chaque module du dossier src dans docs/modules.md",
+                "claude",
+            ),
+            _cmd(
+                "Demandez-le en langage naturel",
+                "« Orchestre ça », « délègue aux petits modèles », « économise les tokens » déclenchent la même "
+                "méthode.",
+                "Résume ces dix fichiers de journal en déléguant aux petits modèles.",
+                "claude",
+            ),
+            _cmd("/mcp", "Vérifier que orchestre est bien connecté (outils modeles et confier_etape).", where="claude"),
+        ],
+        "needs": "Claude Code, et Ollama avec au moins un modèle (bundle « Pour bien démarrer »).",
+        "lezard": "Écrit par Lezard IA. Les étapes confiées tournent dans l'Ollama de ce PC : rien ne sort, rien ne "
+        "coûte. Le modèle déjà chargé est pris d'abord, pour ne pas en charger deux sur la carte graphique. Les "
+        "fichiers sont lus et écrits dans le projet ouvert seulement. Avec les variables LEZARD_IA_URL et "
+        "LEZARD_IA_KEY, les étapes passent par Lezard IA (tous ses modèles, « auto » compris).",
+        "url": "https://github.com/Lezardu29/lezard-ia",
+        "license": _lic(
+            "Lezard IA", "Lezard IA", "https://github.com/Lezardu29/lezard-ia", summary="Fonction de Lezard IA."
+        ),
+    },
+    {
         "id": "repomix",
         "name": "Repomix",
         "description": "Empaqueter un projet de code en un seul fichier (avec sa structure) à donner à une IA, en "
@@ -1909,7 +1945,8 @@ AGENT_TOOLS = (
 
 # ---------- bundles : plusieurs éléments à installer ensemble, proposés selon ce PC ----------
 # « when » : ram_gb (mémoire vive totale), vram_gb (carte graphique), windows, programs (au moins un trouvé sur ce PC),
-# fast (chaque modèle du bundle tient dans la carte graphique). Un modèle est désigné par son usage : « model:chat ».
+# fast (chaque modèle du bundle tient dans la carte graphique). Un modèle est désigné par son usage : « model:chat »,
+# ou fixé : « model:code=qwen3.8:27b » (ce modèle-là, quel que soit le PC ; écarté seulement s'il n'y tient pas).
 BUNDLES = (
     {
         "id": "essentiel",
@@ -1993,6 +2030,35 @@ BUNDLES = (
         "when": {"programs": ("claude",)},
     },
     {
+        "id": "claude-qwen",
+        "name": "Claude Code avec Qwen 3.8 (local)",
+        "description": "Claude Code et son extension VS Code branchés sur Qwen 3.8 27B, qui tourne sur ce PC : il "
+        "reçoit tous les outils de Claude Code (fichiers, terminal, recherche, sous-agents), des méthodes de travail "
+        "éprouvées, la carte de votre code et une mémoire entre les sessions. Le fichier de réglages de l'extension "
+        "est dans Tableau de bord → Brancher un outil → Claude Code. Rien ne sort du PC.",
+        "for": "Ceux qui utilisent Claude Code, avec 32 Go de mémoire vive ; confortable avec une carte graphique "
+        "de 24 Go, lent en dessous.",
+        "items": (
+            "component:ollama",
+            "model:code=qwen3.8:27b",
+            "tool:superpowers",
+            "tool:codegraph",
+            "tool:agentmemory",
+        ),
+        "guide": "claudecode",
+        "when": {"ram_gb": 32, "programs": ("claude",)},
+    },
+    {
+        "id": "claude-econome",
+        "name": "Claude Code économe",
+        "description": "Claude Code garde le travail difficile et confie le reste aux modèles locaux de ce PC "
+        "(chef d'orchestre), avec la carte de votre code et le suivi de sa consommation : bien moins de tokens "
+        "pour le même résultat.",
+        "for": "Ceux qui utilisent Claude Code sur ce PC, avec une carte graphique qui fait tourner un modèle local.",
+        "items": ("component:ollama", "model:chat", "tool:orchestre", "tool:codegraph", "tool:ccusage"),
+        "when": {"programs": ("claude",), "fast": True},
+    },
+    {
         "id": "claude-partout",
         "name": "Claude Code partout",
         "description": "Suivre et piloter Claude Code depuis le téléphone ou le navigateur, avec une ligne d'état qui "
@@ -2029,7 +2095,14 @@ def _gb(n: float) -> str:
 
 def _part(key: str) -> dict:
     kind, _, item = key.partition(":")
-    return {"kind": kind, "use": item, "use_label": USE_LABELS[item]} if kind == "model" else {"kind": kind, "id": item}
+    if kind != "model":
+        return {"kind": kind, "id": item}
+    use, _, pinned = item.partition("=")
+    part = {"kind": kind, "use": use, "use_label": USE_LABELS[use]}
+    if pinned:
+        label = next((m.label for m in CATALOG if m.model == pinned), pinned)
+        part.update(id=pinned.split(":")[0], tag=pinned, label=label)
+    return part
 
 
 def public_bundles() -> list[dict]:
@@ -2086,13 +2159,17 @@ def bundles_for(reco: dict, hw: dict, found: Callable[[str], str | None], platfo
         for key in b["items"]:
             part = _part(key)
             if part["kind"] == "model":
-                tag = (reco.get("best") or {}).get(part["use"])
+                tag = part.get("tag") or (reco.get("best") or {}).get(part["use"])
                 if not tag:
                     why_not.append(f"Aucun modèle « {part['use_label']} » ne tient sur ce PC.")
                     continue
                 m = models.get(tag, {})
                 if when.get("fast") and m.get("fit") != "vram":
                     why_not.append(f"{m.get('label', tag)} ne tient pas dans la carte graphique : il serait lent.")
+                elif m.get("fit") == "too_big":
+                    why_not.append(f"{m.get('label', tag)} ne tient pas dans la mémoire de ce PC.")
+                elif not when.get("fast") and m.get("fit") not in (None, "vram"):  # modèle fixé : prévenir
+                    why.append(f"{m.get('label', tag)} dépasse la carte graphique : il marchera, lentement.")
                 part.update(id=tag.split(":")[0], tag=tag, label=m.get("label", tag))  # installé : vu par la page
             parts.append(part)
         out.append(

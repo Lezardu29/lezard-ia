@@ -42,6 +42,7 @@ CLAUDE_FILES = _script("claude_files")  # retire un dossier écrit dans ~/.claud
 USER_PATH = _script("user_path")  # retire un dossier du PATH de l'utilisateur (désinstallation de claude-mem)
 CLAUDE_MEM_BIN = r"%LOCALAPPDATA%\claude-mem\bin"
 SETUP = _script("setup_download")  # installateur officiel figé, vérifié, lancé sans question
+ORCHESTRE = _script("mcp_orchestre")  # serveur MCP du chef d'orchestre, et sa méthode pour Claude Code
 LIBRECHAT_SETUP = _script("librechat_setup")  # dépôt figé, secrets de ce PC, MongoDB figé, construit sans Docker
 ORCA = (
     "https://github.com/stablyai/orca/releases/download/v1.4.229/orca-windows-setup.exe",  # publiée le 2026-10-17
@@ -302,6 +303,18 @@ RECIPES: dict[str, dict] = {
         "size": "~9 Mo",
         "where": "Serveur MCP de Claude Code (pour tous vos projets)",
         "after": "Redémarrez Claude Code : ses outils de mémoire sont disponibles.",
+    },
+    "tool:orchestre": {
+        "steps": [
+            # « . » : le dossier du projet ouvert dans Claude Code (seul endroit où le serveur lit et écrit)
+            ("claude", "mcp", "add", "--scope", "user", "orchestre", "--", PYTHON, ORCHESTRE, "."),
+            (PYTHON, ORCHESTRE, "--skill"),
+        ],
+        "requires": ("claude",),
+        "size": "moins de 1 Mo",
+        "where": "Serveur MCP et compétence de Claude Code (pour tous vos projets)",
+        "after": "Redémarrez Claude Code, puis /orchestre suivi de votre demande : les étapes simples partent vers "
+        "vos modèles locaux.",
     },
     "tool:ccrouter": {
         "steps": [
@@ -794,7 +807,9 @@ def resolve(argv) -> list[str]:
     exe = program(argv[0])
     if exe is None:
         raise MarketplaceError(409, f"{argv[0]} est requis : installez-le, puis réessayez.")
-    return [exe, *argv[1:]]
+    # « {python} » ailleurs qu'en tête : le Python de Lezard IA donné à un autre programme (claude mcp add … --
+    # {python} serveur.py), qui le lancera plus tard
+    return [exe, *(program(a) or a if a == PYTHON else a for a in argv[1:])]
 
 
 def commands(key: str) -> list[list[str]]:
@@ -851,6 +866,8 @@ def _undo(argv) -> tuple[str, ...] | list[tuple[str, ...]] | None | bool:
         return (PYTHON, CLAUDE_FILES, "--remove", "commands/sc")  # il n'a pas de commande pour les retirer
     if head == PYTHON and rest[:1] == [NPM_NATIVE]:
         return False  # réparation des modules de l'outil : partent avec lui (npm uninstall)
+    if head == PYTHON and rest[:2] == [ORCHESTRE, "--skill"]:
+        return (PYTHON, ORCHESTRE, "--remove-skill")
     if head == PYTHON and rest[:1] == [LIBRECHAT_SETUP]:
         return (PYTHON, LIBRECHAT_SETUP, "--remove", rest[-1])  # conversations (data-db) et secrets (.env) gardés
     if head == "docker" and rest[:1] == ["compose"] and rest[-2:] == ["up", "--detach"]:
