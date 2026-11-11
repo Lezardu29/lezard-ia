@@ -20,7 +20,8 @@ from . import Tool, ToolError, ToolResult, register
 
 MAX_BYTES = 2_000_000
 MAX_TEXT = 6000
-UA = "Mozilla/5.0 (compatible; LezardIA/1.0)"
+# identification honnête, avec où nous joindre : Wikipédia refuse (403) un robot qui ne dit pas qui il est
+UA = "LezardIA/1.0 (+https://lezard-ia.fr)"
 _DROP = re.compile(r"<(script|style|noscript|svg|head)\b.*?</\1>", re.S | re.I)
 _TAG = re.compile(r"<[^>]+>")
 _BLOCK = re.compile(r"</?(p|div|br|li|h[1-6]|tr|section|article)\b[^>]*>", re.I)

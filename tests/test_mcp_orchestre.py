@@ -366,8 +366,10 @@ def test_switch_shows_the_tools_only_when_on_and_tells_the_client_the_list_chang
     err, text = call_on("lezard", "lezard_ia", {"action": "activer"})
     assert not err and "ACTIF dans cette session" in text and "Nouvelles sessions : outils éteints" in text
     assert mo.OUTBOX == [{"jsonrpc": "2.0", "method": "notifications/tools/list_changed"}]
-    assert listed() == ["lezard_ia", "modeles", "bilan", "confier_etape", "resumer_fichier", "resumer_dossier",
-                        "oublier_resumes", "controler", "retoucher"]  # fmt: skip
+    assert listed()[:9] == ["lezard_ia", "modeles", "bilan", "confier_etape", "resumer_fichier", "resumer_dossier",
+                            "oublier_resumes", "controler", "retoucher"]  # fmt: skip
+    # puis les outils à trois modes (tests/test_mcp_modes.py) ; ceux du PC seulement sous Windows
+    assert listed()[9:12] == ["lire_image", "lire_document", "chercher_web"]
     assert not call_on("lezard", "confier_etape", {"consigne": "x"})[0] and len(ollama["sent"]) == 1
     call_on("lezard", "lezard_ia", {"action": "activer"})
     assert len(mo.OUTBOX) == 1  # déjà actif : rien à annoncer de nouveau
@@ -414,7 +416,7 @@ def test_switch_announces_the_change_on_the_wire(tmp_path):
     replies = [json.loads(x) for x in out]
     assert replies[0]["result"]["capabilities"] == {"tools": {"listChanged": True}}
     assert replies[1]["id"] == 2 and replies[2] == {"jsonrpc": "2.0", "method": "notifications/tools/list_changed"}
-    assert len(replies[3]["result"]["tools"]) == 9
+    assert len(replies[3]["result"]["tools"]) >= 12
 
 
 def test_lezard_skill_and_recipe(monkeypatch, tmp_path):

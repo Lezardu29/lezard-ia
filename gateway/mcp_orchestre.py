@@ -187,9 +187,16 @@ def route() -> str:
     return wanted if wanted in ROUTES else "local"
 
 
+LOCAL_ONLY = {"on": False}
+
+
 def lezard() -> tuple[str, str] | None:
     """(adresse, clé) de Lezard IA si les étapes passent par elle : routage éco, rapide ou équilibré, ou bien les
     deux variables d'environnement données à la main (comportement d'origine). En « local » : Ollama, direct."""
+    if LOCAL_ONLY[
+        "on"
+    ]:  # outil à trois modes : sa part « locale » se fait sur l'Ollama de ce PC, quel que soit le routage
+        return None
     by_hand = (os.environ.get("LEZARD_IA_URL") or "").strip() and (os.environ.get("LEZARD_IA_KEY") or "").strip()
     return link() if by_hand or route() != "local" else None
 
@@ -246,6 +253,11 @@ def models() -> list[dict]:
                 | {"window": int(meta.get("context_window") or 0)}
             )
         return found
+    return ollama_models()
+
+
+def ollama_models() -> list[dict]:
+    """Modèles de l'Ollama de ce PC qui écrivent du texte, du plus léger au plus lourd."""
     tags = call(f"{host()}/api/tags", timeout=10).get("models") or []
     try:
         loaded = {m.get("name") for m in call(f"{host()}/api/ps", timeout=10).get("models") or []}
@@ -1177,7 +1189,7 @@ def switch(args: dict, roots: list[Path]) -> str:
         mode_file().write_text(json.dumps(keep), encoding="utf-8")
     later = ("actifs" if default_on() else "éteints") + f", routage {saved_mode().get('routage') or 'local'}"
     if is_on():
-        names = ", ".join(t["name"] for t in ALL_TOOLS)
+        names = ", ".join(t["name"] for t in [*ALL_TOOLS, *mode_specs()])
         return (
             f"Lezard IA : ACTIF dans cette session. Étapes confiées : {ROUTE_HELP[route()]}. Outils : {names}. "
             "Sers-t'en dès qu'il y a de gros fichiers à lire ou du texte répétitif à produire ; fais directement "
@@ -1190,6 +1202,42 @@ def switch(args: dict, roots: list[Path]) -> str:
 
 
 ALL_TOOLS = [*TOOLS, *TOOLS_RESUMES, *TOOLS_BROUILLONS]
+# outils à trois modes (gateway/mcp_modes.py) : images, documents, web, contrôle du PC
+# pc_* : appelables seulement avec ORCHESTRE_PC=1 (voir mcp_modes.pc_offered), pas proposés sinon
+MODE_TOOLS = ("lire_image", "lire_document", "chercher_web", "pc_tache", "pc_voir", "pc_agir")
+_MODES: list = []  # le module, chargé à la première demande ([None] : absent)
+
+
+def modes():
+    """gateway.mcp_modes, ou None si ce script a été copié seul (les autres outils marchent sans lui)."""
+    if not _MODES:
+        here = Path(__file__).resolve().parent
+        # le dossier du script sort des chemins de Python (ses modules en masqueraient d'autres), son parent y entre
+        sys.path[:] = [x for x in sys.path if not x or Path(x).resolve() != here]
+        if str(here.parent) not in sys.path:
+            sys.path.insert(0, str(here.parent))
+        try:
+            from gateway import mcp_modes
+
+            _MODES.append(mcp_modes)
+        except ImportError:
+            _MODES.append(None)
+    return _MODES[0]
+
+
+def mode_specs() -> list[dict]:
+    found = modes()
+    return found.specs(sys.modules[__name__]) if found else []
+
+
+def _mode_tool(name: str):
+    def run(args: dict, roots: list[Path]):
+        found = modes()
+        if found is None:
+            raise ValueError(f"{name} : outil indisponible ici (il vient avec Lezard IA installée).")
+        return found.HANDLERS[name](sys.modules[__name__], args, roots)
+
+    return run
 
 
 def _when_on(function):
@@ -1202,7 +1250,7 @@ def _when_on(function):
 
 
 SERVERS["lezard"] = (
-    lambda: [SWITCH_TOOL, *ALL_TOOLS] if is_on() else [SWITCH_TOOL],
+    lambda: [SWITCH_TOOL, *ALL_TOOLS, *mode_specs()] if is_on() else [SWITCH_TOOL],
     {
         "lezard_ia": switch,
         **{
@@ -1210,6 +1258,7 @@ SERVERS["lezard"] = (
             for server in ("orchestre", "resumes", "brouillons")
             for name, f in SERVERS[server][1].items()
         },
+        **{name: _when_on(_mode_tool(name)) for name in MODE_TOOLS},
     },
 )
 
@@ -1252,6 +1301,21 @@ Réponds ensuite en UNE ligne : actif ou éteint, et ce que valent les prochaine
   « fichier.py:1-800 ».
 - Petite tâche : fais-la directement, ces outils n'y font rien gagner.
 
+## Les trois modes, pour les images, les documents et le web
+
+`lire_image`, `lire_document` et `chercher_web` suivent le routage choisi par l'utilisateur :
+
+| Routage | Qui fait quoi | Ce qui sort du PC |
+|---|---|---|
+| local | le modèle local fait tout, tu relaies sa réponse | rien : ni image, ni document |
+| eco | le modèle local décrit ou résume, tu décides | sa description, en texte |
+| rapide | tu reçois l'image ou le texte entier, tu fais tout | la matière brute |
+
+- Utilise ces outils à la place des tiens (lecture d'image, recherche web, lecture d'un long document) tant que
+  le routage n'est pas « rapide » : c'est le choix de l'utilisateur, ne le contourne pas.
+- Le contrôle du PC (souris, clavier) n'est pas disponible ici : il existe dans le chat de Lezard IA.
+- En local, ne redemande pas l'image ou le document par un autre moyen : ils ne doivent pas sortir du PC.
+
 ## Quand il est éteint
 
 N'utilise aucun de ces outils et n'en parle pas : travaille normalement.
@@ -1282,7 +1346,9 @@ def handle(msg: dict, roots: list[Path], server: str = "orchestre") -> dict | No
             if function is None:
                 raise ValueError(f"outil inconnu : {name}")
             text = function(args, roots)
-            result = {"content": [{"type": "text", "text": text}], "isError": False}
+            # un outil à trois modes peut rendre une image (mode rapide) : déjà une liste de contenus
+            content = text if isinstance(text, list) else [{"type": "text", "text": text}]
+            result = {"content": content, "isError": False}
         except (ValueError, RuntimeError, OSError) as e:
             result = {"content": [{"type": "text", "text": f"Erreur : {e}"}], "isError": True}
     else:

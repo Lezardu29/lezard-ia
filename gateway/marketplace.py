@@ -1727,7 +1727,9 @@ AGENT_TOOLS = (
         "name": "Interrupteur Lezard IA",
         "description": "Une commande dans Claude Code pour choisir comment la session travaille : /lezard on met "
         "Lezard IA entre Claude et vos modèles locaux (résumés de fichiers, étapes confiées, brouillons contrôlés et "
-        "retouchés, vérification finale), /lezard off revient à Claude seul. Éteint, il ne pèse presque rien.",
+        "retouchés, vérification finale), /lezard off revient à Claude seul. Éteint, il ne pèse presque rien. "
+        "Images, documents et recherche web suivent trois modes : local (le modèle de ce PC fait tout, rien ne sort "
+        "du PC), éco (il décrit ou résume, Claude décide), rapide (Claude reçoit tout et fait tout).",
         "install": "claude mcp add --scope user lezard -- python mcp_orchestre.py --serveur lezard . (serveur MCP "
         "fourni avec Lezard IA), puis les méthodes « lezard » et « orchestre » dans les compétences de Claude Code",
         "commands": [
@@ -1747,7 +1749,8 @@ AGENT_TOOLS = (
                 where="claude",
             ),
         ],
-        "needs": "Claude Code, et Ollama avec au moins un modèle.",
+        "needs": "Claude Code, et Ollama avec au moins un modèle (un modèle qui lit les images, gemma3:12b par exemple, "
+        "pour lire les images en local ou en éco).",
         "lezard": "Écrit par Lezard IA. Réunit le chef d'orchestre, la mémoire des résumés et l'atelier de "
         "brouillons derrière un seul interrupteur : inutile d'installer ces fiches en plus. Le modèle reste "
         "Claude, sur votre compte ; seul ce qu'il confie part vers l'Ollama de ce PC.",
