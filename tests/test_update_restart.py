@@ -83,3 +83,62 @@ def test_gateway_launches_the_installer_outside_its_tree(tmp_path, monkeypatch):
         monkeypatch.undo()  # le vrai Popen : l'intermédiaire lancé pour de bon
         out = subprocess.run([sys.executable, "-c", argv[2], sys.executable, "-c", "pass"], timeout=30)
         assert out.returncode == 0  # l'intermédiaire rend la main aussitôt
+
+
+def test_stopper_also_stops_other_programs_run_with_the_installed_python(tmp_path, monkeypatch):
+    """1.0.23 : le serveur MCP « lezard » que Claude Code gardait ouvert tenait python/libcrypto-3.dll ; l'installateur
+    abandonnait et Lezard IA restait arrêté. Tout programme lancé avec le Python de l'installation est arrêté."""
+    stopper = load_stopper()
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "launcher.json").write_text(json.dumps({"pid": 111, "gateway": 222}))
+    mine = stopper.os.getpid()
+    python = str(tmp_path / "python" / "python.exe")
+    running = {111: python, 222: python, 333: python, mine: python, 444: r"C:\Autre\python\python.exe", 555: ""}
+    killed = []
+
+    def stop_one(pid):
+        killed.append(pid)
+        running.pop(pid)
+
+    monkeypatch.setattr(stopper, "all_pids", lambda: list(running))
+    monkeypatch.setattr(stopper, "program", lambda pid: running.get(pid, ""))
+    monkeypatch.setattr(stopper, "is_python", lambda pid: pid in running)
+    monkeypatch.setattr(stopper, "stop_one", stop_one)
+    assert stopper.others(tmp_path) == [111, 222, 333]  # jamais ce script, ni le Python d'un autre dossier
+    assert stopper.main(tmp_path) == 0
+    assert killed == [111, 222, 333] and set(running) == {mine, 444, 555}
+    # sans service lancé (fenêtre fermée à la main) : le serveur MCP resté ouvert est arrêté quand même
+    (tmp_path / "data" / "launcher.json").unlink()
+    running[666] = python
+    assert stopper.main(tmp_path) == 0 and killed[-1] == 666
+
+
+def test_stopper_that_cannot_free_the_files_says_so(tmp_path, monkeypatch):
+    stopper = load_stopper()
+    python = str(tmp_path / "python" / "python.exe")
+    monkeypatch.setattr(stopper, "all_pids", lambda: [777])
+    monkeypatch.setattr(stopper, "program", lambda pid: python)
+    monkeypatch.setattr(stopper, "stop_one", lambda pid: "arrêt refusé")
+    monkeypatch.setattr(stopper.time, "sleep", lambda s: None)
+    assert stopper.main(tmp_path) == 1
+    assert "toujours en cours : [777]" in (tmp_path / "data" / "logs" / "arret-maj.log").read_text(encoding="utf-8")
+
+
+def test_installer_restarts_lezard_ia_when_the_copy_fails_after_the_stop():
+    assert "procedure DeinitializeSetup();" in ISS and "StoppedApp := App;" in ISS
+    net = ISS.split("procedure DeinitializeSetup();")[1].split("\nend;")[0]
+    assert "(StoppedApp <> '') and not Installed" in net and 'lezard.py" service' in net and "ewNoWait" in net
+    assert "if CurStep = ssPostInstall then\n    Installed := True;" in ISS.replace("\r\n", "\n")
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="instantané des processus de Windows")
+def test_real_process_list_sees_this_python():
+    stopper = load_stopper()
+    assert stopper.os.getpid() in stopper.all_pids()
+    assert Path(stopper.program(stopper.os.getpid())).name.lower().startswith("python")
+    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    try:
+        app = Path(sys.executable).parent.parent / "inexistant"  # others() compare un dossier : aucun ici
+        assert stopper.others(app) == [] and child.pid in stopper.all_pids()
+    finally:
+        child.kill()

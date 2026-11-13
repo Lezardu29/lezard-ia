@@ -144,6 +144,30 @@ end;
   le tableau de bord descend de la gateway : elle était arrêtée avec elle, sans rien installer ni relancer Lezard IA.
   arret-maj.py (fourni par CET installateur, valable quelle que soit la version installée) arrête le service puis la
   gateway, chacun seul : l'installation continue et relance Lezard IA à la fin. }
+{ filet de sécurité : si la copie échoue après l'arrêt du service (fichier resté ouvert, disque plein…), Lezard IA est
+  relancé tel qu'il est plutôt que laissé arrêté sans que personne le sache (1.0.23). }
+var
+  StoppedApp: String;
+  Installed: Boolean;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+    Installed := True;
+end;
+
+procedure DeinitializeSetup();
+var
+  Code: Integer;
+begin
+  if (StoppedApp <> '') and not Installed then
+    if FileExists(StoppedApp + '\lezard.py') and FileExists(StoppedApp + '\python\python.exe') then begin
+      Log('Installation interrompue : Lezard IA est relancé.');
+      Exec(StoppedApp + '\python\python.exe', '"' + StoppedApp + '\lezard.py" service', StoppedApp,
+           SW_SHOWMINNOACTIVE, ewNoWait, Code);
+    end;
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   App: String;
@@ -152,6 +176,7 @@ begin
   Result := '';
   App := ExpandConstant('{app}');
   if FileExists(App + '\lezard.py') and FileExists(App + '\python\python.exe') then begin
+    StoppedApp := App;
     ExtractTemporaryFile('arret-maj.py');
     Exec(App + '\python\python.exe', '"' + ExpandConstant('{tmp}\arret-maj.py') + '" "' + App + '"', App, SW_HIDE,
          ewWaitUntilTerminated, Code);

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import ctypes
 import json
+import os
 import sys
 import time
 from ctypes import wintypes
@@ -55,6 +56,63 @@ def stop_one(pid: int) -> str:
         kernel32.CloseHandle(h)
 
 
+class _Entry(ctypes.Structure):  # PROCESSENTRY32W
+    _fields_ = [
+        ("dwSize", wintypes.DWORD),
+        ("cntUsage", wintypes.DWORD),
+        ("th32ProcessID", wintypes.DWORD),
+        ("th32DefaultHeapID", ctypes.c_size_t),
+        ("th32ModuleID", wintypes.DWORD),
+        ("cntThreads", wintypes.DWORD),
+        ("th32ParentProcessID", wintypes.DWORD),
+        ("pcPriClassBase", ctypes.c_long),
+        ("dwFlags", wintypes.DWORD),
+        ("szExeFile", ctypes.c_wchar * 260),
+    ]
+
+
+def all_pids() -> list[int]:
+    """Numéros de tous les processus (instantané de Windows, sans programme externe)."""
+    kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+    kernel32.CreateToolhelp32Snapshot.argtypes = (wintypes.DWORD, wintypes.DWORD)
+    kernel32.Process32FirstW.argtypes = kernel32.Process32NextW.argtypes = (wintypes.HANDLE, ctypes.POINTER(_Entry))
+    snap = kernel32.CreateToolhelp32Snapshot(0x2, 0)  # TH32CS_SNAPPROCESS
+    if not snap or snap == wintypes.HANDLE(-1).value:
+        return []
+    try:
+        entry, found = _Entry(), []
+        entry.dwSize = ctypes.sizeof(_Entry)
+        more = kernel32.Process32FirstW(snap, ctypes.byref(entry))
+        while more:
+            found.append(int(entry.th32ProcessID))
+            more = kernel32.Process32NextW(snap, ctypes.byref(entry))
+        return found
+    finally:
+        kernel32.CloseHandle(snap)
+
+
+def program(pid: int) -> str:
+    """Chemin du programme de ce processus s'il est encore en marche, sinon « »."""
+    h = kernel32.OpenProcess(QUERY, False, pid)
+    if not h:
+        return ""
+    try:
+        code, size, name = wintypes.DWORD(), wintypes.DWORD(1024), ctypes.create_unicode_buffer(1024)
+        if not kernel32.GetExitCodeProcess(h, ctypes.byref(code)) or code.value != STILL_ACTIVE:
+            return ""
+        return name.value if kernel32.QueryFullProcessImageNameW(h, 0, name, ctypes.byref(size)) else ""
+    finally:
+        kernel32.CloseHandle(h)
+
+
+def others(app: Path) -> list[int]:
+    """Programmes encore lancés avec le Python de l'installation (son dossier python), sauf ce script : le serveur
+    MCP « lezard » ou « orchestre » que Claude Code garde ouvert, un outil du chat… Ils tiennent les fichiers de ce
+    dossier ouverts : l'installateur ne pouvait pas les remplacer, abandonnait, et Lezard IA restait arrêté (1.0.23)."""
+    root = os.path.normcase(str(app / "python")) + os.sep
+    return [pid for pid in all_pids() if pid != os.getpid() and os.path.normcase(program(pid)).startswith(root)]
+
+
 def main(app: Path) -> int:
     data = app / "data"
     logs = data / "logs"
@@ -72,10 +130,11 @@ def main(app: Path) -> int:
     try:
         state = json.loads((data / "launcher.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        say("service non lancé : rien à arrêter")
-        return 0
+        state = {}
+        say("service non lancé")
     pids = [p for p in (state.get("pid"), state.get("gateway")) if isinstance(p, int) and p > 0]
-    say(f"arrêt pour la mise à jour : service {state.get('pid')}, gateway {state.get('gateway')}")
+    if state:
+        say(f"arrêt pour la mise à jour : service {state.get('pid')}, gateway {state.get('gateway')}")
     for pid in pids:  # le service d'abord : sinon il relancerait la gateway arrêtée
         if is_python(pid):
             say(f"  {pid} : arrêt…")
@@ -85,7 +144,15 @@ def main(app: Path) -> int:
             break
         time.sleep(0.5)
     (data / "launcher.stop").unlink(missing_ok=True)
-    left = [pid for pid in pids if is_python(pid)]
+    # le reste : serveur MCP gardé ouvert par Claude Code, outil du chat… lancés avec le Python de l'installation
+    for pid in others(app):
+        say(f"  {pid} : autre programme lancé avec le Python de Lezard IA, arrêt…")
+        say(f"  {pid} : {stop_one(pid)}")
+    for _ in range(20):
+        if not others(app):
+            break
+        time.sleep(0.5)
+    left = [pid for pid in pids if is_python(pid)] + others(app)
     say("Lezard IA arrêté pour la mise à jour" if not left else f"toujours en cours : {left}")
     return 0 if not left else 1
 
