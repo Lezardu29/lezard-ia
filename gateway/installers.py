@@ -21,7 +21,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from .marketplace import MarketplaceError
+from .marketplace import MarketplaceError, refuse_retired
 
 PYTHON = "{python}"
 OPENWEBUI_VERSION = "0.12.3"  # publiée le 2026-10-16 (PyPI)
@@ -869,6 +869,7 @@ def dependency_steps(names) -> list[tuple[str, ...]]:
 def plan(key: str) -> list[tuple[str, ...]]:
     """Dépendances absentes d'abord, puis les étapes de la recette ; les programmes sont cherchés au moment de lancer
     chaque étape (resolve), après l'arrivée des dépendances."""
+    refuse_retired(key)
     lacking = missing(key)
     if lacking:
         raise MarketplaceError(409, f"Requis sur ce PC : {', '.join(lacking)}. Installez-le, puis réessayez.")

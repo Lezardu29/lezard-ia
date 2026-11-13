@@ -1,8 +1,8 @@
 {
  "pack": "ollama",
  "label": "Ollama, pour faire tourner les modèles d'IA sur ce PC",
- "version": "0.40.4",
- "url": "https://github.com/ollama/ollama/releases/download/v0.40.4/OllamaSetup.exe",
- "sha256": "45fcd47d70dd047ab95736802e71a7497ef1a473a50470471fc2fb0eb90badde",
- "size": 1581967176
+ "version": "0.40.13",
+ "url": "https://github.com/ollama/ollama/releases/download/v0.40.13/OllamaSetup.exe",
+ "sha256": "9e3c76e54e7184c68e88a2378b909bf59bbe454f83c076cb4f4a717e946ae719",
+ "size": 1676266440
 }

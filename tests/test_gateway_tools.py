@@ -1111,3 +1111,93 @@ def test_web_tools_can_be_switched_off_at_install(monkeypatch):
     assert any(t.level == "web" for t in tools.available(admin_ctx).values())
     monkeypatch.setenv("TOOLS_WEB", "false")
     assert not any(t.level == "web" for t in tools.available(admin_ctx).values())
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="contrôle du PC : Windows")
+def test_pc_open_lance_l_application_sans_clavier(monkeypatch):
+    """Avant : touche Windows, nom tapé, Entrée. Menu Démarrer déjà ouvert, tout partait dans la fenêtre active
+    (essai réel du 2026-11-11). Maintenant : l'application est trouvée dans la liste de Windows et lancée."""
+    from gateway.tools import pc
+
+    apps = [
+        ("Désinstaller Bloc-notes Plus", "u"),
+        ("Bloc-notes", "Notepad!App"),
+        ("Calculatrice", "Calc!App"),
+        ("Microsoft Edge", "MSEdge"),
+        ("Visual Studio Code", "Code"),
+        ("WordPad", "wp"),
+        ("Word", "w"),
+    ]
+    assert pc.find_app("bloc notes", apps) == ("Bloc-notes", "Notepad!App")
+    assert pc.find_app("Notepad", apps)[1] == "Notepad!App" and pc.find_app("calc", apps)[1] == "Calc!App"
+    assert pc.find_app("edge", apps)[1] == "MSEdge" and pc.find_app("word", apps)[1] == "w"
+    assert pc.find_app("vs code", apps)[1] == "Code" and pc.find_app("photoshop", apps) is None
+    launched, typed = [], []
+    monkeypatch.setattr(pc, "start_apps", lambda: apps)
+    monkeypatch.setattr(pc.subprocess, "Popen", lambda cmd, **k: launched.append(cmd))
+    monkeypatch.setattr(pc, "_send", lambda *a: typed.append(a))
+    monkeypatch.setattr(pc, "_check_failsafe", lambda: None)
+    real_sleep = asyncio.sleep
+    monkeypatch.setattr(pc.asyncio, "sleep", lambda s: real_sleep(0))
+
+    async def after():
+        return ToolResult("ok")
+
+    monkeypatch.setattr(pc, "_after", after)
+    out = asyncio.run(pc.open_app({"name": "calculatrice"}))
+    assert launched == [["explorer.exe", r"shell:AppsFolder\Calc!App"]] and not typed
+    assert out.text.startswith("« Calculatrice » lancée.")
+    with pytest.raises(ToolError, match="Aucune application installée.*Rien n'a été tapé"):
+        asyncio.run(pc.open_app({"name": "photoshop"}))
+    assert len(launched) == 1 and not typed
+
+
+def test_la_meme_recherche_n_est_pas_refaite_et_le_modele_doit_conclure():
+    """qwen2.5-coder refaisait douze fois la même recherche avant de répondre, ou finissait par afficher son appel
+    d'outil en texte. La recherche identique n'est plus relancée ; au 2e rappel, le modèle conclut sans outil."""
+    ran = []
+
+    async def search(args):
+        ran.append(args["query"])
+        return ToolResult(f"Résultats pour {args['query']}")
+
+    web = Tool(
+        "web_search", "cherche", {"type": "object", "properties": {"query": {"type": "string"}}}, search, level="web"
+    )
+    same = {
+        "choices": [{"message": {"content": '{"name": "web_search", "arguments": {"query": "python"}}'}}]
+    }  # en texte
+    other = {"choices": [{"message": {"content": '{"name": "web_search", "arguments": {"query": "python 3"}}'}}]}
+
+    async def drive(replies):
+        seen = []
+
+        async def call(msgs, specs):
+            seen.append((msgs, specs))
+            return next(replies), "local"
+
+        chunks = [
+            c
+            async for c in runner.run(
+                call=call,
+                tools={"web_search": web},
+                messages=[{"role": "user", "content": "dernière version de python ?"}],
+                approvals=runner.Approvals(),
+                identity="me",
+                audit=lambda *a: None,
+                max_steps=12,
+            )
+        ]
+        text = "".join((c["choices"][0]["delta"] or {}).get("content") or "" for c in chunks if c.get("choices"))
+        results = [c["x_gateway_tool"] for c in chunks if (c.get("x_gateway_tool") or {}).get("type") == "result"]
+        return text, seen, results
+
+    # la même recherche trois fois : lancée une seule fois, deux rappels, puis réponse demandée sans outil
+    text, seen, results = asyncio.run(drive(iter([same, same, same, FINAL])))
+    assert ran == ["python"] and text == "fini" and len(seen) == 4
+    assert [r["ok"] for r in results] == [True, False, False] and "Déjà fait" in results[1]["text"]
+    assert seen[3][1] is None and seen[3][0][-1] == {"role": "user", "content": runner.CONCLUDE}
+    # une autre requête reste permise ; et un appel encore écrit en texte à la fin n'est jamais affiché tel quel
+    ran.clear()
+    text, seen, results = asyncio.run(drive(iter([same, other, same, same, same])))
+    assert ran == ["python", "python 3"] and text == runner.NO_ANSWER and '"name"' not in text

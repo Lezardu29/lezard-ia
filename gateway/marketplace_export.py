@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import html
 import json
 import os
 import sys
@@ -157,7 +158,84 @@ async def library_with_licenses(client: httpx.AsyncClient) -> tuple[list[dict], 
     return await asyncio.gather(*(one(m) for m in rows)), texts
 
 
+PAGE_SECTIONS = (
+    ("bundles", "Bundles", "Plusieurs éléments installés ensemble, en un clic."),
+    ("components", "Outils de Lezard IA", "Fonctions à ajouter à Lezard IA : voix, recherche web, contrôle du PC…"),
+    ("skills", "Compétences du chat", "Des façons de répondre à activer dans le chat."),
+    ("mcp", "Serveurs MCP", "Des outils donnés à l'IA : fichiers, mémoire, navigateur…"),
+    ("agent_tools", "Outils pour agents", "Outils pour Claude Code et les autres agents de programmation."),
+    ("apps", "Applications", "Applications branchées sur les modèles de Lezard IA."),
+)
+
+
+def _license_name(item: dict) -> str:
+    lic = item.get("license") or (item.get("licenses") or [None])[0]
+    return (lic.get("name") if isinstance(lic, dict) else lic) or ""
+
+
+def static_page(catalog: dict) -> str:
+    """Le catalogue en texte simple, sur une page sans script : la marketplace du site charge ses fiches par script,
+    les moteurs de recherche n'y lisent presque rien. Cette page leur donne chaque nom, sa description et sa licence."""
+    esc = html.escape
+    parts, count = [], 0
+    for key, title, lead in PAGE_SECTIONS:
+        rows = []
+        for it in catalog.get(key) or []:
+            lic, repo = _license_name(it), it.get("github")
+            meta = [f"Licence : {esc(lic)}"] if lic else []
+            if repo:
+                meta.append(f'<a href="https://github.com/{esc(repo)}" rel="noopener nofollow">Code source</a>')
+            rows.append(
+                f'      <h3 id="{esc(key)}-{esc(str(it["id"]))}">{esc(it["name"])}</h3>\n'
+                f"      <p>{esc(it.get('description') or '')}</p>\n"
+                + (f'      <p class="updated">{" · ".join(meta)}</p>\n' if meta else "")
+            )
+        count += len(rows)
+        parts.append(f'      <h2 id="{esc(key)}">{esc(title)}</h2>\n      <p>{esc(lead)}</p>\n' + "".join(rows))
+    models = (catalog.get("library") or {}).get("models") or []
+    rows = []
+    for m in models:
+        lic = _license_name(m)
+        sizes = ", ".join(s["tag"].split(":", 1)[-1] for s in m.get("sizes") or [] if s.get("tag"))
+        meta = " · ".join(
+            x for x in (f"Tailles : {esc(sizes)}" if sizes else "", f"Licence : {esc(lic)}" if lic else "") if x
+        )
+        rows.append(
+            f'        <li id="modele-{esc(m["name"])}"><strong>{esc(m["name"])}</strong> : {esc(m.get("description") or "")}'
+            + (f' <span class="updated">({meta})</span>' if meta else "")
+            + "</li>\n"
+        )
+    count += len(rows)
+    parts.append(
+        '      <h2 id="modeles">Modèles d\'IA</h2>\n'
+        "      <p>Les modèles de la bibliothèque d'Ollama, installables en un clic depuis Lezard IA (descriptions "
+        "d'Ollama, en anglais).</p>\n      <ul>\n" + "".join(rows) + "      </ul>\n"
+    )
+    summary = (
+        " · ".join(f'<a href="#{k}">{esc(t)}</a>' for k, t, _ in PAGE_SECTIONS)
+        + ' · <a href="#modeles">Modèles d\'IA</a>'
+    )
+    template = (Path(__file__).resolve().parent / "marketplace_page.html").read_text(encoding="utf-8")
+    return (
+        template.replace("{{COUNT}}", str(count))
+        .replace("{{DATE}}", esc(catalog.get("generated_at") or time.strftime("%Y-%m-%d")))
+        .replace("{{SUMMARY}}", summary)
+        .replace("{{BODY}}", "".join(parts))
+    )
+
+
+def write_page(catalog: dict) -> None:
+    (OUT / "catalogue.html").write_text(static_page(catalog), encoding="utf-8", newline="\n")
+
+
 async def main() -> int:
+    from . import marketplace_extra
+
+    marketplace_extra.apply_source()  # fiches ajoutées depuis la dernière version (catalogue/supplement.json)
+    if "--page" in sys.argv:  # la page en texte seulement, d'après le catalogue déjà écrit : aucun accès à Internet
+        write_page(json.loads((OUT / "catalog.json").read_text(encoding="utf-8")))
+        print(f"page du catalogue -> {OUT / 'catalogue.html'}")
+        return 0
     async with httpx.AsyncClient(headers={"User-Agent": "LezardIA-marketplace-export"}) as client:
         await refresh_stars(client)
         models, texts = await library_with_licenses(client)
@@ -169,6 +247,7 @@ async def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "catalog.json").write_text(json.dumps(catalog, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     (OUT / "licenses.json").write_text(json.dumps(texts, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    write_page(catalog)
     missing = sum(1 for m in models if not m["license"])
     print(f"{len(models)} modèles ({missing} sans licence lisible), {len(texts)} textes de licence -> {OUT}")
     return 0

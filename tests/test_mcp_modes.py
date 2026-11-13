@@ -138,6 +138,10 @@ def test_pc_qui_pilote_selon_le_mode(core, tmp_path, monkeypatch):
     tools = {"pc_screenshot": "capture", "pc_click": "clic"}
     monkeypatch.setattr(mm, "_pc", lambda: (None, None, tools))
     monkeypatch.setattr(mm, "_run", fake_run)
+    desk = types.SimpleNamespace(open_windows=lambda: {7}, foreground=lambda: (7, "notes.txt - Bloc-notes"))
+    monkeypatch.setattr(mm, "_desk", lambda: desk)
+    monkeypatch.setattr(mm, "USER_WINDOWS", {"seen": None})
+    tools_kb = {"pc_screenshot": "capture", "pc_click": "clic", "pc_type": "saisie", "pc_key": "touche"}
     monkeypatch.delenv("ORCHESTRE_PC", raising=False)
     route("rapide")  # pas proposé tant qu'il n'est pas fiable (essais réels du 2026-11-11) : refusé partout
     with pytest.raises(ValueError, match="pas disponible dans Claude Code"):
@@ -158,6 +162,17 @@ def test_pc_qui_pilote_selon_le_mode(core, tmp_path, monkeypatch):
     assert ran[-1] == ("clic", {"element": 1}) and image["type"] == "image" and "Bloc-notes" in text["text"]
     with pytest.raises(ValueError, match="pc_click"):
         mm.pc_act(core, {"outil": "pc_screenshot"}, [tmp_path])
+    # le clavier est refusé dans une fenêtre déjà ouverte avant la tâche (celle de l'utilisateur)
+    monkeypatch.setattr(mm, "_pc", lambda: (None, None, tools_kb))
+    before = len(ran)
+    for name in ("pc_type", "pc_key"):
+        with pytest.raises(ValueError, match="Refusé, rien n'a été tapé.*Bloc-notes"):
+            mm.pc_act(core, {"outil": name, "arguments": {"text": "bonjour"}}, [tmp_path])
+    assert len(ran) == before
+    mm.pc_act(core, {"outil": "pc_type", "arguments": {"text": "ok"}, "fenetre_utilisateur": True}, [tmp_path])
+    desk.foreground = lambda: (99, "Calculatrice")  # une fenêtre ouverte par la tâche : le clavier y est permis
+    mm.pc_act(core, {"outil": "pc_type", "arguments": {"text": "12"}}, [tmp_path])
+    assert [r[0] for r in ran[before:]] == ["saisie", "saisie"]
     monkeypatch.delenv("ORCHESTRE_PC_AUTONOME", raising=False)
     with pytest.raises(ValueError, match="pas disponible"):  # jamais proposée sans le réglage de mise au point
         mm.pc_task(core, {"objectif": "ouvre le bloc-notes"}, [tmp_path])
@@ -228,6 +243,7 @@ def test_tache_locale_sur_le_pc_avec_la_vraie_boucle_de_pilotage(core, tmp_path,
         ),
         "pc_click": tools.Tool("pc_click", "Clic.", params, click, level="pc", confirm=True),
     }
+    monkeypatch.setattr(mm, "USER_WINDOWS", {"seen": set()})
     monkeypatch.setattr(mm, "_pc", lambda: (tools, runner, fake))
     monkeypatch.setattr(mm, "vision_model", lambda core: "oeil")
     monkeypatch.setattr(tools, "FAILSAFE", None)

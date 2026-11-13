@@ -22,6 +22,9 @@ os.environ.setdefault("GATEWAY_KEEP_ALIVE", "ollama")  # ni de rappel keep_alive
 os.environ.setdefault("LOCAL_TTS", "false")  # ni de lecture vocale locale (Kokoro) : testée à part, simulée
 # guide des applications du contrôle du PC : jamais celui du vrai PC (data/pc_apps.json) ; tests : fichier à part
 os.environ.setdefault("PC_APP_GUIDES", os.path.join(os.path.dirname(__file__), "aucun-guide-pc_apps.json"))
+# serveurs MCP : jamais ceux du vrai PC (data/mcp.json), que chaque application de test lancerait pour de bon et
+# qu'une autre, sur une autre boucle asyncio, tenterait ensuite d'arrêter ; tests : fichier à part (MCP_CONFIG)
+os.environ.setdefault("MCP_CONFIG", os.path.join(os.path.dirname(__file__), "aucun-serveur-mcp.json"))
 
 
 @pytest.fixture(autouse=True)

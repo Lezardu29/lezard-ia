@@ -88,24 +88,24 @@
   },
   {
    "name": "crewai",
-   "version": "1.15.30",
-   "url": "https://files.pythonhosted.org/packages/c4/98/c83e7fdbb05f77dbf75d0fc0608b33bc1142b2912e65bd250929e7043115/crewai-1.15.30-py3-none-any.whl",
-   "sha256": "a54909d778971a7ef21b6a1d52a59090fcc3e1c3fb09bb5ea5b117e6157e0e65",
-   "size": 1395154
+   "version": "1.15.41",
+   "url": "https://files.pythonhosted.org/packages/bf/b2/dc61e215e05916225fc946f7051d7afd1670ada8e38ba9de1cfcbefea182/crewai-1.15.41-py3-none-any.whl",
+   "sha256": "80a2d97f68c08fc2d1e56958416b07f3e0a8a71d2a416cf7869b9cd444306459",
+   "size": 1489856
   },
   {
    "name": "crewai-cli",
-   "version": "1.15.30",
-   "url": "https://files.pythonhosted.org/packages/db/a4/bdda89023d0c0975dad0004331e4a04ba480af5113fcdbfb4260d02a71fb/crewai_cli-1.15.30-py3-none-any.whl",
-   "sha256": "88a69573ba893abcf8db24d05b86c6eff02a7462a24ffa0d473a550684cc852b",
-   "size": 251809
+   "version": "1.15.41",
+   "url": "https://files.pythonhosted.org/packages/ad/68/3397ed051f057412e22c42d42ada972394d965e0d911bdb40fbfaa1db529/crewai_cli-1.15.41-py3-none-any.whl",
+   "sha256": "6787eea9e00844508ea44cdb35a2d582bb0693ca985c9bc9dcc99dfa6ec3979e",
+   "size": 292930
   },
   {
    "name": "crewai-core",
-   "version": "1.15.30",
-   "url": "https://files.pythonhosted.org/packages/ef/b3/41be69b8b277c272f3423658b470fb318dd8c7032f082cae88cffeec74c4/crewai_core-1.15.30-py3-none-any.whl",
-   "sha256": "ac4bb339a894caa68a3b4da785a27ef170daadee17b3aff0c82635755e183991",
-   "size": 1311015
+   "version": "1.15.41",
+   "url": "https://files.pythonhosted.org/packages/88/81/b430067950c93c1b12080406118f2b58c40e76c2cfd559e4661c8e7ddbb6/crewai_core-1.15.41-py3-none-any.whl",
+   "sha256": "0a2e7475a6a7e480421103b9b69508b288b6351a5b2d3be556fa3df7522bb671",
+   "size": 1313256
   },
   {
    "name": "deprecation",
@@ -144,10 +144,10 @@
   },
   {
    "name": "filelock",
-   "version": "4.2.4",
-   "url": "https://files.pythonhosted.org/packages/e0/1b/5e74289a1878e666bb4b65fe5805a04cafcac2aa5f519ef1ead67ef91c56/filelock-4.2.4-py3-none-any.whl",
-   "sha256": "301241438c57936ef93f4243a94f2559022268bfcf9b375a9a72eb0f8db8358e",
-   "size": 162475
+   "version": "4.2.10",
+   "url": "https://files.pythonhosted.org/packages/ef/90/5d0096a325aa0f83ba7a3968bfb485b67e32c947bdf9cd0fcb4b485be718/filelock-4.2.10-py3-none-any.whl",
+   "sha256": "9479aaeb4db20b5a53e3da28493edd24720b66b8a0b84030aa56ccdf243d6857",
+   "size": 218040
   },
   {
    "name": "flatbuffers",
@@ -186,17 +186,17 @@
   },
   {
    "name": "grpcio",
-   "version": "1.85.0",
-   "url": "https://files.pythonhosted.org/packages/46/10/b776072b088df498714ebf45dfc1d94ca5431b5eb8b058447b78b31b8be5/grpcio-1.85.0-cp313-cp313-win_amd64.whl",
-   "sha256": "09ab4af4c4c74baa9b17f9a6fcdcef5be98357774417d624191ec41690df4bb3",
-   "size": 5606189
+   "version": "1.85.1",
+   "url": "https://files.pythonhosted.org/packages/f9/f0/d2448e860d884e8c89dd9135cd9373df064c10227d90973d822c2125428d/grpcio-1.85.1-cp313-cp313-win_amd64.whl",
+   "sha256": "c17d61af28b322c48ab3881c685e5f6e7e367c56844cf589ee7707be9477b969",
+   "size": 5606831
   },
   {
    "name": "hf-xet",
-   "version": "1.7.0",
-   "url": "https://files.pythonhosted.org/packages/4d/59/b35106dfa71b6eef605dc88bd038fe99c7f86fb132a15b60d0bf2f235b2c/hf_xet-1.7.0-cp38-abi3-win_amd64.whl",
-   "sha256": "2b7bb5727889b0f2436dbaaad8fc4c3e66b8240d992716989e0c086b4278b1bc",
-   "size": 3822644
+   "version": "1.8.0",
+   "url": "https://files.pythonhosted.org/packages/97/4d/2c76a992b370ff77d0b5219275779f8c9a7dabb8ee649deb265dfed84d0f/hf_xet-1.8.0-cp38-abi3-win_amd64.whl",
+   "sha256": "92188598dedc1e1f5609bd718d4db8687a6c89915553912571e2f587892eecec",
+   "size": 3911559
   },
   {
    "name": "httpcore2",
@@ -228,10 +228,10 @@
   },
   {
    "name": "huggingface_hub",
-   "version": "2.3.0",
-   "url": "https://files.pythonhosted.org/packages/c7/89/5f6ef1162d0323f167b6baab04d1b4bd6a946161a8af6d86f622d9d79aa1/huggingface_hub-2.3.0-py3-none-any.whl",
-   "sha256": "5da369600233568a126eb5578754935b2add9446b42d9e2fc0927d56840ac1a5",
-   "size": 855161
+   "version": "2.4.0",
+   "url": "https://files.pythonhosted.org/packages/d4/55/ff47f1b082ecf5f43f4bc1e3b932d68eead171dabbbd1a92666c686301d7/huggingface_hub-2.4.0-py3-none-any.whl",
+   "sha256": "42ecfd93ede47bdd333daebbf66a32d7bfe2e18752754fe4d2d4f98a0179d801",
+   "size": 857021
   },
   {
    "name": "importlib_resources",
@@ -326,10 +326,10 @@
   },
   {
    "name": "lancedb",
-   "version": "0.40.0",
-   "url": "https://files.pythonhosted.org/packages/88/38/00ed271fd7fc51761b7d449856913a64951041881e68972602643eae7349/lancedb-0.40.0-cp310-abi3-win_amd64.whl",
-   "sha256": "aaea68920b88e3d0b84a9ec84bc1585ad04239b9ca1bfcd1e491c2c12bffddc2",
-   "size": 83389723
+   "version": "0.41.0",
+   "url": "https://files.pythonhosted.org/packages/14/05/34ded5ae87fc632bed8c95370df082bc01ab5bac1a599727c10b07315d12/lancedb-0.41.0-cp310-abi3-win_amd64.whl",
+   "sha256": "c00ba59f0f880c2581566851a6018c00ef5c49be56ac4484c600e5129135f059",
+   "size": 85595685
   },
   {
    "name": "lark",
@@ -347,10 +347,10 @@
   },
   {
    "name": "markdown-it-py",
-   "version": "4.2.0",
-   "url": "https://files.pythonhosted.org/packages/b3/81/4da04ced5a082363ecfa159c010d200ecbd959ae410c10c0264a38cac0f5/markdown_it_py-4.2.0-py3-none-any.whl",
-   "sha256": "9f7ebbcd14fe59494226453aed97c1070d83f8d24b6fc3a3bcf9a38092641c4a",
-   "size": 91687
+   "version": "4.3.0",
+   "url": "https://files.pythonhosted.org/packages/c9/31/5f0ac2f1a1c67423c995c731a11cd4ad05d081a2be969d74f868bdb9cc70/markdown_it_py-4.3.0-py3-none-any.whl",
+   "sha256": "7aa1511a46c39138de78d9eba92ce47e63124d8003fc98b3a351909e04239efa",
+   "size": 96951
   },
   {
    "name": "MarkupSafe",
@@ -368,10 +368,10 @@
   },
   {
    "name": "mdit-py-plugins",
-   "version": "0.6.1",
-   "url": "https://files.pythonhosted.org/packages/a5/69/6da5581c6a7fede7dc261bf4e67d6adca4196f176b43288b55b3db395b6e/mdit_py_plugins-0.6.1-py3-none-any.whl",
-   "sha256": "214c82fb2ac524472ab6a5bcab1de80f73b50443e187f401bfd77efbc7c6481d",
-   "size": 66663
+   "version": "0.7.0",
+   "url": "https://files.pythonhosted.org/packages/4d/d3/d07e61326f150944ead0da9d0b39fb20d7fa367bbc951b10fca6bb1c7382/mdit_py_plugins-0.7.0-py3-none-any.whl",
+   "sha256": "7f8e30403f3dd8bfe3afcdcbc6e61066d3f2e714167507b9c26eb385ec399353",
+   "size": 72937
   },
   {
    "name": "mdurl",
@@ -403,17 +403,17 @@
   },
   {
    "name": "oauthlib",
-   "version": "4.0.0",
-   "url": "https://files.pythonhosted.org/packages/d9/f4/78229a1066068ca14fc60fb26cf7381cabe4382261392b90e5f9552722d4/oauthlib-4.0.0-py3-none-any.whl",
-   "sha256": "624c28c13a0a59cabf9747dfa52af63be3e512a7f2714df16e91b5b3a145e6cd",
-   "size": 159715
+   "version": "4.0.1",
+   "url": "https://files.pythonhosted.org/packages/df/ef/3b8adde1b32a6f540758bff734d3442c621734c83708e5f02b0ba2f43b84/oauthlib-4.0.1-py3-none-any.whl",
+   "sha256": "498a298876e996301950a5b053d12c31628bb7b895db03666430c69ce182eb61",
+   "size": 161934
   },
   {
    "name": "onnxruntime",
-   "version": "1.31.1",
-   "url": "https://files.pythonhosted.org/packages/59/bf/a1d282b4c753ba3e9b31f4c11abd2bc2390513dc5e3792ca3b78e42401c3/onnxruntime-1.31.1-cp313-cp313-win_amd64.whl",
-   "sha256": "0558f29d5f6ac09957390c9c5495931485ee8ae7f0ce781ccee86a0ae5c2348b",
-   "size": 14888304
+   "version": "1.32.0",
+   "url": "https://files.pythonhosted.org/packages/6f/ee/a776ccc71ba54de3739c20c7c815d9695c55db1d08e2b3c621452676c23f/onnxruntime-1.32.0-cp313-cp313-win_amd64.whl",
+   "sha256": "c7f9aa98036ba2a47aa041a4a8c6d0a1f7bfe1bde44c131dcd15ce334f2f148d",
+   "size": 16697937
   },
   {
    "name": "openai",
@@ -431,59 +431,59 @@
   },
   {
    "name": "opentelemetry-exporter-http-transport",
-   "version": "0.66b1",
-   "url": "https://files.pythonhosted.org/packages/04/69/6af86ff66492b481c6a4c05dcfd68beb47ed8ba046440a26a2aac76b95c7/opentelemetry_exporter_http_transport-0.66b1-py3-none-any.whl",
-   "sha256": "2f95404bdee7f9d2d529c7de56c7bd86d014d774d8fbf137810e0167f8a492bf",
-   "size": 12155
+   "version": "0.66b2",
+   "url": "https://files.pythonhosted.org/packages/a1/b2/c622a101f31c0e6670b82f4264c4e77c161bce415bc6fc158fda0b82e218/opentelemetry_exporter_http_transport-0.66b2-py3-none-any.whl",
+   "sha256": "fd5f5b490c099acda1cd7b909d5e8981436bf18cc8c6098d302d114c271720e9",
+   "size": 12154
   },
   {
    "name": "opentelemetry-exporter-otlp-common",
-   "version": "0.66b1",
-   "url": "https://files.pythonhosted.org/packages/fc/39/8c23d67665c762aa51840fa06f86e902e8f6f1693bc8d7e3d98cd6e2f753/opentelemetry_exporter_otlp_common-0.66b1-py3-none-any.whl",
-   "sha256": "00ff8592c3a7cb729ff3fdc7ffa12372c243bdf2163e80c180994d0c7bd83ee9",
+   "version": "0.66b2",
+   "url": "https://files.pythonhosted.org/packages/a8/47/b3049e30b339c82e3c7ec1fc692185a5d5a3ba65a94c570bb39b2c0b8424/opentelemetry_exporter_otlp_common-0.66b2-py3-none-any.whl",
+   "sha256": "ace86efb75489f925f1ef809856ae5f0c7db534e4afdc624530222228b1236a5",
    "size": 12385
   },
   {
    "name": "opentelemetry-exporter-otlp-proto-common",
-   "version": "1.45.1",
-   "url": "https://files.pythonhosted.org/packages/84/aa/92f225d353904e7f70b8b3e3c1b02db0cf56f744c2e83c581dc372e78873/opentelemetry_exporter_otlp_proto_common-1.45.1-py3-none-any.whl",
-   "sha256": "2f446183ae7047b036226f1d846c41a834b0e8755ad13b51a51dd38952eb466c",
-   "size": 15393
+   "version": "1.45.2",
+   "url": "https://files.pythonhosted.org/packages/e6/d6/0f30d38120a949aef70528f845bf539f80df62abb4b8e62fdf69c2b6df5a/opentelemetry_exporter_otlp_proto_common-1.45.2-py3-none-any.whl",
+   "sha256": "af483b24217028892f017096731b794b196b785025d2e6808874720fd0b05a80",
+   "size": 15392
   },
   {
    "name": "opentelemetry-exporter-otlp-proto-grpc",
-   "version": "1.45.1",
-   "url": "https://files.pythonhosted.org/packages/4d/46/2d1da202f1e17c81aae7efcf702898d524b46709e4d3e2bf1f7f8ca8fbc6/opentelemetry_exporter_otlp_proto_grpc-1.45.1-py3-none-any.whl",
-   "sha256": "e42ecb789d2fc5d8145e3dadc3e2991c9f18cd166d7c7514e234702540274b76",
-   "size": 19492
+   "version": "1.45.2",
+   "url": "https://files.pythonhosted.org/packages/e8/48/14301cac3d106e795eef7e89e191489f086b4e5ad26e47c9635a198e95f4/opentelemetry_exporter_otlp_proto_grpc-1.45.2-py3-none-any.whl",
+   "sha256": "8a48d60835e90536846bd82de487bfbd81bccb5a1b3d0fb82edeea17db07395c",
+   "size": 19490
   },
   {
    "name": "opentelemetry-exporter-otlp-proto-http",
-   "version": "1.45.1",
-   "url": "https://files.pythonhosted.org/packages/aa/1f/517eaa0187ba106a9da97160ce2add3a371812681dc440930b267f714e42/opentelemetry_exporter_otlp_proto_http-1.45.1-py3-none-any.whl",
-   "sha256": "24a97cf3753c7fb52fad44a696e452ff371686339e2acf3309e2eda3d0230700",
+   "version": "1.45.2",
+   "url": "https://files.pythonhosted.org/packages/32/65/f64d7d2450217e2989714e1dee15e19bf79a77a313387abac0cac77bc10e/opentelemetry_exporter_otlp_proto_http-1.45.2-py3-none-any.whl",
+   "sha256": "6e4d025138829d0ee57946930c2ccad6491ad4d92a958e9c7eea69278fe60cfc",
    "size": 22180
   },
   {
    "name": "opentelemetry-proto",
-   "version": "1.45.1",
-   "url": "https://files.pythonhosted.org/packages/ab/9a/42ec8180a769516ae757e893b69736826efceac7332553915b4528a91c6d/opentelemetry_proto-1.45.1-py3-none-any.whl",
-   "sha256": "f38e2a8413053c180cd3d2637fbb279673ec2f6a6e09c995aafa2f452c52b46e",
-   "size": 72488
+   "version": "1.45.2",
+   "url": "https://files.pythonhosted.org/packages/7e/0d/a0b8f2b9efe2ec1abdf639d3696db9b1563ebeb11d91aac08ba7341e9122/opentelemetry_proto-1.45.2-py3-none-any.whl",
+   "sha256": "03a7ca1b43f89fd5b965d5975902bb2515c0c86e2428b456836e9a6149c6235a",
+   "size": 72484
   },
   {
    "name": "opentelemetry-sdk",
-   "version": "1.45.1",
-   "url": "https://files.pythonhosted.org/packages/95/3c/87c42b4bd6dd297536f04cd9383d212ac557ecd49f2cbdcd46da1c9ef5c8/opentelemetry_sdk-1.45.1-py3-none-any.whl",
-   "sha256": "c604c11dc429810812348989115fa44bd558772a3d7442afc43d024f2c250ca4",
-   "size": 140063
+   "version": "1.45.2",
+   "url": "https://files.pythonhosted.org/packages/9f/a5/9a3b793ef48245f2336a16beb2324c2397dbb3f987cd68942f77cca06156/opentelemetry_sdk-1.45.2-py3-none-any.whl",
+   "sha256": "ff974ea70ee4f1d51e2ec152db37c2b626c7bf82bb3f7d86114fd8704e7199c6",
+   "size": 141756
   },
   {
    "name": "opentelemetry-semantic-conventions",
-   "version": "0.66b1",
-   "url": "https://files.pythonhosted.org/packages/bc/14/67f8aa798857f8cf686f515bf93d9bb877ce952ddc8efae0fa25b45ce0d6/opentelemetry_semantic_conventions-0.66b1-py3-none-any.whl",
-   "sha256": "d4cddeb4315490b35213f55e2bdc9ac54bb1e4d318927475bed62b35545e581b",
-   "size": 206279
+   "version": "0.66b2",
+   "url": "https://files.pythonhosted.org/packages/67/bd/6bf33ed31521c565931c037e9e81bac47c1acb000e850c6e24220e2a0c00/opentelemetry_semantic_conventions-0.66b2-py3-none-any.whl",
+   "sha256": "4cbe61e5f9275d57ab31708446e7938ef4291ebbe6a7fca6f7a629c5acae87d8",
+   "size": 206280
   },
   {
    "name": "orjson",
@@ -529,10 +529,10 @@
   },
   {
    "name": "platformdirs",
-   "version": "4.13.5",
-   "url": "https://files.pythonhosted.org/packages/6c/8a/1d8cb3842909dc193a73835adedf412e32e18f8ffd59f43983949622fe6f/platformdirs-4.13.5-py3-none-any.whl",
-   "sha256": "53d3ec4280b815c1e0b02edad7f9ee8fda1ba9c0865dd9c2e6e63849ce82fc1e",
-   "size": 32779
+   "version": "4.14.5",
+   "url": "https://files.pythonhosted.org/packages/7c/ae/ecbbbfd0e4343a6a521d49b3c8656fb4643dee2a4f6eaf941cf3280391a8/platformdirs-4.14.5-py3-none-any.whl",
+   "sha256": "8e778c6fa421516f4d3369449f8df3b0e1b72c0e0005fe88e3ec772d0a14e750",
+   "size": 35402
   },
   {
    "name": "portalocker",
@@ -557,24 +557,24 @@
   },
   {
    "name": "pyarrow",
-   "version": "26.0.0",
-   "url": "https://files.pythonhosted.org/packages/c0/ed/138d29fddaf803b90f4527e124bb6aaddc18aaf4a6c50fd0a5f577c94989/pyarrow-26.0.0-cp313-cp313-win_amd64.whl",
-   "sha256": "3de30a7432b48b98b9decbd9e25a53bb9251d202c2e6c5a29a50869592ccb117",
-   "size": 28478571
+   "version": "26.0.1",
+   "url": "https://files.pythonhosted.org/packages/c1/9e/b6c8afec2ffc06bbd00a88326826f9d66e4bbca752c0837ee8e2dbf2238f/pyarrow-26.0.1-cp313-cp313-win_amd64.whl",
+   "sha256": "8196f36a2f4cb8d2d6ef3651941b80e5ccf125d7653657d99af5bb298e7a7026",
+   "size": 28989592
   },
   {
    "name": "pybase64",
-   "version": "1.5.1",
-   "url": "https://files.pythonhosted.org/packages/5e/1d/ecb6bfb66355ffcb608e36a89e63538c44a9aefa9cd892e80107ecfafdc8/pybase64-1.5.1-cp313-cp313-win_amd64.whl",
-   "sha256": "541f23f3139179bcff0aec38aedb01b7b60c76720b9a21213cdeac0b72c79100",
-   "size": 44636
+   "version": "1.5.2",
+   "url": "https://files.pythonhosted.org/packages/51/63/f8eb779817c93cd78294c0628620945132e26d9d3f6c970cf2a6e6eb3216/pybase64-1.5.2-cp313-cp313-win_amd64.whl",
+   "sha256": "08f607d8114a96502a7d38411745278b9864c2efcf39fc83d5baad4f61cc31ce",
+   "size": 44714
   },
   {
    "name": "pydantic-settings",
-   "version": "2.16.1",
-   "url": "https://files.pythonhosted.org/packages/3c/74/fdf926afe145d8629c4b2ff57f4ea1d64ed7abc4d84d97463b2517a2547e/pydantic_settings-2.16.1-py3-none-any.whl",
-   "sha256": "30f5313340da4e8f1b440d1910b92a5bc3ccbb6b4ba70ec2b8395bc921f418f5",
-   "size": 80771
+   "version": "2.16.3",
+   "url": "https://files.pythonhosted.org/packages/4c/26/3e68379ca313b6aa58e11fbd8b28d5c6f1b9f4428d70222ba021a76797ec/pydantic_settings-2.16.3-py3-none-any.whl",
+   "sha256": "d1db16a2d34006323a1b42c0640898da58adfbad7ec30baaa9e2b18aafc08999",
+   "size": 82679
   },
   {
    "name": "Pygments",
@@ -592,10 +592,10 @@
   },
   {
    "name": "pypdfium2",
-   "version": "5.14.0",
-   "url": "https://files.pythonhosted.org/packages/00/dc/ca7874924c9cfd701ad53f89529968523790e70473e0b71e834668316148/pypdfium2-5.14.0-py3-none-win_amd64.whl",
-   "sha256": "149fd5c6397b8df8bf7911a93506eff0be874f877afe7ac936cf5d37d21a6a06",
-   "size": 3947280
+   "version": "5.15.2",
+   "url": "https://files.pythonhosted.org/packages/fe/7f/8aa446529fa14523e5c18f89e823afc95526689f76a75efe68a82a10d850/pypdfium2-5.15.2-py3-none-win_amd64.whl",
+   "sha256": "74d1bace34fb01c660d0b64344d5a4b7d276942b7c6623c88ab59ea21c5acfbd",
+   "size": 4187589
   },
   {
    "name": "PyPika",
@@ -613,10 +613,10 @@
   },
   {
    "name": "python-dateutil",
-   "version": "3.0.0",
-   "url": "https://files.pythonhosted.org/packages/5a/17/cebee01d1c0c1441174cf0456ddc91b280d79acb65340c05e41d77866ee8/python_dateutil-3.0.0-py2.py3-none-any.whl",
-   "sha256": "3c79630202e4152c6add678446984236efe4f57e84d8e892aab0637bab82e9fd",
-   "size": 94659
+   "version": "4.0.0",
+   "url": "https://files.pythonhosted.org/packages/2f/a9/52b89563d154433d79b51ed1eb4842bf7334cb2696891a7fe135618853d7/python_dateutil-4.0.0-py3-none-any.whl",
+   "sha256": "a5e246f79eb80475e691bf93862cead98decd8a498cf53ba0516fcdc0f50dc1c",
+   "size": 92853
   },
   {
    "name": "python-dotenv",
@@ -704,10 +704,10 @@
   },
   {
    "name": "sse-starlette",
-   "version": "3.6.0",
-   "url": "https://files.pythonhosted.org/packages/cf/49/35053078cdfcf639237e8bee6dc6f34f1b3a3cc8d01800a1e213e1660ff6/sse_starlette-3.6.0-py3-none-any.whl",
-   "sha256": "e4dfa4d237d2712cb2b4d4918eda9b457cd6b44bbecdc838af75de836565bafd",
-   "size": 17985
+   "version": "3.7.0",
+   "url": "https://files.pythonhosted.org/packages/6a/11/25cabac0a24fa76f58637d8671b549c90d818d69d26beecf0c59a3b186e0/sse_starlette-3.7.0-py3-none-any.whl",
+   "sha256": "f1d3136caa12d129284fca3d2ded79bc9af943320b6472712955fea52a6d3eea",
+   "size": 18432
   },
   {
    "name": "tenacity",
@@ -760,10 +760,10 @@
   },
   {
    "name": "typer",
-   "version": "0.27.3",
-   "url": "https://files.pythonhosted.org/packages/07/ea/2e31b67051e91a133189e9c000c222502ddc6969856416de0d095de4c0b0/typer-0.27.3-py3-none-any.whl",
-   "sha256": "e50022f28b82a86313e54501317a1db64bf8f8d036ff8cfe5ca7e47675454aff",
-   "size": 123312
+   "version": "0.29.1",
+   "url": "https://files.pythonhosted.org/packages/05/ff/51969745f31cea6bcd12151e668febcf979656316e67a7755942267c1273/typer-0.29.1-py3-none-any.whl",
+   "sha256": "00dbc549c13428bec1be55fe1f4d0fb8c6637a310e4f178ef14abe9534ee7b58",
+   "size": 121064
   },
   {
    "name": "urllib3",
@@ -774,10 +774,10 @@
   },
   {
    "name": "uv",
-   "version": "0.13.5",
-   "url": "https://files.pythonhosted.org/packages/32/ea/771744a784b16aa21d195cb5d5d5a2878d72fa00fc26f11ea3f9646994fe/uv-0.13.5-py3-none-win_amd64.whl",
-   "sha256": "1fb29fc46ba12033e2ef95a95ac79d649e71bbb1358419bbbcbd19d86026ef2f",
-   "size": 15358650
+   "version": "0.13.8",
+   "url": "https://files.pythonhosted.org/packages/6a/1d/d813afac1a7cbe3eeeca8709b47bdcd5e5189d08364b8d7a9f693082f0f1/uv-0.13.8-py3-none-win_amd64.whl",
+   "sha256": "cfbc13020a64cdf2f116d2936824c38edbf41e5c07f1ea291baf02e31ebf3ed0",
+   "size": 15624377
   },
   {
    "name": "watchfiles",

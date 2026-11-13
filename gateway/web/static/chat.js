@@ -390,6 +390,7 @@ export function isPrivate() { return state.private; }
 export { notice };
 export function setPrivate(on) {
   state.private = !!on;
+  keepDraft();                                             // conversation privée : aucun brouillon gardé
   if (state.server) {                                     // propre à la conversation, enregistré avec elle
     if (state.convId) {
       api(`/v1/conversations/${encodeURIComponent(state.convId)}`, { method: "PATCH", body: { private: state.private } });
@@ -666,6 +667,7 @@ async function generate({ model = null, before = null } = {}) {
     el.classList.remove("streaming");
     state.controller = null;
     setBusy(false);
+    answerReady();
     $("prompt").focus();
   }
   if (meta && current() && contextRatio() >= AUTO_COMPACT) compact("", true);   // contexte presque plein
@@ -841,6 +843,35 @@ const slashUi = {
   },
 };
 
+// Message en cours d'écriture : gardé dans cet onglet seulement (sessionStorage), jamais en conversation privée ;
+// effacé à l'envoi. Un rechargement ou une mise à jour de la page ne fait plus perdre un long message.
+const DRAFT = "gw.chat.draft";
+function keepDraft() {
+  try {
+    const text = $("prompt").value;
+    if (text.trim() && !state.private) sessionStorage.setItem(DRAFT, text.slice(0, 20000));
+    else sessionStorage.removeItem(DRAFT);
+  } catch { /* stockage indisponible ou plein */ }
+}
+
+// Réponse terminée pendant que l'onglet est en arrière-plan (un modèle local met parfois plusieurs minutes) :
+// le titre de l'onglet le dit, jusqu'au retour sur la page.
+let titleBefore = null;
+function topDocument() {
+  try { return window.top.document; } catch { return document; }   // autre origine : le cadre lui-même
+}
+function answerReady() {
+  const doc = topDocument();
+  if (!doc.hidden || titleBefore !== null) return;
+  titleBefore = doc.title;
+  doc.title = `● Réponse prête · ${titleBefore}`;
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden || titleBefore === null) return;
+  topDocument().title = titleBefore;
+  titleBefore = null;
+});
+
 async function submit(event) {
   event?.preventDefault();
   if (state.controller) { state.controller.abort(); return; }      // le bouton sert aussi d'arrêt
@@ -848,12 +879,13 @@ async function submit(event) {
   if (!attachmentsReady() || (!text && !hasAttachments())) return;
   const command = await handleCommand(text, slashUi);
   if (command && !command.send) {
-    if (!command.keep) { $("prompt").value = ""; autosize(); }
+    if (!command.keep) { $("prompt").value = ""; keepDraft(); autosize(); }
     return;
   }
   const { images, docs } = takeAttachments();
   if (!text && !images.length) text = docs.length > 1 ? "Analyse les documents joints." : "Analyse le document joint.";
   $("prompt").value = "";
+  keepDraft();
   autosize();
   notice("");
   // images : message en parties (texte + image_url), comme l'API OpenAI ; la gateway choisit un modèle vision
@@ -1041,6 +1073,21 @@ export async function initChat({ onMeta, onAuthError, getOptions, onStart, onRes
   $("composer").addEventListener("submit", submit);
   initSlash($("prompt"));                                  // ses touches passent avant l'envoi par Entrée
   $("prompt").addEventListener("input", autosize);
+  $("prompt").addEventListener("input", keepDraft);
+  try {                                                    // message commencé puis page rechargée : il revient
+    const draft = sessionStorage.getItem(DRAFT);
+    if (draft && !$("prompt").value) { $("prompt").value = draft; autosize(); }
+  } catch { /* stockage indisponible */ }
+  try {                                                    // demande préparée par le didacticiel (/app?demande=…) :
+    const top = window.top, params = new URLSearchParams(top.location.search);   // écrite ici, jamais envoyée seule
+    const asked = (params.get("demande") || "").slice(0, 2000);
+    if (asked) {
+      $("prompt").value = asked;
+      autosize();
+      params.delete("demande");
+      top.history.replaceState(null, "", top.location.pathname + (params.toString() ? `?${params}` : ""));
+    }
+  } catch { /* cadre d'une autre origine */ }
   $("prompt").addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
       e.preventDefault();

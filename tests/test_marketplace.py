@@ -1282,3 +1282,29 @@ def test_mcp_servers_get_fixed_settings_and_a_folder_by_variable(monkeypatch, tm
     figma = marketplace.add_mcp("figma", "npx", secret="figd_0123456789")
     assert figma["args"][-1] == "--stdio" and figma["env"] == ["FIGMA_API_KEY"]
     assert installers.uninstall_steps("tool:markitdown") == [("uv", "tool", "uninstall", "markitdown")]  # sans [all]
+
+
+def test_catalogue_en_texte_pour_les_moteurs_de_recherche():
+    """La marketplace du site charge ses fiches par script : cette page sans script donne chaque nom aux moteurs."""
+    from gateway import marketplace_export
+
+    catalog = {
+        "generated_at": "2026-11-12",
+        "apps": [
+            {
+                "id": "x",
+                "name": "Appli <X>",
+                "description": "Fait & défait.",
+                "license": {"name": "MIT"},
+                "github": "a/b",
+            }
+        ],
+        "library": {
+            "models": [{"name": "petit", "description": "Small.", "sizes": [{"tag": "petit:4b"}], "license": None}]
+        },
+    }
+    page = marketplace_export.static_page(catalog)
+    assert "<script>" not in page and " style=" not in page and "{{" not in page  # règles du site (CSP)
+    assert '<h3 id="apps-x">Appli &lt;X&gt;</h3>' in page and "Fait &amp; défait." in page and "Licence : MIT" in page
+    assert 'href="https://github.com/a/b"' in page and '<li id="modele-petit">' in page and "Tailles : 4b" in page
+    assert "2 éléments" in page and '<link rel="canonical" href="https://lezard-ia.fr/marketplace/catalogue">' in page

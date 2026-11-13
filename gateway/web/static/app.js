@@ -15,6 +15,7 @@ import { initShortcutsHelp } from "./shortcuts.js";
 import { initPreview, previewAnswer } from "./preview-panel.js";
 import { initDictation } from "./dictation.js";
 import { initPwa } from "./pwa.js";
+import { initTour } from "./tour.js";
 import { offerUpdate, watchUpdates } from "./update-offer.js";
 
 const $ = (id) => document.getElementById(id);
@@ -155,6 +156,7 @@ document.addEventListener("DOMContentLoaded", () => {
   greet();
   initMobile({ chatScroller: $("scroller") });         // tiroir + saisie au-dessus du clavier virtuel (13.5)
   initPwa($("install-btn"));                           // installation en application (13.6)
+  initTour();                                          // visite guidée de l'écran et lien vers le didacticiel
   $("logout").addEventListener("click", logout);
   init();
 });

@@ -56,6 +56,11 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
     async def marketplace_page():
         return page("marketplace.html")
 
+    # Didacticiel pour débuter : dix leçons à lire, page à part, sans clé (aucune donnée de ce PC n'y figure)
+    @router.get("/didacticiel", include_in_schema=False)
+    async def tutorial_page():
+        return page("tutorial.html")
+
     # Conversation partagée par lien (lecture seule, sans clé) : la page lit /v1/shared/<jeton>
     @router.get("/partage/{token}", include_in_schema=False)
     async def shared_page(token: str):

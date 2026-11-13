@@ -25,10 +25,10 @@
   },
   {
    "name": "ctranslate2",
-   "version": "4.8.4",
-   "url": "https://files.pythonhosted.org/packages/37/ae/4fbe636b36fd4fd4266e309d050548c1ae0a23c88ef73ef89c6485db99d1/ctranslate2-4.8.4-cp313-cp313-win_amd64.whl",
-   "sha256": "d9523961651ac0f51e4e62d03307609ff93d828b32ae92dc8b14a7e55243f6f2",
-   "size": 20371182
+   "version": "4.9.0",
+   "url": "https://files.pythonhosted.org/packages/3f/71/cd84a3e26cf8a932c7826a4e7d45ddbf2e2899880d6dcc5ad4833169e6da/ctranslate2-4.9.0-cp313-cp313-win_amd64.whl",
+   "sha256": "d009840a95a5ced75563da030d1aa79dba85c7f280a658e518d575aed40ef095",
+   "size": 20408731
   },
   {
    "name": "dlinfo",
@@ -53,10 +53,10 @@
   },
   {
    "name": "filelock",
-   "version": "4.2.4",
-   "url": "https://files.pythonhosted.org/packages/e0/1b/5e74289a1878e666bb4b65fe5805a04cafcac2aa5f519ef1ead67ef91c56/filelock-4.2.4-py3-none-any.whl",
-   "sha256": "301241438c57936ef93f4243a94f2559022268bfcf9b375a9a72eb0f8db8358e",
-   "size": 162475
+   "version": "4.2.10",
+   "url": "https://files.pythonhosted.org/packages/ef/90/5d0096a325aa0f83ba7a3968bfb485b67e32c947bdf9cd0fcb4b485be718/filelock-4.2.10-py3-none-any.whl",
+   "sha256": "9479aaeb4db20b5a53e3da28493edd24720b66b8a0b84030aa56ccdf243d6857",
+   "size": 218040
   },
   {
    "name": "flatbuffers",
@@ -74,10 +74,10 @@
   },
   {
    "name": "hf-xet",
-   "version": "1.7.0",
-   "url": "https://files.pythonhosted.org/packages/4d/59/b35106dfa71b6eef605dc88bd038fe99c7f86fb132a15b60d0bf2f235b2c/hf_xet-1.7.0-cp38-abi3-win_amd64.whl",
-   "sha256": "2b7bb5727889b0f2436dbaaad8fc4c3e66b8240d992716989e0c086b4278b1bc",
-   "size": 3822644
+   "version": "1.8.0",
+   "url": "https://files.pythonhosted.org/packages/97/4d/2c76a992b370ff77d0b5219275779f8c9a7dabb8ee649deb265dfed84d0f/hf_xet-1.8.0-cp38-abi3-win_amd64.whl",
+   "sha256": "92188598dedc1e1f5609bd718d4db8687a6c89915553912571e2f587892eecec",
+   "size": 3911559
   },
   {
    "name": "httpcore2",
@@ -95,10 +95,10 @@
   },
   {
    "name": "huggingface_hub",
-   "version": "2.3.0",
-   "url": "https://files.pythonhosted.org/packages/c7/89/5f6ef1162d0323f167b6baab04d1b4bd6a946161a8af6d86f622d9d79aa1/huggingface_hub-2.3.0-py3-none-any.whl",
-   "sha256": "5da369600233568a126eb5578754935b2add9446b42d9e2fc0927d56840ac1a5",
-   "size": 855161
+   "version": "2.4.0",
+   "url": "https://files.pythonhosted.org/packages/d4/55/ff47f1b082ecf5f43f4bc1e3b932d68eead171dabbbd1a92666c686301d7/huggingface_hub-2.4.0-py3-none-any.whl",
+   "sha256": "42ecfd93ede47bdd333daebbf66a32d7bfe2e18752754fe4d2d4f98a0179d801",
+   "size": 857021
   },
   {
    "name": "joblib",
@@ -123,10 +123,10 @@
   },
   {
    "name": "onnxruntime",
-   "version": "1.31.1",
-   "url": "https://files.pythonhosted.org/packages/59/bf/a1d282b4c753ba3e9b31f4c11abd2bc2390513dc5e3792ca3b78e42401c3/onnxruntime-1.31.1-cp313-cp313-win_amd64.whl",
-   "sha256": "0558f29d5f6ac09957390c9c5495931485ee8ae7f0ce781ccee86a0ae5c2348b",
-   "size": 14888304
+   "version": "1.32.0",
+   "url": "https://files.pythonhosted.org/packages/6f/ee/a776ccc71ba54de3739c20c7c815d9695c55db1d08e2b3c621452676c23f/onnxruntime-1.32.0-cp313-cp313-win_amd64.whl",
+   "sha256": "c7f9aa98036ba2a47aa041a4a8c6d0a1f7bfe1bde44c131dcd15ce334f2f148d",
+   "size": 16697937
   },
   {
    "name": "packaging",
@@ -137,10 +137,10 @@
   },
   {
    "name": "phonemizer",
-   "version": "3.4.0",
-   "url": "https://files.pythonhosted.org/packages/37/41/09bafd0ccf4f4ddd1530c9f9d10e75a24056e10e120b9daa97f691fcabc3/phonemizer-3.4.0-py3-none-any.whl",
-   "sha256": "5ff1215d0efa3606dd1b92449f6d71b5c1741efcc84c6d40c17bfaf64f6ded5f",
-   "size": 108529
+   "version": "3.6.0",
+   "url": "https://files.pythonhosted.org/packages/9b/70/681cea1684270c8d70b4e0fd7f17aaeb4e97fa9fc17b7bc2a6dee6a74e96/phonemizer-3.6.0-py3-none-any.whl",
+   "sha256": "efb0703d3204f334756cafc9c97390c588446469c69214af4092836ca128cbab",
+   "size": 125087
   },
   {
    "name": "protobuf",

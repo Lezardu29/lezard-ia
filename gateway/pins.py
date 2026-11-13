@@ -288,6 +288,9 @@ async def links(full: bool) -> int:
 
 
 async def main() -> int:
+    from . import marketplace_extra
+
+    marketplace_extra.apply_source()  # les versions figées du supplément (catalogue/supplement.json) sont suivies aussi
     if "--liens" in sys.argv:
         return await links("--complet" in sys.argv)
     async with httpx.AsyncClient(headers={"User-Agent": "LezardIA-pins"}, follow_redirects=True) as client:

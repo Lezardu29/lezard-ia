@@ -9,12 +9,14 @@ from __future__ import annotations
 import asyncio
 import base64
 import ctypes
+import difflib
 import io
 import os
 import string
 import subprocess
 import sys
 import time
+import unicodedata
 from ctypes import wintypes
 from pathlib import Path
 
@@ -138,6 +140,26 @@ def _windows() -> list[tuple[int, str]]:
 
     _user32.EnumWindows(each, 0)
     return found[:15]
+
+
+def foreground() -> tuple[int, str]:
+    """La fenêtre au premier plan : (identifiant, titre)."""
+    hwnd = _user32.GetForegroundWindow()
+    return int(hwnd or 0), _title(hwnd)
+
+
+def open_windows() -> set[int]:
+    """Identifiants de toutes les fenêtres visibles, pour savoir plus tard lesquelles étaient déjà là."""
+    found: set[int] = set()
+
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def each(hwnd, _):
+        if _user32.IsWindowVisible(hwnd):
+            found.add(int(hwnd or 0))
+        return True
+
+    _user32.EnumWindows(each, 0)
+    return found
 
 
 def _context() -> str:
@@ -488,19 +510,99 @@ async def scroll(args: dict) -> ToolResult:
     return await _after()
 
 
+# ---------- ouvrir une application : par la liste de Windows, jamais par le clavier ----------
+_apps: dict = {"at": 0.0, "found": []}
+APPS_FRESH = 300  # secondes : la liste des applications installées est relue au-delà
+ALIASES = {  # noms courants (anglais, raccourcis) → nom affiché par Windows en français
+    "notepad": "bloc-notes",
+    "calc": "calculatrice",
+    "calculator": "calculatrice",
+    "explorer": "explorateur de fichiers",
+    "file explorer": "explorateur de fichiers",
+    "explorateur": "explorateur de fichiers",
+    "settings": "paramètres",
+    "terminal": "terminal",
+    "cmd": "invite de commandes",
+    "vscode": "visual studio code",
+    "vs code": "visual studio code",
+}
+
+
+def _plain(text: str) -> str:
+    """« Bloc-notes » et « bloc notes » : le même nom. Minuscules, sans accents, lettres et chiffres seulement."""
+    text = unicodedata.normalize("NFD", text.lower())
+    return "".join(c for c in text if c.isalnum() and not unicodedata.combining(c))
+
+
+def start_apps() -> list[tuple[str, str]]:
+    """Applications du menu Démarrer : (nom affiché, identifiant), d'après Windows lui-même (Get-StartApps)."""
+    if _apps["found"] and time.monotonic() - _apps["at"] < APPS_FRESH:
+        return _apps["found"]
+    command = (
+        "[Console]::OutputEncoding = [Text.Encoding]::UTF8; "
+        "Get-StartApps | ForEach-Object { $_.Name + [char]9 + $_.AppID }"
+    )
+    try:
+        out = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", command],
+            capture_output=True, timeout=20, creationflags=0x08000000,  # CREATE_NO_WINDOW
+        ).stdout.decode("utf-8", "replace")  # fmt: skip
+    except (OSError, subprocess.SubprocessError):
+        return []
+    found = []
+    for line in out.splitlines():
+        name, _, app_id = line.lstrip("\ufeff").partition("\t")
+        if name.strip() and app_id.strip():
+            found.append((name.strip(), app_id.strip()))
+    _apps.update(at=time.monotonic(), found=found)
+    return found
+
+
+def find_app(wanted: str, apps: list[tuple[str, str]]) -> tuple[str, str] | None:
+    """L'application demandée : nom exact d'abord, puis nom qui commence par la demande, puis qui la contient ; à
+    égalité, le nom le plus court (« Word » avant « WordPad », jamais « Désinstaller … »)."""
+    key = _plain(ALIASES.get(wanted.strip().lower(), wanted))
+    if len(key) < 2:
+        return None
+    named = sorted(((_plain(name), name, app_id) for name, app_id in apps), key=lambda x: len(x[0]))
+    for match in (str.__eq__, str.startswith, str.__contains__):
+        for plain, name, app_id in named:
+            if plain and match(plain, key):
+                return name, app_id
+    return None
+
+
 async def open_app(args: dict) -> ToolResult:
     _check_failsafe()
     name = str(args.get("name") or "").strip()
     if not name or len(name) > 60 or "\n" in name:
         raise ToolError("'name' requis : nom de l'application, ex. « bloc-notes » (60 caractères max).")
-    _send(_key(VK["win"]), _key(VK["win"], up=True))
-    await asyncio.sleep(0.8)  # menu Démarrer ouvert, recherche prête
-    _type(name)
-    await asyncio.sleep(1.0)  # résultats de la recherche
-    _send(_key(VK["enter"]), _key(VK["enter"], up=True))
-    await asyncio.sleep(1.2)  # l'application s'ouvre
+    apps = await asyncio.to_thread(start_apps)
+    found = find_app(name, apps)
+    if found is None:
+        plain = {_plain(n): n for n, _ in apps}
+        near = [plain[k] for k in difflib.get_close_matches(_plain(name), list(plain), n=5, cutoff=0.5)]
+        hint = f" Noms proches : {', '.join(near)}." if near else ""
+        raise ToolError(
+            f"Aucune application installée ne s'appelle « {name} ».{hint} Rien n'a été tapé ni cliqué : donne son "
+            "nom exact, ou clique son icône (barre des tâches, bureau) si elle est visible."
+        )
+    before = _user32.GetForegroundWindow()
+    try:  # lancée par son identifiant, comme le fait le menu Démarrer : ni souris, ni clavier
+        subprocess.Popen(  # noqa: ASYNC220 (rend la main aussitôt)
+            ["explorer.exe", f"shell:AppsFolder\\{found[1]}"], creationflags=0x08000000
+        )
+    except OSError as e:
+        raise ToolError(f"« {found[0]} » n'a pas pu être lancée : {e}") from None
+    for _ in range(24):  # jusqu'à 6 s : la fenêtre de l'application passe au premier plan
+        await asyncio.sleep(0.25)
+        if _user32.GetForegroundWindow() != before:
+            break
+    await asyncio.sleep(0.6)  # elle finit de se dessiner
     _last.update(kind="command")
-    return await _after()
+    result = await _after()
+    result.text = f"« {found[0]} » lancée. {result.text}"
+    return result
 
 
 _REASON = {"reason": {"type": "string", "description": "Ce que tu vois sur la capture et pourquoi cette action"}}
@@ -538,7 +640,8 @@ register(
     ),
     _action(
         "pc_open",
-        "Ouvre une application par la recherche du menu Démarrer, ex. « bloc-notes », « calculatrice ».",
+        "Ouvre une application installée, par son nom (ex. « bloc-notes », « calculatrice »), sans toucher au "
+        "clavier ni à la souris.",
         {"name": {"type": "string"}},
         open_app,
         ("name",),

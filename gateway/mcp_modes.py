@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import dataclasses
 import hashlib
 import io
 import json
@@ -376,9 +377,59 @@ def _piloted(core) -> None:
         )
 
 
+KEYBOARD = ("pc_type", "pc_key")  # les actions qui écrivent dans la fenêtre au premier plan
+USER_WINDOWS: dict = {"seen": None}  # fenêtres déjà ouvertes au premier appel de la session : celles de l'utilisateur
+
+
+def user_windows() -> set[int]:
+    """Relevées une fois, avant la première action : ce qui était ouvert appartient à l'utilisateur."""
+    if USER_WINDOWS["seen"] is None:
+        USER_WINDOWS["seen"] = _desk().open_windows()
+    return USER_WINDOWS["seen"]
+
+
+def _desk():
+    use_gateway_code()
+    from gateway.tools import pc
+
+    return pc
+
+
+def keyboard_guard(name: str, allowed: bool = False) -> None:
+    """Essai réel du 2026-11-11 : un modèle a tapé dans un fichier que l'utilisateur avait ouvert. Depuis, le clavier
+    est refusé quand la fenêtre au premier plan était là avant la tâche, sauf demande expresse de l'utilisateur."""
+    seen = user_windows()
+    if name not in KEYBOARD or allowed:
+        return
+    hwnd, title = _desk().foreground()
+    if hwnd in seen:
+        raise ValueError(
+            f"Refusé, rien n'a été tapé : la fenêtre au premier plan (« {title[:60] or 'sans titre'} ») était déjà "
+            "ouverte avant cette tâche, c'est une fenêtre de l'utilisateur. Ouvre l'application voulue avec pc_open "
+            "(elle aura sa propre fenêtre) et vérifie qu'elle est au premier plan. Si l'utilisateur a demandé "
+            "expressément d'écrire dans cette fenêtre-là, repasse l'action avec « fenetre_utilisateur » à true."
+        )
+
+
+def _guarded(tool):
+    """Le même outil, avec le garde-fou de saisie et sans exception possible (tâche confiée à un modèle local)."""
+    use_gateway_code()
+    from gateway.tools import ToolError
+
+    async def run(args: dict):
+        try:
+            keyboard_guard(tool.name)
+        except ValueError as e:
+            raise ToolError(str(e).split(" Si l'utilisateur a demandé")[0]) from None
+        return await tool.run(args)
+
+    return dataclasses.replace(tool, run=run)
+
+
 def pc_see(core, args: dict, roots: list[Path]):
     _piloted(core)
     _, _, found = _pc()
+    user_windows()
     return shown(core, _run(found["pc_screenshot"], {}))
 
 
@@ -390,6 +441,7 @@ def pc_act(core, args: dict, roots: list[Path]):
     if name not in actions:
         raise ValueError(f"« outil » : {', '.join(actions)}.")
     params = args.get("arguments") if isinstance(args.get("arguments"), dict) else {}
+    keyboard_guard(name, allowed=args.get("fenetre_utilisateur") is True)
     return shown(core, _run(actions[name], params))
 
 
@@ -419,6 +471,8 @@ async def _task(core, goal: str, steps: int) -> str:
     from gateway.tools.state import TaskState
 
     model = vision_model(core)
+    user_windows()
+    found = {name: _guarded(tool) if name in KEYBOARD else tool for name, tool in found.items()}
     approvals, log, said = runner.Approvals(), [], []
 
     async def call(msgs: list, specs: list | None) -> tuple[dict, str]:
@@ -597,6 +651,11 @@ def specs(core) -> list[dict]:
                     "properties": {
                         "outil": {"type": "string", "description": "Nom de l'action (pc_click, pc_type, pc_press…)."},
                         "arguments": {"type": "object", "description": "Arguments de cette action."},
+                        "fenetre_utilisateur": {
+                            "type": "boolean",
+                            "description": "true seulement si l'utilisateur a demandé expressément d'écrire "
+                            "dans une fenêtre qu'il avait déjà ouverte (pc_type et pc_key y sont refusés sinon).",
+                        },
                     },
                     "required": ["outil"],
                 },

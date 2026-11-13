@@ -27,6 +27,15 @@ NUDGE = (
     "Ta réponse était vide. Continue la tâche : appelle l'outil de l'action suivante, ou réponds en texte si "
     "l'objectif est atteint ou si tu es bloqué."
 )
+# recherche ou page web redemandée à l'identique (qwen2.5-coder refait douze fois la même) : elle n'est pas relancée,
+# et au 2e rappel le modèle doit conclure avec ce qu'il a déjà
+REPEATED = (
+    "Déjà fait : même appel, même résultat (il est plus haut dans la conversation). Ne le refais pas : réponds "
+    "maintenant avec ce que tu as, ou change de requête."
+)
+MAX_REPEATS = 2
+CONCLUDE = "Réponds maintenant à la demande, en texte, avec les résultats déjà obtenus. N'appelle plus d'outil."
+NO_ANSWER = "Le modèle n'a pas su conclure après ses recherches : reposez la question, ou choisissez un autre modèle."
 # réponse qui affirme avoir agi sur l'écran
 CLAIM = re.compile(r"\bj'ai (ouvert|cliqué|lancé|fermé|écrit|tapé|affiché|navigué|démarré)", re.I)
 PC_LOCK = asyncio.Lock()  # un seul agent contrôle le PC à la fois
@@ -239,6 +248,7 @@ async def run(
     # requête et les envoyer à un site (consigne cachée dans un e-mail ou une page affichée)
     sensitive = False
     nudges = 0  # réponses vides relancées
+    fetched, repeats = set(), 0  # appels web déjà faits, et rappels à l'identique
     tripped = asyncio.get_running_loop().create_future() if pc_run and failsafe else None
     watcher = asyncio.create_task(_watch(failsafe, tripped)) if tripped else None
     try:
@@ -251,7 +261,9 @@ async def run(
                 yield _chunk(x_gateway_tool={"type": "plan", "id": "plan", "steps": state.plan})
         for step in range(max_steps + 1):
             expired = state is not None and state.expired()
-            last = step == max_steps or expired
+            last = step == max_steps or expired or repeats >= MAX_REPEATS
+            if repeats >= MAX_REPEATS:
+                msgs.append({"role": "user", "content": CONCLUDE})
             if state is not None:  # état de la tâche : un seul message juste après la demande, remplacé à chaque tour
                 state.steps = step
                 msgs = [m for m in msgs if not m.get("x_state")]
@@ -275,6 +287,10 @@ async def run(
                 continue
             if last or not calls:
                 text = msg.get("content") or ("(limite d'étapes atteinte)" if calls else "")
+                if (
+                    last and tools and text_calls(text, tools)
+                ):  # encore un appel, écrit en texte : jamais affiché tel quel
+                    text = NO_ANSWER
                 if pc_run and not done and CLAIM.search(text):  # « j'ai ouvert… » sans aucune action sur le PC
                     text += "\n\n⚠️ Aucune action n'a été faite sur le PC pendant cette réponse."
                 if expired:
@@ -318,6 +334,9 @@ async def run(
                             "Refusée : même action déjà faite deux fois de suite. Elle ne mène nulle part : vérifie "
                             "la fenêtre au premier plan, change d'approche (pc_focus, pc_open, autre case) ou réponds."
                         )
+                    if tool.level == "web" and key in fetched:
+                        repeats += 1
+                        raise ToolError(REPEATED)
                     if tool.confirm or (tool.level == "web" and sensitive):
                         aid, fut = approvals.open(identity)
                         try:
@@ -358,6 +377,8 @@ async def run(
                         decision = "sans validation (lecture de l'écran)" if name != "pc_app_guide" else "guide"
                     result = await _guarded(tool.run(args), tripped)
                     ok = True
+                    if tool.level == "web":
+                        fetched.add(key)
                     sensitive = sensitive or tool.local_only or bool(result.image)
                     if decision:
                         audit(name, args, decision, result.text, result.image)

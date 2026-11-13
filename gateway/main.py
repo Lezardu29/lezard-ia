@@ -45,6 +45,7 @@ from .store import DocumentStore, default_db_path
 from .tls import tls_port
 from .totp import AdminTotp
 from .vectors import VectorIndex
+from .marketplace_extra import CatalogUpdater, enabled as catalog_check_enabled
 from .updates import UpdateChecker, check_enabled as update_check_enabled
 from .api import (
     access,
@@ -355,6 +356,10 @@ def create_app(
             holder["store"], backups=holder["backups"], owner=account_identity(master) if master else None
         )
         update_task = asyncio.create_task(holder["updates"].run()) if update_check_enabled() else None
+        # supplément signé de la marketplace : le dernier reçu est appliqué tout de suite, puis relu en ligne
+        holder["catalog"] = CatalogUpdater(holder["store"])
+        holder["catalog"].load()
+        catalog_task = asyncio.create_task(holder["catalog"].run()) if catalog_check_enabled() else None
         price_task = asyncio.create_task(holder["pricing"].run(holder["gw"])) if pricing_auto_refresh() else None
         # sauvegarde quotidienne (18.2) : base ouverte ici seulement (une base fournie appartient à l'appelant)
         backup_task = (
@@ -525,6 +530,7 @@ def create_app(
             rediscover_task,
             hw_task,
             update_task,
+            catalog_task,
             gpu_task,
             idle_task,
             supervision_task,

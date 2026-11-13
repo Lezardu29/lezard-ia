@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Didacticiel · Lezard IA</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/theme.css">
+  <link rel="stylesheet" href="/static/admin.css">
+  <link rel="stylesheet" href="/static/tutorial.css">
+  <link rel="stylesheet" href="/static/mobile.css">
+  <link rel="stylesheet" href="/static/claude.css">
+  <link rel="stylesheet" href="/static/ui-claude.css">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/static/icons/icon-192.png" type="image/png">
+  <meta name="theme-color" content="#092f5c">
+  <script src="/static/theme.js"></script>
+  <script type="module" src="/static/tutorial.js"></script>
+</head>
+<body class="admin-page tuto-body">
+  <header class="topbar tuto-top">
+    <a class="tuto-brand" href="/didacticiel" aria-label="Didacticiel de Lezard IA">
+      <span class="logo" aria-hidden="true"><img src="/static/icons/logo-mark.png" alt="" width="128" height="117"></span>
+      <strong>Lezard IA</strong><span class="tuto-brand-sub">Didacticiel</span>
+    </a>
+    <span class="grow"></span>
+    <a class="btn btn-ghost btn-inline" href="#lexique">Lexique</a>
+    <a class="btn btn-primary btn-inline" href="/app" id="open-app">Ouvrir Lezard IA</a>
+  </header>
+
+  <main class="tuto" id="contenu">
+    <section class="tuto-hero">
+      <p class="tuto-kicker">Didacticiel</p>
+      <h1>Débuter avec Lezard IA, sans rien connaître à l'IA</h1>
+      <p class="tuto-lead">Dix petites leçons, cinq minutes chacune au plus. Aucun mot compliqué sans explication. À la
+        fin, vous saurez poser une bonne question, faire lire un document, et ajouter des fonctions.</p>
+      <aside class="tuto-progress">
+        <div class="tuto-bar" role="progressbar" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0" aria-label="Leçons terminées" id="bar"><span id="bar-fill"></span></div>
+        <p class="small muted" id="bar-text">0 leçon terminée sur 10</p>
+        <a class="btn btn-primary" href="#lecon-1" id="resume">Commencer</a>
+      </aside>
+    </section>
+
+    <nav class="tuto-nav" aria-label="Les leçons">
+      <ol id="plan">
+        <li><a href="#lecon-1">C'est quoi, une IA ?</a></li>
+        <li><a href="#lecon-2">Installer votre première IA</a></li>
+        <li><a href="#lecon-3">Poser votre première question</a></li>
+        <li><a href="#lecon-4">Bien demander</a></li>
+        <li><a href="#lecon-5">Choisir qui répond</a></li>
+        <li><a href="#lecon-6">Faire lire un document</a></li>
+        <li><a href="#lecon-7">Les commandes</a></li>
+        <li><a href="#lecon-8">Ajouter des fonctions</a></li>
+        <li><a href="#lecon-9">Sur le téléphone</a></li>
+        <li><a href="#lecon-10">Rester prudent</a></li>
+      </ol>
+    </nav>
+
+    <article class="lesson" id="lecon-1" data-lesson="1">
+      <p class="lesson-n">Leçon 1</p>
+      <h2>C'est quoi, une IA ?</h2>
+      <p>Une IA comme celle de Lezard IA est un programme qui <strong>écrit du texte</strong>. Vous lui écrivez une
+        question ou une demande, elle vous écrit une réponse. C'est tout. Elle peut expliquer, résumer, corriger,
+        traduire, proposer des idées, écrire un courrier.</p>
+      <p>Elle ne « sait » pas les choses comme une personne. Elle a lu énormément de textes, et elle devine la suite la
+        plus probable de ce que vous écrivez. C'est pour cela qu'elle répond bien la plupart du temps, et qu'elle se
+        trompe parfois avec beaucoup d'assurance.</p>
+      <div class="lesson-two">
+        <div class="lesson-card">
+          <h3>Une IA en ligne</h3>
+          <p>Votre message part sur Internet, vers les ordinateurs d'une entreprise. Il faut une connexion, et souvent
+            un compte ou un abonnement.</p>
+        </div>
+        <div class="lesson-card lesson-card-on">
+          <h3>Une IA locale</h3>
+          <p>Elle fonctionne <strong>dans votre ordinateur</strong>. Vos messages ne sortent pas de chez vous, et elle
+            marche même sans Internet. C'est ce que fait Lezard IA.</p>
+        </div>
+      </div>
+      <p>Deux mots reviendront souvent :</p>
+      <ul>
+        <li><strong>Un modèle</strong> : c'est le « cerveau » de l'IA. Un gros fichier, que l'on télécharge une fois. Il
+          en existe beaucoup, plus ou moins gros.</li>
+        <li><strong>Lezard IA</strong> : c'est l'application. Elle vous donne la fenêtre de discussion et s'occupe du
+          reste.</li>
+      </ul>
+      <p class="lesson-keep"><strong>À retenir :</strong> une IA écrit des réponses. Un modèle est son cerveau. Avec
+        Lezard IA, tout se passe sur votre PC.</p>
+      <fieldset class="quiz" data-answer="b">
+        <legend>Une petite question pour vérifier</legend>
+        <p>Où travaille une IA locale ?</p>
+        <label><input type="radio" name="q1" value="a"> Sur les ordinateurs d'une entreprise, par Internet</label>
+        <label><input type="radio" name="q1" value="b"> Dans mon propre ordinateur</label>
+        <label><input type="radio" name="q1" value="c"> Dans mon téléphone uniquement</label>
+        <p class="quiz-result" role="status" data-good="Exactement : rien ne sort de chez vous." data-bad="Pas tout à fait : une IA locale travaille dans votre propre ordinateur."></p>
+      </fieldset>
+      <button class="btn btn-primary lesson-done" type="button">J'ai compris, leçon suivante</button>
+    </article>
+
+    <article class="lesson" id="lecon-2" data-lesson="2">
+      <p class="lesson-n">Leçon 2</p>
+      <h2>Installer votre première IA</h2>
+      <p>Lezard IA ne contient pas de modèle : vous choisissez le vôtre. Rassurez-vous, la page <strong>Modèles</strong>
+        choisit avec vous.</p>
+      <ol>
+        <li>Ouvrez la page <strong>Modèles</strong> (dans le menu en bas à gauche de la discussion).</li>
+        <li>Lezard IA regarde votre ordinateur et affiche un modèle <strong>recommandé</strong> : un modèle qui
+          fonctionnera bien chez vous.</li>
+        <li>Cliquez sur <strong>« Installer le modèle recommandé »</strong>. Le téléchargement dure quelques minutes.
+          Vous ne le ferez qu'une fois.</li>
+      </ol>
+      <figure class="lesson-fig">
+        <img src="/static/tuto/modeles.jpg" alt="La page Modèles : la mémoire de la carte graphique, la mémoire vive, le processeur, puis le modèle recommandé et son bouton d'installation." width="1280" height="414" loading="lazy">
+        <figcaption>La page Modèles mesure votre ordinateur, puis recommande un modèle.</figcaption>
+      </figure>
+      <p>Si la page parle d'<strong>Ollama</strong> : c'est le petit logiciel gratuit qui fait tourner les modèles.
+        Lezard IA vous guide pour l'installer, il n'y a rien à régler.</p>
+      <details class="lesson-more">
+        <summary>Pourquoi tous les modèles ne marchent pas sur mon PC ?</summary>
+        <p>Un modèle a besoin de mémoire. Le plus rapide est de le loger dans la mémoire de la <strong>carte
+          graphique</strong> (la pièce qui sert aussi aux jeux vidéo). Un modèle trop gros pour elle fonctionne quand
+          même, mais lentement. Sa taille se lit en <strong>Go</strong> (gigaoctets) : plus le chiffre est grand, plus
+          le modèle est capable, et plus il lui faut de mémoire.</p>
+      </details>
+      <p class="lesson-keep"><strong>À retenir :</strong> page Modèles, bouton « Installer le modèle recommandé ». Pas
+        besoin de comprendre les chiffres pour commencer.</p>
+      <p class="lesson-try"><a class="btn btn-ghost" href="/models">Ouvrir la page Modèles</a></p>
+      <button class="btn btn-primary lesson-done" type="button">C'est fait, leçon suivante</button>
+    </article>
+
+    <article class="lesson" id="lecon-3" data-lesson="3">
+      <p class="lesson-n">Leçon 3</p>
+      <h2>Poser votre première question</h2>
+      <p>Dans la discussion, il y a une seule chose à faire : <strong>écrire dans la case du bas, puis appuyer sur
+        Entrée</strong>. Écrivez comme vous parleriez à quelqu'un. Pas de formule spéciale, pas de mots-clés.</p>
+      <figure class="lesson-fig">
+        <img src="/static/tuto/discussion.jpg" alt="La discussion : la question en haut à droite, la réponse de l'IA en dessous, la case pour écrire en bas, et la liste des conversations à gauche." width="1280" height="720" loading="lazy">
+        <figcaption>Votre question à droite, la réponse en dessous, la case pour écrire en bas.</figcaption>
+      </figure>
+      <p>La réponse s'écrit sous vos yeux. La première peut mettre un peu de temps : votre ordinateur doit d'abord
+        charger le modèle en mémoire. Les suivantes sont plus rapides.</p>
+      <ul>
+        <li>La réponse ne vous convient pas ? <strong>Répondez-lui</strong> : « plus court », « explique plus
+          simplement », « donne un exemple ». Elle se souvient de la conversation.</li>
+        <li>Vous changez de sujet ? Cliquez sur <strong>« Nouvelle conversation »</strong>, en haut à gauche. L'IA
+          repart de zéro et ne mélange pas les sujets.</li>
+        <li>Vos conversations restent dans la liste de gauche. Vous pouvez y revenir plus tard.</li>
+      </ul>
+      <p class="lesson-keep"><strong>À retenir :</strong> écrire, Entrée. Puis discuter : on a rarement la meilleure
+        réponse du premier coup.</p>
+      <p class="lesson-try"><a class="btn btn-ghost" href="/app?demande=Explique-moi%20la%20photosynth%C3%A8se%20en%20trois%20phrases%20simples.">Essayer cette question dans la discussion</a></p>
+      <button class="btn btn-primary lesson-done" type="button">J'ai essayé, leçon suivante</button>
+    </article>
+
+    <article class="lesson" id="lecon-4" data-lesson="4">
+      <p class="lesson-n">Leçon 4</p>
+      <h2>Bien demander</h2>
+      <p>L'IA ne lit pas dans vos pensées. Plus votre demande est précise, meilleure est la réponse. Quatre habitudes
+        changent tout :</p>
+      <ol>
+        <li><strong>Dites pour qui et pour quoi.</strong> « Pour ma fille de dix ans », « pour un courrier à ma
+          banque ».</li>
+        <li><strong>Dites la forme voulue.</strong> « En cinq lignes », « sous forme de liste », « sur un ton poli ».</li>
+        <li><strong>Donnez ce que vous avez.</strong> Collez le texte à corriger, les chiffres, le message auquel vous
+          répondez.</li>
+        <li><strong>Demandez une chose à la fois.</strong> Puis affinez dans la même conversation.</li>
+      </ol>
+      <div class="lesson-two">
+        <div class="lesson-card">
+          <h3>Demande vague</h3>
+          <p class="lesson-quote">« Écris un mail pour mon propriétaire. »</p>
+          <p class="small muted">L'IA doit tout inventer : le sujet, le ton, la longueur.</p>
+        </div>
+        <div class="lesson-card lesson-card-on">
+          <h3>Demande précise</h3>
+          <p class="lesson-quote">« Écris un mail poli à mon propriétaire pour signaler une fuite sous l'évier depuis
+            lundi. Je voudrais un plombier cette semaine. Six lignes au plus. »</p>
+          <p class="small muted">Elle sait quoi dire, à qui, et sous quelle forme.</p>
+        </div>
+      </div>
+      <p class="lesson-keep"><strong>À retenir :</strong> pour qui, sous quelle forme, avec quelles informations. Une
+        chose à la fois.</p>
+      <p class="lesson-try"><a class="btn btn-ghost" href="/app?demande=%C3%89cris%20un%20mail%20poli%20%C3%A0%20mon%20propri%C3%A9taire%20pour%20signaler%20une%20fuite%20sous%20l'%C3%A9vier%20depuis%20lundi.%20Je%20voudrais%20un%20plombier%20cette%20semaine.%20Six%20lignes%20au%20plus.">Essayer la demande précise</a></p>
+      <fieldset class="quiz" data-answer="c">
+        <legend>Une petite question pour vérifier</legend>
+        <p>Laquelle de ces demandes donnera la meilleure réponse ?</p>
+        <label><input type="radio" name="q4" value="a"> « Parle-moi de l'Italie. »</label>
+        <label><input type="radio" name="q4" value="b"> « Italie vacances ? »</label>
+        <label><input type="radio" name="q4" value="c"> « Propose trois idées de week-end en Italie en mai, pour deux adultes, sans voiture. Une liste courte. »</label>
+        <p class="quiz-result" role="status" data-good="Oui : pour qui, quand, sous quelle forme." data-bad="Regardez la troisième : elle dit pour qui, quand, et sous quelle forme."></p>
+      </fieldset>
+      <button class="btn btn-primary lesson-done" type="button">J'ai compris, leçon suivante</button>
+    </article>
+
+    <article class="lesson" id="lecon-5" data-lesson="5">
+      <p class="lesson-n">Leçon 5</p>
+      <h2>Choisir qui répond</h2>
+      <p>Sous la case où vous écrivez, un petit bouton indique qui va répondre. Au début, laissez-le sur
+        <strong>« Auto »</strong> : Lezard IA choisit le modèle qui convient à votre question.</p>
+      <figure class="lesson-fig lesson-fig-narrow">
+        <img src="/static/tuto/choisir.jpg" alt="La fenêtre « Sélectionner un modèle » : trois choix automatiques (Vitesse, Éco, Équilibré), puis la liste des modèles installés sur ce PC." width="760" height="940" loading="lazy">
+        <figcaption>Trois réglages automatiques, puis vos modèles.</figcaption>
+      </figure>
+      <ul>
+        <li><strong>Auto · Équilibré</strong> : le bon choix par défaut.</li>
+        <li><strong>Auto · Vitesse</strong> : la réponse la plus rapide.</li>
+        <li><strong>Auto · Éco</strong> : vos modèles locaux d'abord. Utile seulement si vous avez aussi branché une IA
+          payante en ligne.</li>
+        <li><strong>Sur ce PC</strong> : la liste de vos modèles, si vous voulez en choisir un vous-même.</li>
+      </ul>
+      <p>Vous n'avez qu'un seul modèle ? Alors c'est toujours lui qui répond, quel que soit le réglage.</p>
+      <p class="lesson-keep"><strong>À retenir :</strong> laissez sur « Auto ». Vous y reviendrez le jour où vous aurez
+        plusieurs modèles.</p>
+      <button class="btn btn-primary lesson-done" type="button">Compris, leçon suivante</button>
+    </article>
+
+    <article class="lesson" id="lecon-6" data-lesson="6">
+      <p class="lesson-n">Leçon 6</p>
+      <h2>Faire lire un document</h2>
+      <p>L'IA peut lire un fichier et répondre à vos questions dessus : un contrat, une notice, un cours, un
+        compte rendu.</p>
+      <ol>
+        <li>Cliquez sur le bouton <strong>+</strong>, à gauche de la case où vous écrivez, et choisissez votre fichier
+          (un PDF par exemple). Vous pouvez aussi le faire glisser dans la fenêtre.</li>
+        <li>Posez votre question : « Quel est le préavis ? », « Résume ce document en cinq points ».</li>
+      </ol>
+      <figure class="lesson-fig">
+        <img src="/static/tuto/document.jpg" alt="Un contrat en PDF joint à la question « Quel est le loyer mensuel et le préavis ? » ; la réponse donne 87 euros et quarante-cinq jours, avec la page du contrat entre crochets." width="1280" height="560" loading="lazy">
+        <figcaption>La réponse indique entre crochets la page du document où elle a trouvé l'information.</figcaption>
+      </figure>
+      <p>Regardez les crochets dans la réponse : ils donnent <strong>la page</strong> d'où vient chaque information.
+        Pour un papier important, allez vérifier cette page. Et comme tout est local, votre fichier ne quitte pas votre
+        ordinateur.</p>
+      <p class="lesson-keep"><strong>À retenir :</strong> le bouton +, puis votre question. Vérifiez la page citée
+        quand c'est important.</p>
+      <button class="btn btn-primary lesson-done" type="button">Compris, leçon suivante</button>
+    </article>
+
+    <article class="lesson" id="lecon-7" data-lesson="7">
+      <p class="lesson-n">Leçon 7</p>
+      <h2>Les commandes</h2>
+      <p>Une commande est un raccourci. Tapez une <strong>barre oblique</strong> « / » dans la case où vous écrivez :
+        la liste apparaît, avec une explication pour chacune. Inutile de les apprendre.</p>
+      <figure class="lesson-fig">
+        <img src="/static/tuto/commandes.jpg" alt="La liste des commandes qui s'ouvre quand on tape une barre oblique : /web, /nouveau, /compacte, /prive, /modele, /mode, /effort…" width="1280" height="720" loading="lazy">
+        <figcaption>Tapez « / » : la liste s'ouvre, chaque commande est expliquée.</figcaption>
+      </figure>
+      <p>Les trois plus utiles pour commencer :</p>
+      <ul>
+        <li><code>/nouveau</code> : ouvre une nouvelle conversation.</li>
+        <li><code>/web</code> suivi de votre question : l'IA cherche sur Internet avant de répondre. Indispensable pour
+          l'actualité, la météo, un prix : sans cela, elle ne connaît que ce qu'elle a appris il y a longtemps.</li>
+        <li><code>/aide</code> : rappelle toutes les commandes.</li>
+      </ul>
+      <p class="lesson-keep"><strong>À retenir :</strong> « / » ouvre la liste. <code>/web</code> pour tout ce qui est
+        récent.</p>
+      <p class="lesson-try"><a class="btn btn-ghost" href="/app?demande=%2Fweb%20quel%20temps%20fera-t-il%20%C3%A0%20Brest%20demain%20%3F">Essayer une recherche sur Internet</a></p>
+      <button class="btn btn-primary lesson-done" type="button">Compris, leçon suivante</button>
+    </article>
+
+    <article class="lesson" id="lecon-8" data-lesson="8">
+      <p class="lesson-n">Leçon 8</p>
+      <h2>Ajouter des fonctions</h2>
+      <p>La <strong>marketplace</strong> est le catalogue de tout ce qui s'ajoute à Lezard IA. Tout y est gratuit.
+        Elle se trouve dans le menu en bas à gauche de la discussion.</p>
+      <figure class="lesson-fig">
+        <img src="/static/tuto/marketplace.jpg" alt="Le haut de la marketplace : « Conseillé pour ce PC », avec un modèle conseillé par usage et des bundles, puis les catégories." width="1280" height="720" loading="lazy">
+        <figcaption>En haut, ce qui est conseillé pour votre ordinateur. En dessous, les catégories.</figcaption>
+      </figure>
+      <p>Pour commencer, deux choses suffisent :</p>
+      <ul>
+        <li><strong>Les bundles</strong> : des lots tout prêts. « Pour bien démarrer » installe d'un seul clic
+          l'essentiel. « Parler avec l'IA » ajoute la voix : vous dictez, elle lit ses réponses.</li>
+        <li><strong>Les modèles</strong> : chaque fiche dit, taille par taille, si le modèle sera
+          <strong>rapide</strong>, <strong>plus lent</strong> ou <strong>trop gros</strong> pour votre PC.</li>
+      </ul>
+      <figure class="lesson-fig">
+        <img src="/static/tuto/tailles.jpg" alt="La fiche d'un modèle : pour chaque taille, la mémoire nécessaire, le téléchargement, et la mention « Rapide sur ce PC », « Plus lent » ou « Trop gros pour ce PC »." width="1280" height="810" loading="lazy">
+        <figcaption>La fiche d'un modèle : prenez une taille marquée « Rapide sur ce PC ».</figcaption>
+      </figure>
+      <p>Chaque fiche explique à quoi sert l'élément, comment s'en servir, et sa <strong>licence</strong> : les
+        conditions de son auteur. Pour un usage personnel, vous n'avez rien de particulier à faire.</p>
+      <p class="lesson-keep"><strong>À retenir :</strong> marketplace, bundle « Pour bien démarrer ». Pour un modèle,
+        une taille « Rapide sur ce PC ».</p>
+      <p class="lesson-try"><a class="btn btn-ghost" href="/marketplace">Ouvrir la marketplace</a></p>
+      <button class="btn btn-primary lesson-done" type="button">Compris, leçon suivante</button>
+    </article>
+
+    <article class="lesson" id="lecon-9" data-lesson="9">
+      <p class="lesson-n">Leçon 9</p>
+      <h2>Sur le téléphone</h2>
+      <p>L'IA reste dans votre PC, mais vous pouvez lui parler depuis votre téléphone. Le PC doit rester allumé.</p>
+      <div class="lesson-side">
+        <figure class="lesson-fig lesson-fig-phone">
+          <img src="/static/tuto/telephone.jpg" alt="La discussion de Lezard IA affichée sur un téléphone." width="500" height="1075" loading="lazy">
+          <figcaption>La même discussion, sur le téléphone.</figcaption>
+        </figure>
+        <div>
+          <h3>À la maison (même Wi-Fi)</h3>
+          <ol>
+            <li>Dans le menu en bas à gauche, ouvrez <strong>« Connecter un téléphone »</strong>.</li>
+            <li>Sur le téléphone Android, ouvrez l'application Lezard IA et visez le <strong>QR code</strong> (le carré
+              noir et blanc) avec « Scanner le QR code ».</li>
+          </ol>
+          <h3>De partout</h3>
+          <p>Créez votre compte gratuit depuis le tableau de bord (« Accès par le site »), puis ouvrez
+            <strong>« Utiliser mon IA »</strong> sur lezard-ia.fr. Un code à six chiffres, donné par une application de
+            votre téléphone, protège l'entrée : c'est la <strong>double authentification</strong>.</p>
+          <p class="small muted">Ne montrez le QR code qu'à vos propres appareils : il donne accès à votre IA.</p>
+        </div>
+      </div>
+      <p class="lesson-keep"><strong>À retenir :</strong> « Connecter un téléphone » à la maison, « Utiliser mon IA »
+        sur le site pour le reste. Le PC reste allumé.</p>
+      <button class="btn btn-primary lesson-done" type="button">Compris, dernière leçon</button>
+    </article>
+
+    <article class="lesson" id="lecon-10" data-lesson="10">
+      <p class="lesson-n">Leçon 10</p>
+      <h2>Rester prudent</h2>
+      <p>Une IA est un bon assistant, pas un expert infaillible. Cinq réflexes à garder :</p>
+      <ol>
+        <li><strong>Elle peut se tromper</strong>, même quand elle a l'air sûre d'elle. Un chiffre, une date, une
+          citation, un nom : vérifiez ce qui compte.</li>
+        <li><strong>Santé, droit, argent</strong> : servez-vous-en pour comprendre et préparer vos questions, puis
+          demandez à un professionnel.</li>
+        <li><strong>Elle ne connaît pas l'actualité</strong> sans la commande <code>/web</code>.</li>
+        <li><strong>Votre clé est votre mot de passe.</strong> Ne la donnez à personne et ne la collez pas dans une
+          conversation.</li>
+        <li><strong>Vos données restent chez vous</strong> : conversations, documents et réglages sont enregistrés sur
+          votre ordinateur. Seule une recherche <code>/web</code> envoie votre question sur Internet.</li>
+      </ol>
+      <p class="lesson-keep"><strong>À retenir :</strong> un assistant qui aide beaucoup, que l'on relit toujours pour
+        ce qui est important.</p>
+      <fieldset class="quiz" data-answer="a">
+        <legend>Une dernière question</legend>
+        <p>L'IA vous donne une date de fin de contrat. Que faites-vous ?</p>
+        <label><input type="radio" name="q10" value="a"> Je vérifie dans le contrat, à la page qu'elle cite</label>
+        <label><input type="radio" name="q10" value="b"> Je la crois, elle a lu le document</label>
+        <label><input type="radio" name="q10" value="c"> Je lui redemande trois fois pour être sûr</label>
+        <p class="quiz-result" role="status" data-good="C'est le bon réflexe." data-bad="Le bon réflexe : vérifier dans le contrat, à la page citée."></p>
+      </fieldset>
+      <button class="btn btn-primary lesson-done" type="button">J'ai terminé le didacticiel</button>
+    </article>
+
+    <section class="lesson lesson-end" id="fin" hidden>
+      <h2>Bravo, vous savez l'essentiel</h2>
+      <p>Vous savez poser une bonne question, faire lire un document, chercher sur Internet et ajouter des fonctions.
+        Le reste se découvre en s'en servant.</p>
+      <p><a class="btn btn-primary" href="/app">Ouvrir la discussion</a>
+        <a class="btn btn-ghost" href="/app?visite=1">Faire la visite guidée de l'écran</a></p>
+    </section>
+
+    <section class="lesson lexique" id="lexique">
+      <p class="lesson-n">Pour s'y retrouver</p>
+      <h2>Petit lexique</h2>
+      <p class="lex-search"><label for="lex-q" class="small muted">Chercher un mot</label>
+        <input id="lex-q" type="search" placeholder="modèle, carte graphique, token…" autocomplete="off" spellcheck="false"></p>
+      <dl id="lex">
+        <dt>Carte graphique</dt>
+        <dd>La pièce de l'ordinateur qui calcule les images des jeux. Elle fait aussi tourner les modèles d'IA beaucoup
+          plus vite que le reste de l'ordinateur.</dd>
+        <dt>Clé (clé maître, clé d'administration)</dt>
+        <dd>Le mot de passe de votre Lezard IA. Elle se copie depuis le menu Démarrer de Windows.</dd>
+        <dt>Cloud (IA en ligne)</dt>
+        <dd>Une IA qui fonctionne sur les ordinateurs d'une entreprise, par Internet. Lezard IA peut en brancher une,
+          mais n'en a pas besoin.</dd>
+        <dt>Commande</dt>
+        <dd>Un raccourci qui commence par « / », comme <code>/web</code> ou <code>/aide</code>.</dd>
+        <dt>Compétence</dt>
+        <dd>Une consigne toute faite qui change la façon de répondre, par exemple « Réponses concises ».</dd>
+        <dt>Double authentification</dt>
+        <dd>Une seconde vérification à la connexion : un code à six chiffres donné par votre téléphone.</dd>
+        <dt>Go (gigaoctet)</dt>
+        <dd>Une unité de taille. Un modèle pèse en général de 2 à 20 Go.</dd>
+        <dt>Licence</dt>
+        <dd>Les conditions fixées par l'auteur d'un modèle ou d'un outil : ce que l'on a le droit d'en faire.</dd>
+        <dt>Local</dt>
+        <dd>Qui fonctionne dans votre ordinateur, sans passer par Internet.</dd>
+        <dt>Marketplace</dt>
+        <dd>Le catalogue gratuit de ce qui s'ajoute à Lezard IA : modèles, outils, compétences, applications.</dd>
+        <dt>Mémoire vive (RAM)</dt>
+        <dd>La mémoire de travail de l'ordinateur. Un modèle trop gros pour la carte graphique déborde dedans, et
+          devient plus lent.</dd>
+        <dt>Modèle</dt>
+        <dd>Le « cerveau » de l'IA : un gros fichier que l'on télécharge une fois.</dd>
+        <dt>Ollama, LM Studio</dt>
+        <dd>Deux logiciels gratuits qui font tourner les modèles sur votre ordinateur. Lezard IA s'appuie sur eux.</dd>
+        <dt>Projet</dt>
+        <dd>Un dossier de conversations qui partagent les mêmes consignes et les mêmes fichiers.</dd>
+        <dt>Serveur MCP</dt>
+        <dd>Un petit programme qui donne un outil à l'IA, par exemple lire les fichiers d'un dossier que vous
+          choisissez.</dd>
+        <dt>Token</dt>
+        <dd>Un morceau de mot. Les IA comptent en tokens : environ trois tokens pour deux mots.</dd>
+        <dt>VRAM</dt>
+        <dd>La mémoire de la carte graphique. C'est elle qui décide de la taille des modèles rapides chez vous.</dd>
+      </dl>
+    </section>
+  </main>
+</body>
+</html>

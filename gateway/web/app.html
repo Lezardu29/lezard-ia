@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="/static/row-menu.css">
   <link rel="stylesheet" href="/static/preview.css">
   <link rel="stylesheet" href="/static/projects.css">
+  <link rel="stylesheet" href="/static/tour.css">
   <link rel="stylesheet" href="/static/mobile.css">
   <link rel="stylesheet" href="/static/claude.css">
   <link rel="stylesheet" href="/static/ui-claude.css">
@@ -83,6 +84,15 @@
     <button class="icon-btn" type="button" id="usage-btn" title="Utilisation" aria-label="Utilisation : contexte et plafonds" data-drawer>
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg>
       <span class="drawer-label">Utilisation</span>
+    </button>
+    <!-- pour débuter : les dix leçons (page à part, lisible sans clé) et la visite de cet écran (tour.js) -->
+    <a class="icon-btn" href="/didacticiel" target="_blank" id="tuto-link" title="Didacticiel" aria-label="Didacticiel : débuter avec Lezard IA" data-drawer>
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 5h7a3 3 0 0 1 3 3v12a2.5 2.5 0 0 0-2.5-2.5H2z"/><path d="M22 5h-7a3 3 0 0 0-3 3v12a2.5 2.5 0 0 1 2.5-2.5H22z"/></svg>
+      <span class="drawer-label">Didacticiel</span>
+    </a>
+    <button class="icon-btn" type="button" id="tour-btn" title="Visite guidée" aria-label="Visite guidée de l'écran" data-drawer>
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg>
+      <span class="drawer-label">Visite guidée</span>
     </button>
     <!-- formulaire de signalement sur GitHub, prérempli (version, système) par app.js : rien n'est envoyé tout seul -->
     <a class="icon-btn" href="https://github.com/Lezardu29/lezard-ia/issues/new?template=bug.yml" target="_blank" rel="noopener" id="bug-link" title="Signaler un bug" aria-label="Signaler un bug (formulaire sur GitHub)" data-drawer>
@@ -216,6 +226,12 @@
       </div>
       <h1><span class="gradient">Bonjour</span><br>Que puis-je faire pour vous ?</h1>
       <div class="suggestions" id="suggestions"></div>   <!-- tirées au hasard (chat.js) -->
+      <!-- nouveaux venus : visite de l'écran (tour.js) et didacticiel ; disparaît après la visite ou par la croix -->
+      <p class="first-steps" id="first-steps" hidden>Première fois ?
+        <button type="button" class="link-btn" id="tour-start">Visite guidée de l'écran</button> ·
+        <a href="/didacticiel" target="_blank">Didacticiel pour débuter</a>
+        <button type="button" class="first-steps-x" id="first-steps-x" title="Ne plus afficher" aria-label="Ne plus afficher">×</button>
+      </p>
       <div class="project-home" id="project-home" hidden>
         <section class="ph-convs" aria-labelledby="ph-convs-title">
           <h2 id="ph-convs-title">Conversations du projet</h2>

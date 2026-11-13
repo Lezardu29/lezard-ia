@@ -236,8 +236,10 @@ function rebuild() {
 function visible() {
   const q = plain($("search").value.trim());
   const fitOnly = admin && $("fit-only").checked;
+  const mineOnly = admin && $("mine-only").checked;  // ce qui est déjà sur ce PC : pour retrouver, mettre à jour, retirer
   return items.filter((it) => (tab === "all" || it.kind === tab) && !it.hidden   // bundle pas fait pour ce PC
     && (!fitOnly || it.kind !== "model" || it.fit !== "too_big")
+    && (!mineOnly || it.installed || (it.kind === "bundle" && it.bundle.parts.some((p) => p.installed)))
     && (!q || plain([it.name, it.description, ...it.tags.filter(Boolean), it.license?.name || licenses.get(it.licenseKey)?.name || ""].join(" ")).includes(q)))
     .sort(order());
 }
@@ -702,6 +704,10 @@ async function follow(r, btn, body, words = { doing: "Installation en cours…",
 function oneClick(it, entry, body, foot, route) {
   if (!admin) { foot.prepend(loginButton()); return; }
   if (!entry.one_click) return;
+  if (entry.retired) {                                    // retirée du catalogue : plus d'installation, on peut encore l'enlever
+    if (entry.installed) uninstallButton(it, entry, body, foot, route);
+    return;
+  }
   body.append(el("h3", "", "Installation"));
   if (entry.size || entry.where) {
     const dl = el("dl", "confirm-facts");
@@ -754,6 +760,7 @@ function mcpDetail(it, body, foot) {
   body.append(el("p", "small muted", `Paquet npm ${s.package}, version figée ${s.version}, lancé par npx sur ce PC. `
     + "Chaque appel d'outil demande votre accord dans le chat (commande /mcp)."));
   if (s.service) body.append(el("p", "alert show warn-box", s.service));
+  if (s.warning) body.append(el("p", "alert show warn-box", s.warning));
   body.append(toolsList(s));
   webSearchCompare(it, body);
   body.append(licenseBlock(s.license));
@@ -766,6 +773,7 @@ function mcpDetail(it, body, foot) {
     foot.prepend(button("Retirer", "btn-ghost", (b) => removeMcp(s, b)));
     return;
   }
+  if (s.retired) return;                                  // retiré du catalogue : il ne s'installe plus
   if (!data.node && !s.deps?.length) { body.append(el("p", "alert show warn-box", "Node.js est requis : installez-le depuis nodejs.org, puis revenez ici.")); return; }
   if (s.deps?.length) body.append(depsList(s.deps));
   let folder = null, secret = null;
@@ -817,7 +825,16 @@ async function addMcp(s, fields, btn, dialogBody) {
   message(r.data.connected ? `${s.name} est connecté : dans le chat, /mcp ${s.id} explique ses outils.`
     : `${s.name} est déclaré, mais pas encore connecté${r.data.error ? ` : ${r.data.error}` : ""}.`, r.data.connected);
   $("detail").close();
+  mcpState(s, { installed: true, connected: !!r.data.connected, error: r.data.error || null });
   await load(false);
+}
+
+/** L'état d'un serveur MCP montré tout de suite sur sa carte : relire tout le catalogue de ce PC prend plusieurs
+ *  secondes, pendant lesquelles la carte disait encore « Non installé » (ou « Connecté » après un retrait). */
+function mcpState(s, state) {
+  Object.assign(s, state);
+  rebuild();
+  render();
 }
 
 async function removeMcp(s, btn) {
@@ -827,6 +844,7 @@ async function removeMcp(s, btn) {
   if (!r.ok) { btn.disabled = false; return message(r.data?.error?.message || "Impossible de le retirer."); }
   message(`${s.name} est retiré.`, true);
   $("detail").close();
+  mcpState(s, { installed: false, connected: false, error: null });
   await load(false);
 }
 
@@ -1106,6 +1124,7 @@ async function init() {
   $("logout").hidden = !me;
   $("open-app").hidden = !me;
   $("fit-only").closest("label").hidden = !admin;
+  $("mine-only").closest("label").hidden = !admin;
   if (me && !admin) {
     $("denied").textContent = me.admin_session?.blocked
       ? "Administration depuis Internet désactivée : activez d'abord la double authentification, depuis ce PC ou votre réseau local. Vous pouvez visiter la marketplace."
@@ -1122,6 +1141,7 @@ async function init() {
   }
   $("search").addEventListener("input", () => { shown = PAGE; render(); });
   $("fit-only").addEventListener("change", () => { shown = PAGE; render(); });
+  $("mine-only").addEventListener("change", () => { shown = PAGE; render(); });
   try { $("sort").value = localStorage.getItem("gw.market.sort") || ""; } catch { /* stockage indisponible */ }
   $("sort").addEventListener("change", () => {
     try { localStorage.setItem("gw.market.sort", $("sort").value); } catch { /* ignoré */ }

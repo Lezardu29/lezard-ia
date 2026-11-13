@@ -98,7 +98,11 @@ tâche, dis-le en une phrase à l'utilisateur et fais-la directement, même s'il
    noms, et une ligne citée se vérifie d'une seule recherche. Passe les fichiers par `fichiers` (ne recopie pas
    leur contenu) et fais écrire les longues réponses avec `ecrire_dans` (tu ne reçois alors qu'un reçu).
 5. **Annonce le plan** à l'utilisateur en un tableau court (étape, qui la fait, pourquoi), puis exécute sans
-   attendre, sauf s'il a demandé à valider.
+   attendre, sauf s'il a demandé à valider. **Deux étapes indépendantes ou plus : un seul appel `confier_lot`**,
+   jamais plusieurs `confier_etape` à la suite. Chacun de tes appels te fait relire toute la conversation : mesuré,
+   c'est là que part presque toute la facture (24 à 41 tours pour quatre fichiers). `confier_lot` confie, contrôle
+   chaque morceau écrit (comme `controler` avec « recaler ») et assemble le tout (`assembler_dans`) : mets ce qui
+   est commun dans `consigne_commune`, et un `ecrire_dans` différent par étape.
 6. **Vérifie à bas coût** chaque résultat : lancer les tests, chercher un motif, contrôler quelques lignes
    citées. Ne relis pas tout. Un brouillon imparfait se corrige par une retouche, pas par une réécriture complète.
 7. **Étape bloquée** (« ÉTAPE BLOQUÉE » avec la raison) ou résultat faux : dans l'ordre, (a) donne ce qui manquait
@@ -119,8 +123,8 @@ Mesuré : sans cette règle, ils restent inutilisés et tu refais leur travail a
 
 - `resumer_fichier`, `resumer_dossier` : à l'étape 1, à la place de lire un gros fichier ou de confier son résumé.
   Un fichier déjà résumé ne coûte plus rien.
-- `controler` avec « recaler » à true : aux étapes 6 et 8, sur chaque document écrit par un modèle moins fort,
-  AVANT toute recherche ou lecture de ta part. Il ne consomme aucun token, corrige lui-même les numéros de ligne
+- `controler` avec « recaler » à true : aux étapes 6 et 8, sur chaque document écrit par un modèle moins fort
+  (déjà fait pour ce qui sort de `confier_lot` : ne le refais pas), AVANT toute recherche ou lecture de ta part. Il ne consomme aucun token, corrige lui-même les numéros de ligne
   faux et rend la liste exacte de ce qui reste : noms absents, lignes qu'il n'a pas su retrouver.
 - `retoucher` : pour corriger ce que `controler` a signalé, au lieu de réécrire le passage toi-même. Une seule
   retouche par document ; s'il reste des erreurs après elle, corrige-les à la main.
@@ -1108,10 +1112,146 @@ def _no_roots(function):
     return lambda args, roots: function()
 
 
+# ---------- lot d'étapes : plusieurs étapes, leur contrôle et l'assemblage en UN appel ----------
+MAX_LOT = 12  # étapes par lot, au plus
+LOT_BUDGET = 1200  # secondes : au-delà, les étapes restantes attendent l'appel suivant
+
+
+def _assemble(raw: str, parts: list[str], written: set[Path], roots: list[Path]) -> str:
+    """Met bout à bout les parties, dans l'ordre, dans un seul fichier ; les parties écrites par ce lot sont ensuite
+    supprimées (elles n'étaient que des morceaux), les autres restent."""
+    target = inside(raw, roots, "écriture de fichiers")
+    paths = [inside(p, roots, "lecture de fichiers") for p in parts]
+    absent = [p.name for p in paths if not p.is_file()]
+    if absent:
+        return f"NON ASSEMBLÉ : partie(s) absente(s) : {', '.join(absent)}."
+    text = "\n\n".join(p.read_text(encoding="utf-8", errors="replace").strip("\n") for p in paths) + "\n"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    write_like(target, text)
+    for p in paths:
+        if p in written and p != target:
+            p.unlink(missing_ok=True)
+    return f"Assemblé dans {target} : {len(paths)} partie(s), {len(text.splitlines())} lignes."
+
+
+def delegate_batch(args: dict, roots: list[Path]) -> str:
+    """Chaque appel de l'IA qui orchestre relit toute sa conversation : huit appels pour quatre fichiers coûtent bien
+    plus que le travail lui-même. Ici, un seul appel confie les étapes, contrôle ce qu'elles ont écrit et assemble."""
+    steps = args.get("etapes") or []
+    if not isinstance(steps, list) or any(not isinstance(s, dict) for s in steps):
+        raise ValueError("« etapes » : une liste d'étapes (mêmes champs que confier_etape).")
+    if len(steps) > MAX_LOT:
+        raise ValueError(f"{len(steps)} étapes : {MAX_LOT} au plus par lot, fais-en deux.")
+    whole = str(args.get("assembler_dans") or "").strip()
+    parts = [str(p) for p in args.get("parties") or []] or [
+        str(s["ecrire_dans"]) for s in steps if s.get("ecrire_dans")
+    ]
+    if not steps and not (whole and parts):
+        raise ValueError("« etapes » manquantes (ou « assembler_dans » avec « parties » pour assembler seulement).")
+    common = str(args.get("consigne_commune") or "").strip()
+    started, out, written, undone = time.monotonic(), [], set(), 0
+    for i, step in enumerate(steps, 1):
+        if time.monotonic() - started > LOT_BUDGET:
+            undone += len(steps) - i + 1
+            out.append(f"{i} à {len(steps)}. PAS FAITES : temps du lot dépassé. Relance un lot avec ces étapes.")
+            break
+        merged = {k: v for k, v in step.items() if k != "controler"}
+        merged["consigne"] = "\n\n".join(x for x in (common, str(step.get("consigne") or "").strip()) if x)
+        if args.get("modele") and not merged.get("modele"):
+            merged["modele"] = args["modele"]
+        try:
+            result = delegate(merged, roots)
+        except (ValueError, RuntimeError, OSError) as e:
+            undone += 1
+            out.append(f"{i}. ERREUR : {e}")
+            continue
+        done = not result.startswith("ÉTAPE BLOQUÉE")
+        undone += 0 if done else 1
+        target, sources = step.get("ecrire_dans"), [line_range(str(f))[0] for f in step.get("fichiers") or []]
+        if done and target:
+            written.add(inside(str(target), roots, "écriture de fichiers"))
+            result = result.split(" Début :\n", 1)[0] + " " + result.rsplit("\n\n", 1)[-1]  # reçu sans l'extrait
+            if sources and step.get("controler", True) and not step.get("sans_numeros"):
+                check = check_draft({"brouillon": str(target), "sources": sources, "recaler": True}, roots)
+                result += "\n   Contrôle : " + check.replace("\n", "\n   ")
+        out.append(f"{i}. {result}")
+    if whole:
+        out.append(
+            "NON ASSEMBLÉ : une étape au moins n'est pas faite. Reprends-la, puis appelle confier_lot avec "
+            "« assembler_dans » et « parties » seulement."
+            if undone
+            else _assemble(whole, parts, written, roots)
+        )
+    return "\n".join(out)
+
+
+TOOLS.append(
+    {
+        "name": "confier_lot",
+        "description": "Confie PLUSIEURS étapes en UN seul appel, à préférer à plusieurs confier_etape dès qu'il y a "
+        "deux étapes indépendantes ou plus (un fichier chacune, par exemple) : chaque appel que tu fais te fait "
+        "relire toute la conversation, c'est ce qui coûte le plus. Les étapes s'exécutent l'une après l'autre ; ce "
+        "que chacune écrit est contrôlé aussitôt sans modèle (noms cités présents dans ses fichiers, numéros de "
+        "ligne recalés), puis tout peut être assemblé dans un seul fichier. Tu ne reçois qu'un reçu par étape, "
+        "avec les écarts à corriger.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "etapes": {
+                    "type": "array",
+                    "description": f"Les étapes, {MAX_LOT} au plus.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "consigne": {"type": "string", "description": "Ce qui est propre à cette étape."},
+                            "fichiers": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Fichiers à lui faire lire (plage possible : « a.py:1-800 »).",
+                            },
+                            "ecrire_dans": {"type": "string", "description": "Fichier où écrire sa réponse."},
+                            "modele": {"type": "string"},
+                            "role": {"type": "string"},
+                            "sans_numeros": {"type": "boolean"},
+                            "max_tokens": {"type": "integer"},
+                            "controler": {
+                                "type": "boolean",
+                                "description": "false pour ne pas contrôler ce que l'étape écrit (du code, par exemple).",
+                            },
+                        },
+                    },
+                },
+                "consigne_commune": {
+                    "type": "string",
+                    "description": "Ce qui vaut pour toutes les étapes (objectif, format exact, contraintes) : écrit "
+                    "une seule fois, ajouté devant la consigne de chacune.",
+                },
+                "modele": {"type": "string", "description": "Modèle de toutes les étapes qui n'en nomment pas."},
+                "assembler_dans": {
+                    "type": "string",
+                    "description": "Fichier où mettre bout à bout, dans l'ordre, ce que les étapes ont écrit (leurs "
+                    "morceaux sont ensuite supprimés). Rien n'est assemblé si une étape est bloquée.",
+                },
+                "parties": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Fichiers à assembler, dans l'ordre, si ce ne sont pas ceux des étapes (pour "
+                    "assembler après avoir repris une étape bloquée : sans « etapes »).",
+                },
+            },
+        },
+    }
+)
+
 SERVERS = {
     "orchestre": (
         lambda: TOOLS,
-        {"modeles": _no_roots(listing), "bilan": _no_roots(report), "confier_etape": delegate},
+        {
+            "modeles": _no_roots(listing),
+            "bilan": _no_roots(report),
+            "confier_etape": delegate,
+            "confier_lot": delegate_batch,
+        },
     ),
     "resumes": (
         lambda: TOOLS_RESUMES,
@@ -1293,8 +1433,8 @@ Réponds ensuite en UNE ligne : actif ou éteint, et ce que valent les prochaine
 
 - Gros fichier ou dossier à connaître : `resumer_fichier` ou `resumer_dossier` au lieu de lire ; lis ensuite
   seulement les lignes utiles.
-- Travail en plusieurs étapes avec beaucoup à lire ou à écrire : suis la méthode « orchestre » (`confier_etape`,
-  puis `bilan` et vérification finale).
+- Travail en plusieurs étapes avec beaucoup à lire ou à écrire : suis la méthode « orchestre » (`confier_lot` pour
+  plusieurs étapes en un seul appel, `confier_etape` pour une seule, puis `bilan` et vérification finale).
 - Document produit par un modèle moins fort : `controler` avec « recaler » à true (il corrige lui-même les numéros
   de ligne faux), puis `retoucher` pour ce qui reste, plutôt que de le réécrire.
 - Fichier trop long pour un modèle local (`modeles` dit combien de lignes chacun lit) : confie-le par plages,

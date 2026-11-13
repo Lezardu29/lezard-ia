@@ -196,6 +196,8 @@ class Stdio:
                 await asyncio.wait_for(self.proc.wait(), 5)
             except TimeoutError:
                 self.proc.kill()
+            except RuntimeError:  # processus lancé par une autre boucle asyncio (déjà fermée) : arrêté sans l'attendre
+                pass
         if self.reader:
             self.reader.cancel()
 
@@ -388,7 +390,13 @@ async def load(extra: Callable[[], dict] | None = None) -> None:
             servers.update(parse_config({"servers": extra()}))
         except ValueError as e:
             log.warning("MCP : clés des services : %s", e)
+    from .marketplace import RETIRED  # ici : marketplace importe ce module
+
     for name, cfg in servers.items():
+        if f"mcp:{name}" in RETIRED:  # retiré du catalogue (paquet devenu dangereux) : déclaré, mais plus jamais lancé
+            STATUS[name] = {"ok": False, "error": f"Retiré du catalogue : {RETIRED[f'mcp:{name}']}"[:200]}
+            log.warning("MCP : %s n'est pas lancé : retiré du catalogue", name)
+            continue
         try:
             n = await _connect(name, cfg)
             STATUS[name] = {"ok": True, "tools": n}

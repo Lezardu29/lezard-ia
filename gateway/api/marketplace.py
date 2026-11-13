@@ -362,7 +362,20 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
             "node": bool(npx()),
             "installer_mode": mode,
             "job": job["id"] if busy() else None,
+            "extra": holder["catalog"].view() if holder.get("catalog") else None,
         }
+
+    @router.post("/v1/admin/marketplace/refresh")
+    async def refresh_catalog(request: Request):
+        """Relit tout de suite le supplément signé du catalogue (fiches ajoutées, corrigées ou retirées)."""
+        admin(request)
+        request.state.audit = {"target": "marketplace:catalogue"}
+        if not holder.get("catalog"):
+            raise VirtualKeyError(409, "Catalogue en ligne indisponible sur cette installation.")
+        result = await asyncio.to_thread(holder["catalog"].refresh)
+        if any(f"mcp:{s['name']}" in marketplace.RETIRED and s.get("ok") for s in mcp.overview()):
+            await reload()  # un serveur MCP qui vient d'être retiré est arrêté tout de suite
+        return {**holder["catalog"].view(), "last": result}
 
     @router.get("/v1/admin/marketplace/models/{name}/license")
     async def model_license(name: str, request: Request, tag: str = "latest"):

@@ -186,7 +186,7 @@ def test_speaks_mcp_over_stdio_as_a_plain_script():
     replies = [json.loads(x) for x in out]
     assert [r["id"] for r in replies] == [1, 2, 3]
     assert replies[0]["result"]["serverInfo"]["name"] == "orchestre"
-    assert [t["name"] for t in replies[1]["result"]["tools"]] == ["modeles", "bilan", "confier_etape"]
+    assert [t["name"] for t in replies[1]["result"]["tools"]] == ["modeles", "bilan", "confier_etape", "confier_lot"]
     assert replies[2]["error"]["code"] == -32601
 
 
@@ -229,7 +229,7 @@ def test_each_server_offers_only_its_own_tools():
     def names(server):
         return [t["name"] for t in mo.handle({"id": 1, "method": "tools/list"}, [], server)["result"]["tools"]]
 
-    assert names("orchestre") == ["modeles", "bilan", "confier_etape"]
+    assert names("orchestre") == ["modeles", "bilan", "confier_etape", "confier_lot"]
     assert names("resumes") == ["resumer_fichier", "resumer_dossier", "oublier_resumes"]
     assert names("brouillons") == ["controler", "retoucher"]
     assert call_on("resumes", "confier_etape", {"consigne": "x"})[0]  # outil d'un autre serveur : refusé
@@ -366,17 +366,22 @@ def test_switch_shows_the_tools_only_when_on_and_tells_the_client_the_list_chang
     err, text = call_on("lezard", "lezard_ia", {"action": "activer"})
     assert not err and "ACTIF dans cette session" in text and "Nouvelles sessions : outils éteints" in text
     assert mo.OUTBOX == [{"jsonrpc": "2.0", "method": "notifications/tools/list_changed"}]
-    assert listed()[:9] == ["lezard_ia", "modeles", "bilan", "confier_etape", "resumer_fichier", "resumer_dossier",
+    assert listed()[:10] == ["lezard_ia", "modeles", "bilan", "confier_etape", "confier_lot", "resumer_fichier", "resumer_dossier",
                             "oublier_resumes", "controler", "retoucher"]  # fmt: skip
     # puis les outils à trois modes (tests/test_mcp_modes.py) ; ceux du PC seulement sous Windows
-    assert listed()[9:12] == ["lire_image", "lire_document", "chercher_web"]
+    assert listed()[10:13] == ["lire_image", "lire_document", "chercher_web"]
     assert not call_on("lezard", "confier_etape", {"consigne": "x"})[0] and len(ollama["sent"]) == 1
     call_on("lezard", "lezard_ia", {"action": "activer"})
     assert len(mo.OUTBOX) == 1  # déjà actif : rien à annoncer de nouveau
     assert "ÉTEINT" in call_on("lezard", "lezard_ia", {"action": "desactiver"})[1]
     assert listed() == ["lezard_ia"] and len(mo.OUTBOX) == 2
     assert call_on("lezard", "lezard_ia", {"action": "danser"})[0]
-    assert listed("orchestre") == ["modeles", "bilan", "confier_etape"]  # les serveurs à part ne dépendent pas de lui
+    assert listed("orchestre") == [
+        "modeles",
+        "bilan",
+        "confier_etape",
+        "confier_lot",
+    ]  # les serveurs à part ne dépendent pas de lui
 
 
 def test_switch_default_for_new_sessions_is_kept_on_disk(ollama, monkeypatch):
@@ -710,3 +715,52 @@ def test_un_nom_defini_une_fois_doit_etre_cite_a_sa_ligne_exacte(tmp_path):
     text = m.check_draft({**args, "recaler": True}, [tmp_path])
     assert "2 numéro(s) de ligne recalé(s)" in text and "Tout existe" in text
     assert "`charger` (ligne 3)" in doc.read_text("utf-8") and "`MAX` (ligne 1)" in doc.read_text("utf-8")
+
+
+def test_un_lot_confie_controle_et_assemble_en_un_seul_appel(ollama, tmp_path, monkeypatch):
+    (tmp_path / "a.py").write_text("x = 1\n\n\ndef alpha():\n    return 1\n", encoding="utf-8")
+    (tmp_path / "b.py").write_text("def beta():\n    return 2\n", encoding="utf-8")
+    answers = iter(
+        ["# a.py\n\n- `alpha` (ligne 2) : rend 1\n- `fantome` (ligne 1) : rien", "# b.py\n\n- `beta` (ligne 1)"]
+    )
+    base = mo.call
+
+    def call(url, body=None, timeout=0, key=""):
+        if url.endswith("/api/chat"):
+            ollama["answer"] = next(answers)
+        return base(url, body, timeout, key)
+
+    monkeypatch.setattr(mo, "call", call)
+    lot = {
+        "consigne_commune": "Documente ce fichier, une ligne par fonction.",
+        "etapes": [
+            {"consigne": "Fichier a.", "fichiers": ["a.py"], "ecrire_dans": "docs/a.md"},
+            {"consigne": "Fichier b.", "fichiers": ["b.py:1-2"], "ecrire_dans": "docs/b.md"},
+        ],
+        "assembler_dans": "docs/tout.md",
+    }
+    err, text = tool("confier_lot", lot, [tmp_path])
+    assert not err and "Assemblé dans" in text and "2 partie(s)" in text
+    assert "Début" not in text  # un reçu par étape, sans extrait
+    assert "1 numéro(s) de ligne recalé(s)" in text and "ABSENTS des sources (1) : fantome" in text
+    whole = (tmp_path / "docs" / "tout.md").read_text(encoding="utf-8")
+    assert "`alpha` (ligne 4)" in whole and whole.index("# a.py") < whole.index("# b.py")
+    assert not (tmp_path / "docs" / "a.md").exists()  # les morceaux du lot ne restent pas
+    sent = [b["messages"][1]["content"] for b in ollama["sent"]]
+    assert all("Documente ce fichier" in s for s in sent) and "Fichier b." in sent[1] and len(mo.STEPS) == 2
+
+    # une étape bloquée : rien n'est assemblé, les autres sont faites ; on assemble ensuite sans étape
+    answers = iter(["BLOQUE: fichier illisible", "# b.py\n\n- `beta` (ligne 1)"])
+    err, text = tool("confier_lot", lot, [tmp_path])
+    assert not err and "1. ÉTAPE BLOQUÉE" in text and "NON ASSEMBLÉ" in text and (tmp_path / "docs" / "b.md").exists()
+    (tmp_path / "docs" / "a.md").write_text("# a.py repris\n", encoding="utf-8")
+    err, text = tool(
+        "confier_lot", {"assembler_dans": "docs/tout.md", "parties": ["docs/a.md", "docs/b.md"]}, [tmp_path]
+    )
+    assert not err and "Assemblé" in text and (tmp_path / "docs" / "a.md").exists()  # pas écrits par ce lot : gardés
+    assert "repris" in (tmp_path / "docs" / "tout.md").read_text(encoding="utf-8")
+
+    err, text = tool("confier_lot", {"etapes": [{"consigne": "x"}] * 13}, [tmp_path])
+    assert err and "12 au plus" in text
+    err, text = tool("confier_lot", {}, [tmp_path])
+    assert err and "etapes" in text

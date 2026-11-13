@@ -47,6 +47,16 @@ _TAG = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 DISCLAIMER = "Résumé indicatif, pas un avis juridique : seul le texte complet de la licence fait foi."
 
 
+# fiches retirées par le supplément signé (marketplace_extra) : « mcp:<id> », « app:<id> », « tool:<id> » -> raison.
+# Elles restent affichées avec la raison et se désinstallent encore, mais ne s'installent plus.
+RETIRED: dict[str, str] = {}
+
+
+def refuse_retired(key: str) -> None:
+    if key in RETIRED:
+        raise MarketplaceError(410, f"Retiré du catalogue : {RETIRED[key]}")
+
+
 class MarketplaceError(Exception):
     def __init__(self, status: int, message: str):
         super().__init__(message)
@@ -892,6 +902,7 @@ def check_mcp(sid: str, folder: str | None = None, secret: str | None = None) ->
 def add_mcp(sid: str, npx: str, folder: str | None = None, secret: str | None = None, write: bool = True) -> dict:
     """Déclare un serveur de la liste dans data/mcp.json (version figée) ; renvoie sa déclaration, sans la clé."""
     s = mcp_server(sid)
+    refuse_retired(f"mcp:{sid}")
     args = ["-y", f"{s['package']}@{s['version']}", *s.get("args", ())]
     if s["needs_folder"]:
         target = Path(folder or "").expanduser()

@@ -13,7 +13,8 @@ httpx>=0.28,<1
 # fuseaux horaires (date donnée au modèle) : Windows n'a pas de base IANA ; sans lui, heure locale du PC
 tzdata>=2024.1; sys_platform == "win32"
 python-multipart>=0.0.9,<0.1
-pypdf>=4,<7
+# 6.21.4 : corrige sept failles de lecture de PDF (CVE-2026-119203 à 119209), signalées par pip-audit
+pypdf>=6.21.4,<7
 # 50 : corrige les failles connues des versions antérieures (PYSEC-2026-3552/3553/3554, GHSA-537c-gmf6-5ccf),
 # signalées par pip-audit (15.3)
 cryptography>=50,<51
