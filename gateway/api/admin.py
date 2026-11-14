@@ -24,7 +24,7 @@ from ..config import ProviderConfig, hosted_instance, preset, presets
 from ..crypto import Cipher, CryptoError, mask
 from ..edition import PRICE, account_url, edition, license_info, load_license
 from .. import auto_tunnel, benchmark, cloudflared, mcp, ollama_library, services, sources, updates
-from .. import model_catalog
+from .. import hf_models, model_catalog
 from ..license import LicenseError
 from ..free_tiers import (
     CHECKED as FREE_CHECKED,
@@ -33,7 +33,7 @@ from ..free_tiers import (
     remove_rules as remove_free_rules,
 )
 from ..hardware import disk_info, is_this_machine
-from ..local_context import server_root
+from ..local_context import ollama_server_default, server_root
 from ..model_catalog import disk_needed, find, recommend
 from ..keys import (
     PREFIX as KEY_PREFIX,
@@ -428,7 +428,7 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
             except CryptoError:
                 tunnel = None
         if tunnel is None:
-            tunnel = await auto_tunnel.create(client, holder["instance"], socket.gethostname(), port)
+            tunnel = await auto_tunnel.create(client, holder["instance"], port)
             await asyncio.to_thread(auto_tunnel.save, store, cipher, tunnel)
         await shared.start_remote("cloudflare", None, False, {"hostname": tunnel["hostname"], "token": tunnel["token"]})
         holder["managed_tunnel"] = tunnel["hostname"]
@@ -766,6 +766,49 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
 
     shared.recommendations, shared.library = recommendations, library  # marketplace de lezard-ia.fr
 
+    # ----- modèles de Hugging Face (GGUF), installés par Ollama sous le nom hf.co/auteur/dépôt:QUANT -----
+    def hf_fail(e: hf_models.HfError):
+        raise VirtualKeyError(e.status, e.message) from None
+
+    @router.get("/v1/admin/models/hf/search")
+    async def admin_hf_search(request: Request, q: str = ""):
+        """Dépôts GGUF publics de Hugging Face, les plus téléchargés d'abord. Seuls les mots cherchés partent."""
+        admin(request)
+        try:
+            return {"models": await hf_models.search(holder["gw"].client, q)}
+        except hf_models.HfError as e:
+            hf_fail(e)
+
+    @router.get("/v1/admin/models/hf/files")
+    async def admin_hf_files(request: Request, repo: str = ""):
+        """Quantifications d'un dépôt : téléchargement, mémoire estimée, adéquation à ce PC, déjà installée ou non."""
+        admin(request)
+        gw: Gateway = holder["gw"]
+        try:
+            info = await hf_models.files(gw.client, repo)
+        except hf_models.HfError as e:
+            hf_fail(e)
+        hw = await hardware.snapshot(list(gw.providers.values()), gw.client)
+        o = await this_pc_ollama(gw)
+        b = model_catalog.budget(hw)
+        have = {t.lower() for t in o["installed"]}
+        ctx = ollama_server_default()
+        rows = []
+        for f in info["files"]:
+            params = info["params_b"] or f["size"] / model_catalog.GB / model_catalog.BYTES_PER_WEIGHT["q4_K_M"]
+            kv = params * model_catalog.KV_GB_PER_B_AT_4K * ctx / 4096
+            need = f["size"] + (kv + model_catalog.RUNTIME_GB) * model_catalog.GB
+            rows.append(
+                {**f, "memory": round(need), "fit": model_catalog.fit(need, b), "installed": f["tag"].lower() in have}
+            )
+        return {
+            **info,
+            "files": rows,
+            "budget": b,
+            "ollama": o["target"].name if o["target"] else None,
+            "ollama_running": bool(o["target"]) or o["running"],
+        }
+
     # ----- mesure d'un modèle précis, installé sur ce PC (vitesse réelle, pas estimée) -----
     model_job: dict = {"state": "idle", "model": None, "step": None, "error": None}
 
@@ -1001,9 +1044,11 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
         p = ollama_target(body.get("provider") or "ollama", body.get("model"))
         request.state.audit = {"target": body.get("model"), "detail": {"provider": p.name}}  # 20.2
         if is_this_machine(p.cfg.base_url):  # 14.4 : jamais un téléchargement qui remplit le disque
-            disk, need = await asyncio.to_thread(disk_info), disk_needed(body["model"])
+            disk = await asyncio.to_thread(disk_info)
+            hf = hf_models.size_hint(body["model"])  # modèle de Hugging Face : taille lue sur sa fiche
+            need = hf + model_catalog.DISK_MARGIN_GB * model_catalog.GB if hf else disk_needed(body["model"])
             if disk["free"] is not None and disk["free"] < need:
-                known = find(body["model"])
+                known = find(body["model"]) or hf
                 raise VirtualKeyError(
                     507,
                     f"Espace disque insuffisant dans {disk['path']} : "

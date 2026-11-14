@@ -58,6 +58,13 @@
         <ul class="market-reco-list" id="mr-list"></ul>
       </section>
 
+      <!-- clé maître : ce qui se gêne parmi ce qui est installé sur ce PC (gateway/compat.py) -->
+      <section class="panel market-compat" id="compat" aria-labelledby="compat-title" hidden>
+        <div class="panel-head"><h2 id="compat-title">Sur ce PC : compatibilité</h2></div>
+        <p class="small muted" id="compat-sum"></p>
+        <ul class="compat-list" id="compat-list"></ul>
+      </section>
+
       <div class="market-tools">
         <div class="market-tabs" role="tablist" aria-label="Catégories" id="tabs"></div>
         <input id="search" type="search" placeholder="Rechercher : qwen, vision, voix, MIT…" spellcheck="false"

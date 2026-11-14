@@ -134,3 +134,12 @@
 .market-tools-dl dt { font-family: ui-monospace, Consolas, monospace; font-size: 13px; overflow-wrap: anywhere; }
 .market-tools-dl dd { margin: 0; font-size: 14px; color: var(--text-muted); }
 @media (max-width: 560px) { .market-tools-dl { grid-template-columns: 1fr; gap: 2px; } .market-tools-dl dd { margin-bottom: 8px; } }
+
+/* compatibilité entre outils (gateway/compat.py) */
+.market-compat { margin-bottom: 18px; }
+.compat-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 10px; }
+.compat-item { padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface, transparent); }
+.compat-item p { margin: 4px 0 0; }
+.compat-conflit { border-color: color-mix(in srgb, #c0392b 45%, var(--border)); }
+.compat-attention { border-color: color-mix(in srgb, #d68910 45%, var(--border)); }
+.market-compat-detail { margin-top: 16px; }

@@ -15,10 +15,10 @@ const $ = (id) => document.getElementById(id);
 const LOGIN = "/?next=/marketplace";
 const SITE_ORIGINS = ["https://lezard-ia.fr", "https://www.lezard-ia.fr"];
 const PAGE = 30;                                            // cartes affichées avant « Afficher plus »
-const TABS = [["all", "Tout"], ["bundle", "Bundles"], ["component", "Outils"], ["model", "Modèles"],
+const TABS = [["all", "Tout"], ["bundle", "Bundles"], ["component", "Outils"], ["model", "Modèles"], ["hf", "Hugging Face"],
               ["skill", "Compétences"], ["mcp", "Serveurs MCP"], ["tool", "Outils pour agents"], ["app", "Applications"]];
 const KIND_LABELS = { model: "Modèle", skill: "Compétence", component: "Outil", mcp: "Serveur MCP",
-                      tool: "Outil pour agents", app: "Application", bundle: "Bundle" };
+                      tool: "Outil pour agents", app: "Application", bundle: "Bundle", hf: "Modèle Hugging Face" };
 const ON_THIS_PC = ["component", "mcp", "tool", "app"];     // clé maître : présent ou non sur ce PC, sur la carte et la fiche
 const COMMERCIAL = {
   oui: ["Usage commercial permis", "ok"],
@@ -313,6 +313,7 @@ function card(it) {
   return li;
 }
 function render() {
+  if (tab === "hf") return renderHf();
   const list = visible();
   const hidden = (tab === "all" || tab === "bundle") ? items.filter((it) => it.hidden).length : 0;
   $("count").textContent = `${list.length} élément${list.length > 1 ? "s" : ""}`
@@ -323,6 +324,164 @@ function render() {
   wantLicenses(page.filter((it) => it.kind === "model").map((it) => it.licenseKey));
   $("more").hidden = list.length <= shown;
   for (const b of $("tabs").children) b.setAttribute("aria-selected", String(b.dataset.tab === tab));
+}
+
+// ---------- modèles de Hugging Face (GGUF) : recherche à la demande, installés par Ollama (hf.co/auteur/dépôt:QUANT) ----------
+const hf = { query: null, rows: null, busy: false, error: null, timer: 0, info: null };
+const count = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1).replace(".", ",")} M` : n >= 1e3 ? `${Math.round(n / 1e3)} k` : String(n));
+
+function renderHf() {
+  for (const b of $("tabs").children) b.setAttribute("aria-selected", String(b.dataset.tab === tab));
+  $("more").hidden = true;
+  if (!admin) {
+    $("count").textContent = "";
+    const li = el("li", "market-card");
+    li.append(el("h3", "mc-name", "Les modèles de Hugging Face"),
+      el("p", "mc-desc", "Des milliers de modèles au format GGUF, publiés sur huggingface.co, installés par Ollama comme ceux "
+        + "de sa bibliothèque. La recherche et l'installation demandent la clé maître de votre Lezard IA."), loginButton());
+    $("grid").replaceChildren(li);
+    return;
+  }
+  const q = $("search").value.trim();
+  if (hf.query !== q) {
+    clearTimeout(hf.timer);
+    hf.timer = setTimeout(() => hfSearch(q), hf.rows ? 450 : 0);   // on attend la fin de la frappe
+  }
+  const list = hf.rows || [];
+  $("count").textContent = hf.error || (hf.busy || !hf.rows ? "Recherche sur Hugging Face…"
+    : `${list.length} modèle${list.length > 1 ? "s" : ""} GGUF sur Hugging Face${q ? ` pour « ${q} »` : " : les plus téléchargés"}`
+      + " · publiés par n'importe qui : préférez les auteurs connus");
+  $("grid").replaceChildren(...list.map(hfItem).map(card));
+}
+
+async function hfSearch(q) {
+  hf.query = q;
+  hf.busy = true;
+  hf.error = null;
+  const r = await api(`/v1/admin/models/hf/search?q=${encodeURIComponent(q)}`);
+  if (hf.query !== q) return;                                // une autre recherche a été tapée entre-temps
+  hf.busy = false;
+  hf.rows = r.ok ? r.data.models : [];
+  if (!r.ok) hf.error = r.data?.error?.message || `Recherche impossible (erreur ${r.status}).`;
+  if (tab === "hf") render();
+}
+
+function hfItem(m) {
+  return {
+    kind: "hf", id: m.repo, name: m.repo.split("/")[1], installed: false, hf: m,
+    description: `Publié par ${m.author} sur Hugging Face${m.base_model ? `, d'après ${m.base_model}` : ""}.`,
+    tags: [`${count(m.downloads)} téléchargements`, `${count(m.likes)} j'aime`, m.vision ? "images" : null],
+    license: { ...m.license, url: `https://huggingface.co/${m.repo}` },
+  };
+}
+
+async function hfDetail(it, body, foot) {
+  const m = it.hf;
+  body.append(el("p", "small", `Dépôt : ${m.repo}`), el("p", "alert show warn-box",
+    "Publié par un tiers sur Hugging Face : Lezard IA ne l'a pas vérifié. Un fichier GGUF ne contient que les poids du "
+    + "modèle (pas de programme), mais ses réponses peuvent être de mauvaise qualité ou orientées : préférez les auteurs "
+    + "connus (ggml-org, bartowski, unsloth, lmstudio-community…) et les modèles très téléchargés."));
+  const slot = el("div");
+  slot.append(el("p", "small muted", "Lecture des fichiers sur Hugging Face…"));
+  body.append(slot, licenseBlock({ ...it.license, summary: `${it.license.summary} C'est souvent la licence du modèle d'origine`
+    + `${m.base_model ? ` (${m.base_model})` : ""} : vérifiez-la sur sa page.` }));
+  const page = el("p", "small");
+  page.append(link("Page du modèle sur Hugging Face ↗", `https://huggingface.co/${m.repo}`));
+  body.append(page);
+  if (!admin) { foot.prepend(loginButton()); slot.replaceChildren(); return; }
+  const r = await api(`/v1/admin/models/hf/files?repo=${encodeURIComponent(m.repo)}`);
+  if ($("d-title").textContent !== it.name) return;          // une autre fiche a été ouverte entre-temps
+  if (!r.ok) return slot.replaceChildren(el("p", "small", r.data?.error?.message || "Fichiers illisibles."));
+  const info = hf.info = r.data;
+  if (!info.files.length) {
+    return slot.replaceChildren(el("p", "small", "Aucun fichier GGUF qu'Ollama sache prendre dans ce dépôt (modèle découpé "
+      + "en plusieurs fichiers, ou rangé dans des dossiers) : cherchez une autre version de ce modèle."));
+  }
+  const ok = info.files.filter((f) => f.fit !== "too_big");
+  const best = ok.find((f) => f.quant === "Q4_K_M") || ok.filter((f) => f.fit === "vram").pop() || ok[0] || null;
+  const table = el("table", "market-sizes");
+  const head = el("tr");
+  for (const h of ["Version", "Téléchargement", "Mémoire", "Sur ce PC", ""]) head.append(el("th", "", h));
+  table.append(head);
+  // la version conseillée d'abord, puis les courantes ; les autres (souvent une vingtaine) derrière un bouton
+  const COMMON = ["Q4_K_M", "Q5_K_M", "Q6_K", "Q8_0", "Q3_K_M"];
+  const first = info.files.filter((f) => f === best || f.installed || COMMON.includes(f.quant));
+  const shownFiles = [...(best ? [best] : []), ...first.filter((f) => f !== best)];
+  const others = info.files.filter((f) => !shownFiles.includes(f));
+  for (const f of [...shownFiles, ...others]) {
+    const tr = el("tr");
+    tr.dataset.tag = f.tag;
+    if (shownFiles.length && !shownFiles.includes(f)) tr.hidden = true;
+    const name = el("td", "", f.quant);
+    if (f === best) name.append(" ", el("span", "pill reco-pill", "Conseillée"));
+    const fitCell = el("td");
+    fitCell.append(el("span", `fit ${FIT[f.fit][1]}`, fitLabel(f.fit)));
+    const act = el("td");
+    if (f.installed) act.append(button("Supprimer", "btn-ghost", (b) => removeModel(f.tag, info.ollama, b)));
+    else if (!info.ollama && !ollamaInstallable()) act.append(el("span", "small muted", "Ollama requis"));
+    else act.append(button(info.ollama ? "Installer" : "Installer + Ollama", f === best ? "btn-primary" : "btn-ghost",
+      (b) => installModel({ tag: f.tag, download: f.size, fit: f.fit }, info.ollama, b, body)));
+    tr.append(name, el("td", "", `~${size(f.size)}`), el("td", "", size(f.memory)), fitCell, act);
+    table.append(tr);
+  }
+  const wrap = el("div", "market-table");
+  wrap.append(table);
+  const more = shownFiles.length && others.length ? button(`Afficher les ${others.length} autres versions`, "btn-ghost", (b) => {
+    table.querySelectorAll("tr[hidden]").forEach((tr) => { tr.hidden = false; });
+    b.remove();
+  }) : null;
+  slot.replaceChildren(el("h3", "", "Versions et adéquation à ce PC"), wrap, ...(more ? [more] : []), el("p", "small muted",
+    "Chaque version est le même modèle, plus ou moins compressé : Q4_K_M est le bon compromis ; un nombre plus petit "
+    + "(Q3, Q2) prend moins de place mais répond moins bien, un plus grand (Q6, Q8) l'inverse. Une fois installé, le "
+    + `modèle apparaît dans le menu des modèles du chat sous le nom hf.co/${m.repo}.`));
+}
+
+// ---------- compatibilité (gateway/compat.py) : dans chaque fiche, et bilan de ce PC pour la clé maître ----------
+const COMPAT = { conflit: ["À éviter ensemble", "bad"], attention: ["Avec une précaution", "warn"], doublon: ["Font double emploi", "ok"] };
+const keyOf = (it) => `${it.kind}:${it.id}`;
+function nameOfKey(key) {
+  const [kind, id] = key.split(":");
+  return items.find((x) => x.kind === kind && x.id === id)?.name || id;
+}
+function compatRule(r, others, here = null) {
+  const li = el("li", `compat-item compat-${r.level}`);
+  li.append(el("span", `lic lic-${COMPAT[r.level][1]}`, COMPAT[r.level][0]), el("strong", "", ` ${r.title}`));
+  if (others.length) {
+    li.append(el("p", "small", (here ? "Installés ici : " : "Avec : ") + others.map(nameOfKey).join(", ")));
+  }
+  li.append(el("p", "small muted", r.text));
+  return li;
+}
+function compatBlock(it) {
+  const c = data?.compat;
+  if (!c || !["component", "mcp", "tool", "app"].includes(it.kind)) return null;
+  const box = el("section", "market-compat-detail");
+  box.append(el("h3", "", "Compatibilité avec les autres outils"));
+  if (c.kinds[it.kind]) box.append(el("p", "small", c.kinds[it.kind]));
+  const key = keyOf(it);
+  const known = new Set(items.map(keyOf));
+  const rules = c.rules.filter((r) => r.ids.includes(key)).map((r) => [r, r.ids.filter((i) => i !== key && known.has(i))])
+    .filter(([, others]) => others.length);
+  if (rules.length) {
+    const ul = el("ul", "compat-list");
+    for (const [r, others] of rules) ul.append(compatRule(r, others));
+    box.append(ul);
+  } else {
+    box.append(el("p", "small", "Aucun conflit connu avec les autres éléments de la marketplace."));
+  }
+  box.append(el("p", "small muted", c.general));
+  return box;
+}
+function renderCompat() {
+  const pc = data?.pc_compat;
+  $("compat").hidden = !admin || !pc;
+  if (!pc) return;
+  $("compat-sum").textContent = `${pc.installed} élément${pc.installed > 1 ? "s" : ""} installé${pc.installed > 1 ? "s" : ""}`
+    + ` · ${pc.mcp_servers} serveur${pc.mcp_servers > 1 ? "s" : ""} MCP (${pc.mcp_tools} outils) · `
+    + (pc.warnings.length ? (pc.ok ? "rien qui empêche Lezard IA de marcher, quelques points à connaître :"
+      : "à corriger : des éléments installés se contredisent.")
+      : "rien ne se gêne : tout peut rester installé.");
+  $("compat-list").replaceChildren(...pc.warnings.map((w) => compatRule(w, w.items, true)));
 }
 
 function renderReco() {
@@ -441,8 +600,10 @@ function openDetail(it, tag = null) {
   if (entryOf(it)?.stars) body.append(starsLine(entryOf(it), "small muted", true));
   if (commandsOf(it).length) body.append(commandsBlock(commandsOf(it)));
   foot.replaceChildren(button("Fermer", "btn-ghost", () => $("detail").close()));
+  const compatInfo = compatBlock(it);
   ({ model: modelDetail, skill: skillDetail, component: componentDetail, mcp: mcpDetail, tool: toolDetail,
-     app: appDetail, bundle: bundleDetail })[it.kind](it, body, foot, tag);
+     app: appDetail, bundle: bundleDetail, hf: hfDetail })[it.kind](it, body, foot, tag);
+  if (compatInfo) body.append(compatInfo);
   if (!$("detail").open) $("detail").showModal();
 }
 
@@ -540,7 +701,7 @@ function installModel(s, provider, btn, body) {
     ["Ollama", withOllama ? (reco?.ollama_installed ? "Déjà sur ce PC : Lezard IA le démarre et l'ajoute"
       : "≈ 1,5 Go, installateur officiel vérifié par Lezard IA, lancé par Lezard IA") : null],
     ["Modèle", `environ ${size(s.download)} à télécharger`],
-    ["Espace libre", library.budget?.disk_free ? size(library.budget.disk_free) : null],
+    ["Espace libre", (library || hf.info)?.budget?.disk_free ? size(library.budget.disk_free) : null],
     ["Emplacement", "Dans Ollama, sur ce PC : disponible aussitôt dans le chat"], ["Sur ce PC", fit]],
     () => startModel(s, provider, btn, body));
 }
@@ -1042,6 +1203,7 @@ async function load(first = true) {
   }
   rebuild();
   renderReco();
+  renderCompat();
   render();
   $("legal").textContent = "Les noms et marques cités appartiennent à leurs titulaires ; Lezard IA n'est affilié à aucun des "
     + "éditeurs présentés. Les nombres d'étoiles GitHub sont un relevé daté, pas un gage de qualité ni de sécurité. " + data.disclaimer;

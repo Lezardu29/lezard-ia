@@ -857,7 +857,13 @@ def test_site_marketplace_is_static_and_hands_the_key_only_to_the_chosen_pc():
     assert "<script>" not in page and " style=" not in page  # CSP du site : ni script ni style en ligne
     assert '<script src="/assets/marketplace.js?v=' in page
     data = json.loads((SITE / "marketplace" / "catalog.json").read_text(encoding="utf-8"))
-    assert {t["id"] for t in data["agent_tools"]} == {t["id"] for t in marketplace.AGENT_TOOLS}
+    from gateway import marketplace_extra
+
+    marketplace_extra.apply_source()  # le site montre aussi les fiches du supplément signé (catalogue/supplement.json)
+    try:
+        assert {t["id"] for t in data["agent_tools"]} == {t["id"] for t in marketplace.AGENT_TOOLS}
+    finally:
+        marketplace_extra.apply(None)
     assert len(data["library"]["models"]) > 100 and json.loads(
         (SITE / "marketplace" / "licenses.json").read_text(encoding="utf-8")
     )

@@ -24,6 +24,8 @@ const COMMANDS = [
   { name: "mcp", args: "[serveur] [demande]", help: "Serveurs MCP : seul, la liste et les commandes ; avec un serveur, ses outils expliqués ou une demande pour lui seul ; sinon, l'IA choisit parmi tous", needs: "mcp", send: true },
   { name: "docs", args: "<question>", help: "L'IA cherche dans vos documents Paperless-ngx et Nextcloud", needs: "docs", send: true },
   { name: "image", args: "<description>", help: "Générer une image avec votre ComfyUI (COMFYUI_URL dans .env)" },
+  { name: "travail", args: "<durée> <tâche>", help: "L'IA travaille seule pendant la durée donnée et se relit pour s'améliorer (ex. /travail 30min écris… ; seul : la dernière séance)",
+    send: true, app: { id: "travail", name: "Le travail en durée", kind: "travail", command: "travail" } },
   { name: "multi", args: "[auto | on | off]", help: "Multi-agents : auto selon la complexité, on toujours, off une IA seule" },
   { name: "competence", args: "[nom | off]", help: "Compétences que l'IA suit, ex. réponses concises (sans nom : la liste ; nom : activer ou couper)" },
   { name: "aide", help: "Liste des commandes" },
@@ -94,6 +96,29 @@ export function parseCommand(text) {
   const m = /^\/(\p{L}+)(?:\s+([\s\S]*))?$/u.exec(text.trim());
   if (!m) return null;
   return { name: m[1], cmd: commands().find((c) => c.name === plain(m[1])) || null, rest: (m[2] || "").trim() };
+}
+
+/** Outils installés qu'on peut activer pour toute une conversation (question du début, conv-tools.js) : la recherche
+ *  sur Internet, le contrôle du PC, vos documents, puis chaque serveur MCP connecté. `names` : outils envoyés à la
+ *  gateway (gateway_tools) quand le groupe est coché. Seulement ce que cette clé a le droit d'utiliser. */
+export async function toolGroups(fresh = false) {
+  const list = await rights(fresh);
+  const of = (pred) => list.filter(pred).map((t) => t.name);
+  const groups = [];
+  const web = of((t) => t.level === "web");
+  if (web.length) groups.push({ id: "web", label: "Recherche sur Internet", names: [...web, ...of((t) => t.level === "basic")],
+                                help: "L'IA cherche et lit des pages web quand la question le demande." });
+  const pc = of((t) => t.level === "pc");
+  if (pc.length) groups.push({ id: "pc", label: "Contrôle du PC", names: pc, warn: true,
+                               help: "L'IA peut ouvrir des applications, cliquer et taper sur ce PC (chaque action sensible vous est demandée)." });
+  const docs = of((t) => t.level === "docs");
+  if (docs.length) groups.push({ id: "docs", label: "Vos documents", names: docs, help: "Paperless-ngx et Nextcloud." });
+  for (const s of servers.filter((x) => x.connected)) {
+    const names = of((t) => t.level === "mcp" && t.server === s.id);
+    if (names.length) groups.push({ id: `mcp:${s.id}`, label: s.name || s.id, names, help: s.description || "",
+                                    count: names.length });
+  }
+  return groups;
 }
 
 /** Commande reconnue au début d'un message affiché : { label: "/pc", rest } (bulle de l'utilisateur). */

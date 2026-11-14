@@ -11,11 +11,12 @@ import { saveCode } from "./save-file.js";
 import { renderMarkdown } from "./markdown.js";
 import { renderMetrics } from "./metrics.js";
 import { attachmentsReady, hasAttachments, sizeLabel, takeAttachments } from "./attachments.js";
-import { appRequest, commandLabel, commandOptions, handleCommand, initSlash, mcpTool,
+import { appRequest, commandLabel, commandOptions, handleCommand, initSlash, mcpTool, parseCommand,
          stripCommand } from "./slash-commands.js";
 import { AUTO_COMPACT, contextRatio, mountContextRing, updateContextRing } from "./context-ring.js";
 import { initRowMenus } from "./row-menu.js";
 import { sse } from "./sse.js";
+import * as convTools from "./conv-tools.js";
 
 const $ = (id) => document.getElementById(id);
 // attente de la réponse : le lézard de l'avatar s'anime (chat.css), le texte l'annonce
@@ -325,7 +326,7 @@ async function sync() {
     : await api("/v1/conversations", { method: "POST",
                                        body: { messages, private: state.private, project: state.project } });
   if (r.ok) {
-    if (!state.convId) { state.convId = r.data.id; remember(r.data.id); }
+    if (!state.convId) { state.convId = r.data.id; remember(r.data.id); convTools.keep(r.data.id); }
     state.revision = r.data.revision;
     if (state.noticeIsError) notice("");                  // enregistrement rétabli
     state.onChange();
@@ -367,6 +368,7 @@ function apply(conv) {
   state.private = conv.private;
   state.project = conv.project_id || null;
   state.onPrivate(state.private);
+  convTools.load(conv.id);                                // outils choisis pour cette conversation
   renderAll();
   conversationShown();
   const last = [...state.messages].reverse().find((m) => m.role === "assistant" && m.meta);
@@ -431,7 +433,42 @@ function attachMetrics(el, meta) {
 // La gateway le lance en tâche de fond (gateway/chat_tools.py), la page la suit toutes les 2 s. Une session par
 // conversation : chaque outil s'y souvient des échanges précédents. Bouton d'arrêt : la tâche est arrêtée sur le PC.
 const POLL_MS = 2000;
+// « /travail 30min … » : séance de travail en durée (gateway/travail.py). L'IA travaille seule et se relit ; la page
+// suit la séance et affiche le tour en cours. « /travail » seul : la dernière séance, retrouvée même après avoir fermé
+// la page. Bouton d'arrêt : la séance s'arrête et rend la meilleure version obtenue.
+const clockOf = (s) => `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, "0")} s`;
+async function askTravail(request, signal, onWait) {
+  const model = state.getOptions().model;
+  let r = request
+    ? await api("/v1/travail", { method: "POST", body: { text: request, ...(model && model !== "auto" && { model }),
+                                                        ...(state.private && { private: true }) } })
+    : await api("/v1/travail/last");
+  if (!r.ok) throw new Error(r.data?.error?.message || `Travail en durée : erreur ${r.status}`);
+  const id = encodeURIComponent(r.data.id);
+  let stopped = false;
+  const stop = () => { stopped = true; api(`/v1/travail/${id}`, { method: "DELETE" }); };
+  signal.addEventListener("abort", stop, { once: true });
+  try {
+    while (r.data.status === "running") {
+      const d = r.data, left = Math.max(0, d.planned - d.seconds);
+      onWait(`${d.step || "Travail…"} · ${clockOf(d.seconds)} écoulées, `
+        + (left ? `${clockOf(left)} restantes` : "temps écoulé : fin du tour en cours")
+        + (d.round ? ` · ${d.kept} amélioration${d.kept > 1 ? "s" : ""} gardée${d.kept > 1 ? "s" : ""}` : "")
+        + (d.note != null ? ` · note de l'IA : ${d.note}/10` : "") + (stopped ? " · arrêt demandé, résultat en cours…" : ""));
+      await new Promise((ok) => setTimeout(ok, POLL_MS));
+      const next = await api(`/v1/travail/${id}`);
+      if (next.ok) r = next;
+      else if (next.status) throw new Error(next.data?.error?.message || `Travail en durée : erreur ${next.status}`);
+    }
+  } finally {
+    signal.removeEventListener("abort", stop);
+  }
+  if (r.data.status !== "done") throw new Error(r.data.error || "La séance de travail n'a rien donné.");
+  return { text: r.data.report, meta: { tool: { id: "travail", name: "Lezard IA (travail en durée)", seconds: r.data.seconds } } };
+}
+
 async function askTool(app, request, signal, onWait) {
+  if (app.kind === "travail") return askTravail(request, signal, onWait);
   if (state.private && app.kind === "agent") {
     throw new Error(`Mode privé : /${app.command} n'est pas disponible (repassez en mode normal avec /prive off).`);
   }
@@ -532,6 +569,7 @@ function renderAll() {
     .classList.toggle("archived", i < start));            // avant le dernier compactage : affiché, plus envoyé
   updateContextRing(...contextUsage());
   scrollToBottom(true);
+  convTools.refresh();
 }
 
 // ---------- envoi & streaming ----------
@@ -543,6 +581,12 @@ function setBusy(on) {
 function updateSend() {
   const busy = $("composer").classList.contains("busy");
   $("send").disabled = !busy && (!attachmentsReady() || (!$("prompt").value.trim() && !hasAttachments()));
+}
+
+/** Outils du message : ceux de sa commande (« /pc … », « /web … »), sinon ceux choisis pour la conversation. */
+function withTools(text) {
+  const own = commandOptions(text);
+  return Object.keys(own).length || parseCommand(text)?.cmd ? own : convTools.options();
 }
 
 async function generate({ model = null, before = null } = {}) {
@@ -580,7 +624,7 @@ async function generate({ model = null, before = null } = {}) {
       const r = await askTool(tool.app, tool.rest, state.controller.signal, (s) => {
         const wait = Object.assign(document.createElement("p"), { className: "split-progress" });
         wait.setAttribute("role", "status");
-        wait.textContent = `${tool.app.name} travaille… ${s} s` +
+        wait.textContent = typeof s === "string" ? s : `${tool.app.name} travaille… ${s} s` +
           (s >= 30 && tool.app.kind === "agent" ? " (une IA locale peut mettre plusieurs minutes)" : "");
         body.innerHTML = THINKING;
         body.append(wait);
@@ -592,7 +636,7 @@ async function generate({ model = null, before = null } = {}) {
         method: "POST", signal: state.controller.signal,
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${getKey()}` },
         body: JSON.stringify({ ...state.getOptions(), ...(model && { model }),   // autre modèle demandé (19.3)
-                               ...commandOptions(textOf(asked?.content)),    // « /pc … », « /web … »
+                               ...withTools(textOf(asked?.content)),         // « /pc … », ou les outils de la conversation
                                stream: true,                                 // mode / effort / multi-agents (5.4)
                                ...(state.private && { private: true }),      // refusé par le serveur hors IA locale
                                ...(state.project && { project: state.project }),   // instructions et fichiers du projet
@@ -976,6 +1020,7 @@ export function newConversation(project = null) {
     save();
   }
   setPrivate(false);                                        // le mode privé suit la conversation
+  convTools.reset();                                        // nouvelle question : quels outils activer ?
   showSuggestions();
   renderAll();
   state.onRestore(null);
@@ -1096,6 +1141,7 @@ export async function initChat({ onMeta, onAuthError, getOptions, onStart, onRes
     if (e.key === "Escape" && state.controller) state.controller.abort();
   });
   showSuggestions();
+  convTools.init(() => { if (state.convId) convTools.keep(state.convId); });
   $("suggestions").addEventListener("click", (e) => {
     const s = e.target.closest(".suggestion");
     if (!s || state.controller) return;

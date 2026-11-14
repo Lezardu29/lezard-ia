@@ -1,6 +1,6 @@
 """Accès à distance automatique : ce PC demande à lezard-ia.fr (/api/tunnel) un tunnel Cloudflare nommé et une adresse
-fixe <nom>-<hex>.lezard-ia.fr, puis le garde (jeton chiffré dans la base) et le relance à chaque démarrage. Rien à
-configurer : « Créer mon compte web » s'en charge quand aucun accès à distance n'existe encore."""
+fixe ia-<6 caractères>.lezard-ia.fr (sans le nom du PC), puis le garde (jeton chiffré dans la base) et le relance à
+chaque démarrage. Rien à configurer : « Créer mon compte web » s'en charge quand aucun accès à distance n'existe encore."""
 
 from __future__ import annotations
 
@@ -37,9 +37,10 @@ async def _call(client: httpx.AsyncClient, action: str, body: dict) -> dict:
     return data
 
 
-async def create(client: httpx.AsyncClient, instance: str, name: str, port: int) -> dict:
-    """Nouveau tunnel : {hostname, token, proof}."""
-    data = await _call(client, "creer", {"instance": instance, "name": name, "port": port})
+async def create(client: httpx.AsyncClient, instance: str, port: int) -> dict:
+    """Nouveau tunnel : {hostname, token, proof}, adresse ia-<6 caractères>.lezard-ia.fr. Le nom du PC n'est pas
+    envoyé : il n'apparaît plus dans l'adresse (anciennes versions : <nom-du-pc>-<hex>.lezard-ia.fr, gardées)."""
+    data = await _call(client, "creer", {"instance": instance, "port": port})
     if not all(isinstance(data.get(k), str) and data[k] for k in ("hostname", "token", "proof")):
         raise AutoTunnelError(502, "Réponse inattendue de lezard-ia.fr.")
     return {"hostname": data["hostname"], "token": data["token"], "proof": data["proof"]}

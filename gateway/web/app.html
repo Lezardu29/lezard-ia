@@ -225,6 +225,13 @@
         <p class="ph-desc" id="ph-desc"></p>
       </div>
       <h1><span class="gradient">Bonjour</span><br>Que puis-je faire pour vous ?</h1>
+      <!-- outils installés à activer pour cette conversation (conv-tools.js) ; caché s'il n'y en a aucun -->
+      <section class="conv-tools" id="conv-tools" aria-labelledby="ct-title" hidden>
+        <p class="ct-title" id="ct-title">Quels outils installés activer pour cette conversation ?</p>
+        <div class="ct-list" id="ct-list" role="group" aria-labelledby="ct-title"></div>
+        <p class="ct-note" id="ct-note" role="status" hidden></p>
+        <p class="ct-hint">Rien de coché : l'IA répond seule. Une commande (/web, /pc, /mcp…) reste possible à chaque message.</p>
+      </section>
       <div class="suggestions" id="suggestions"></div>   <!-- tirées au hasard (chat.js) -->
       <!-- nouveaux venus : visite de l'écran (tour.js) et didacticiel ; disparaît après la visite ou par la croix -->
       <p class="first-steps" id="first-steps" hidden>Première fois ?
@@ -357,7 +364,12 @@
         </button>
       </div>
       <p class="dictation" id="dictation" role="status" aria-live="polite" hidden></p>
-      <div class="toolbar" id="toolbar" aria-label="Réglages rapides"></div>
+      <div class="ct-pop" id="ct-pop" hidden>
+        <p class="ct-title">Outils de cette conversation</p>
+        <div class="ct-list" id="ct-pop-list" role="group" aria-label="Outils de cette conversation"></div>
+        <p class="ct-note" id="ct-pop-note" role="status" hidden></p>
+      </div>
+      <div class="toolbar" id="toolbar" aria-label="Réglages rapides"></div>   <!-- + puce « Outils » (conv-tools.js) -->
     </form>
     <p class="disclaimer">Les IA peuvent se tromper. Vérifiez les informations importantes.</p>
   </footer>

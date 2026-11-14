@@ -49,9 +49,9 @@ REFRESH: list[int] = []  # réponse de lezard-ia.fr à « jeton » : [404] = tun
 def env(monkeypatch):
     created = []
 
-    async def fake_create(client, instance, name, port):
-        created.append((instance, name, port))
-        return {"hostname": "mon-pc-7f3a1c.lezard-ia.fr", "token": "JETON-TUNNEL-SECRET", "proof": "p" * 64}
+    async def fake_create(client, instance, port):
+        created.append((instance, port))
+        return {"hostname": "ia-7k3f9q.lezard-ia.fr", "token": "JETON-TUNNEL-SECRET", "proof": "p" * 64}
 
     async def fake_ensure(client):
         return "cloudflared.exe"
@@ -59,7 +59,7 @@ def env(monkeypatch):
     async def fake_refresh(client, instance, proof, port):
         if REFRESH:
             raise auto_tunnel.AutoTunnelError(REFRESH[0], "refus")
-        return {"hostname": "mon-pc-7f3a1c.lezard-ia.fr", "token": "JETON-TUNNEL-SECRET"}
+        return {"hostname": "ia-7k3f9q.lezard-ia.fr", "token": "JETON-TUNNEL-SECRET"}
 
     REFRESH.clear()
     monkeypatch.setattr(auto_tunnel, "refresh", fake_refresh)
@@ -101,11 +101,11 @@ def test_web_account_creates_the_remote_access_by_itself(env):
     enable_totp(c)
     r = c.post("/v1/admin/web-account", headers=ADMIN)
     assert r.status_code == 200, r.text
-    assert r.json()["url"] == "https://mon-pc-7f3a1c.lezard-ia.fr" and r.json()["stable"] is True
-    assert len(created) == 1 and created[0][2] == 8000
-    assert remote.started[-1] == {"hostname": "mon-pc-7f3a1c.lezard-ia.fr", "token": "JETON-TUNNEL-SECRET"}
+    assert r.json()["url"] == "https://ia-7k3f9q.lezard-ia.fr" and r.json()["stable"] is True
+    assert len(created) == 1 and created[0][1] == 8000
+    assert remote.started[-1] == {"hostname": "ia-7k3f9q.lezard-ia.fr", "token": "JETON-TUNNEL-SECRET"}
     saved = store.get_setting("managed_tunnel")
-    assert saved["auto"] is True and saved["hostname"] == "mon-pc-7f3a1c.lezard-ia.fr"
+    assert saved["auto"] is True and saved["hostname"] == "ia-7k3f9q.lezard-ia.fr"
     assert "JETON-TUNNEL-SECRET" not in str(saved) and "p" * 64 not in str(saved)  # jeton et preuve chiffrés
 
 
@@ -166,7 +166,7 @@ def test_errors_are_explained(env, monkeypatch):
     c, remote, store, created = env
     enable_totp(c)
 
-    async def full(client, instance, name, port):
+    async def full(client, instance, port):
         raise auto_tunnel.AutoTunnelError(503, "Plus de place pour de nouveaux accès à distance pour le moment.")
 
     monkeypatch.setattr(auto_tunnel, "create", full)

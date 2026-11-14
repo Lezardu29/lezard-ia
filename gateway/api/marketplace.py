@@ -33,6 +33,7 @@ from fastapi.responses import JSONResponse, Response
 from .. import (
     app_connect,
     benchmark,
+    compat,
     chat_tools,
     detection,
     installers,
@@ -160,6 +161,7 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
             "skills_catalog_url": skills.CATALOG_URL,
             "web_search": marketplace.web_search_comparison(),
             "disclaimer": marketplace.DISCLAIMER,
+            "compat": {"general": compat.GENERAL, "kinds": compat.KIND_NOTES, "rules": [dict(r) for r in compat.RULES]},
         }
 
     @router.get("/v1/marketplace")
@@ -346,8 +348,17 @@ def build(app: FastAPI, shared: SimpleNamespace) -> APIRouter:
             }
             for s in marketplace.MCP_SERVERS
         ]
+        have = (
+            {f"component:{c['id']}" for c in comps if c["installed"]}
+            | {f"mcp:{s}" for s in declared}
+            | {k for k in here if k.startswith(("tool:", "app:"))}
+        )
+        known = {f"component:{c['id']}" for c in comps} | {f"mcp:{s['id']}" for s in marketplace.MCP_SERVERS}
+        known |= {f"tool:{t['id']}" for t in marketplace.AGENT_TOOLS} | {f"app:{a['id']}" for a in marketplace.APPS}
+        tool_counts = {s["id"]: len(s["tools"] or []) for s in servers}
         return {
             **public(),
+            "pc_compat": compat.report(have, known, tool_counts),  # bilan de ce PC : ce qui se gêne parmi l'installé
             "bundles": await bundles(),
             "components": comps,
             "mcp": servers,
