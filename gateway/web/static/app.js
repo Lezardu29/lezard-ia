@@ -80,7 +80,7 @@ async function init() {
                   isPrivate: () => isPrivate() || me.routing_rights?.hosting === "local" });
 }
 
-// ---------- « Signaler un bug » : formulaire GitHub prérempli, que la personne relit et envoie elle-même ----------
+// ---------- « Signaler un bug » : formulaire du site (aucun compte demandé), que la personne relit et envoie elle-même ----------
 // seulement la version (clé maître : jamais montrée aux autres comptes), le système et l'interface ; ni clé ni message
 function fillBugLink(link, me) {
   const ua = navigator.userAgentData;

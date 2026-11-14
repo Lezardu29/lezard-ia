@@ -1,7 +1,176 @@
 {
-  "serial": 1,
+  "serial": 2,
   "mcp": [],
   "apps": [],
-  "tools": [],
+  "tools": [
+    {
+      "id": "rojo",
+      "name": "Rojo (Roblox)",
+      "description": "Le code d'un jeu Roblox dans des fichiers de votre PC, synchronisés en direct avec Roblox Studio : votre IA (Claude Code, OpenCode, Aider, Cline…) peut alors écrire les scripts du jeu.",
+      "url": "https://github.com/rojo-rbx/rojo",
+      "license": {"name": "MPL-2.0", "copyright": "Rojo contributors", "url": "https://github.com/rojo-rbx/rojo/blob/master/LICENSE.txt", "summary": "Libre, usage commercial compris ; un fichier de Rojo modifié reste sous MPL-2.0 (vos jeux ne sont pas concernés)."},
+      "needs": "Roblox Studio, avec le plugin Rojo (rojo plugin install).",
+      "lezard": "Outil en ligne de commande pour vos agents de code ; le chat de Lezard IA n'en a pas besoin.",
+      "commands": [
+        {"use": "rojo init mon-jeu", "what": "Crée le dossier d'un nouveau jeu (scripts en fichiers .luau).", "where": "terminal"},
+        {"use": "rojo plugin install", "what": "Installe le plugin Rojo dans Roblox Studio (une seule fois).", "where": "terminal"},
+        {"use": "rojo serve", "what": "Dans le dossier du jeu : synchronise les fichiers avec Studio (bouton Connect du plugin).", "where": "terminal"},
+        {"use": "rojo build -o jeu.rbxlx", "what": "Fabrique le fichier du jeu, à ouvrir dans Studio.", "where": "terminal"}
+      ],
+      "recipe": {
+        "steps": [{"type": "winget", "id": "Rojo.Rojo"}],
+        "size": "~10 Mo",
+        "after": "Dans un terminal : rojo plugin install, puis rojo init mon-jeu.",
+        "windows_name": "Rojo"
+      }
+    },
+    {
+      "id": "rokit",
+      "name": "Rokit (outils Roblox par projet)",
+      "description": "Installe et garde à la bonne version les outils Roblox d'un projet (Rojo, Wally, StyLua, selene…), comme le font les projets Roblox open source.",
+      "url": "https://github.com/rojo-rbx/rokit",
+      "license": {"name": "MIT", "copyright": "Rojo contributors", "url": "https://github.com/rojo-rbx/rokit/blob/main/LICENSE.txt"},
+      "needs": "Rien de plus.",
+      "lezard": "Pratique si vous reprenez un projet Roblox qui a un fichier rokit.toml.",
+      "commands": [
+        {"use": "rokit init", "what": "Crée le fichier rokit.toml du projet.", "where": "terminal"},
+        {"use": "rokit add rojo-rbx/rojo", "what": "Ajoute un outil au projet, à une version figée.", "where": "terminal"},
+        {"use": "rokit install", "what": "Installe tous les outils listés par le projet.", "where": "terminal"}
+      ],
+      "recipe": {
+        "steps": [{"type": "winget", "id": "Rojo.Rokit"}],
+        "size": "~5 Mo",
+        "after": "Dans un terminal, dans le dossier du jeu : rokit init.",
+        "windows_name": "Rokit"
+      }
+    },
+    {
+      "id": "wally",
+      "name": "Wally (bibliothèques Roblox)",
+      "description": "Ajoute à votre jeu des bibliothèques de code Roblox prêtes à l'emploi (interfaces, réseau, données…), comme npm pour JavaScript.",
+      "url": "https://github.com/UpliftGames/wally",
+      "license": {"name": "MPL-2.0", "copyright": "Uplift Games", "url": "https://github.com/UpliftGames/wally/blob/main/LICENSE.txt", "summary": "Libre, usage commercial compris. Chaque bibliothèque installée a sa propre licence."},
+      "needs": "Rojo, pour mettre les bibliothèques dans le jeu.",
+      "lezard": "Les bibliothèques arrivent en fichiers : votre agent de code peut les lire et les utiliser.",
+      "warning": "Les bibliothèques de Wally sont publiées par n'importe qui : lisez leur code ou choisissez des projets connus avant de les ajouter à votre jeu.",
+      "commands": [
+        {"use": "wally init", "what": "Crée le fichier wally.toml du jeu.", "where": "terminal"},
+        {"use": "wally install", "what": "Télécharge les bibliothèques listées dans wally.toml (dossier Packages).", "where": "terminal"}
+      ],
+      "recipe": {
+        "steps": [{"type": "winget", "id": "UpliftGames.wally"}],
+        "size": "~10 Mo",
+        "after": "Dans un terminal, dans le dossier du jeu : wally init.",
+        "windows_name": "Wally"
+      }
+    },
+    {
+      "id": "stylua",
+      "name": "StyLua (mise en forme du Luau)",
+      "description": "Remet en forme le code Luau de votre jeu (espaces, retours à la ligne) : un code régulier, que l'IA et vous relisez plus facilement.",
+      "url": "https://github.com/JohnnyMorganz/StyLua",
+      "license": {"name": "MPL-2.0", "copyright": "JohnnyMorganz", "url": "https://github.com/JohnnyMorganz/StyLua/blob/main/LICENSE.md", "summary": "Libre, usage commercial compris ; vos fichiers mis en forme restent à vous."},
+      "needs": "Rien de plus.",
+      "lezard": "Demandez à votre agent de code de lancer stylua après chaque modification.",
+      "commands": [
+        {"use": "stylua src", "what": "Met en forme tous les fichiers du dossier src.", "where": "terminal"},
+        {"use": "stylua --check src", "what": "Dit seulement ce qui serait changé.", "where": "terminal"}
+      ],
+      "recipe": {
+        "steps": [{"type": "winget", "id": "JohnnyMorganz.StyLua"}],
+        "size": "~5 Mo",
+        "after": "Dans un terminal, dans le dossier du jeu : stylua src.",
+        "windows_name": "StyLua"
+      }
+    },
+    {
+      "id": "selene",
+      "name": "selene (vérification du Luau)",
+      "description": "Relit le code Luau du jeu et signale les erreurs courantes (variable inconnue, code jamais exécuté) avant même de lancer le jeu : utile pour contrôler ce qu'une IA a écrit.",
+      "url": "https://github.com/Kampfkarren/selene",
+      "license": {"name": "MPL-2.0", "copyright": "Kampfkarren", "url": "https://github.com/Kampfkarren/selene/blob/main/LICENSE.md", "summary": "Libre, usage commercial compris."},
+      "needs": "Un fichier selene.toml avec std = \"roblox\" dans le dossier du jeu.",
+      "lezard": "Votre agent de code peut lancer selene src et corriger ce qu'il signale.",
+      "commands": [
+        {"use": "selene src", "what": "Vérifie tout le code du dossier src.", "where": "terminal"}
+      ],
+      "recipe": {
+        "steps": [{"type": "winget", "id": "Kampfkarren.selene"}],
+        "size": "~10 Mo",
+        "after": "Dans le dossier du jeu, créez selene.toml contenant std = \"roblox\", puis : selene src.",
+        "windows_name": "selene"
+      }
+    },
+    {
+      "id": "lune",
+      "name": "Lune (Luau hors de Roblox)",
+      "description": "Lance des scripts Luau directement sur votre PC, sans Roblox : pour tester une fonction du jeu, ou écrire des petits outils dans le même langage.",
+      "url": "https://github.com/lune-org/lune",
+      "license": {"name": "MPL-2.0", "copyright": "Filip Tibell et contributeurs", "url": "https://github.com/lune-org/lune/blob/main/LICENSE.txt", "summary": "Libre, usage commercial compris."},
+      "needs": "Rien de plus.",
+      "lezard": "Votre agent de code peut essayer un bout de Luau avec lune run avant de le mettre dans le jeu.",
+      "commands": [
+        {"use": "lune run essai.luau", "what": "Lance un script Luau.", "where": "terminal"}
+      ],
+      "recipe": {
+        "steps": [{"type": "winget", "id": "Lune.Lune"}],
+        "size": "~15 Mo",
+        "after": "Dans un terminal : lune run essai.luau.",
+        "windows_name": "Lune"
+      }
+    },
+    {
+      "id": "luau-lsp",
+      "name": "Luau Language Server (VS Code)",
+      "description": "VS Code comprend le Luau de Roblox : complétion, erreurs soulignées, documentation des fonctions de Roblox au survol. Le meilleur réglage pour écrire un jeu avec une IA dans VS Code.",
+      "url": "https://github.com/JohnnyMorganz/luau-lsp",
+      "license": {"name": "MIT", "copyright": "JohnnyMorganz", "url": "https://github.com/JohnnyMorganz/luau-lsp/blob/main/LICENSE.md"},
+      "needs": "VS Code (installé d'abord s'il manque).",
+      "lezard": "Va bien avec Cline, Continue ou Kilo Code branchés sur Lezard IA dans VS Code.",
+      "commands": [
+        {"use": "Ctrl+Espace", "what": "Propose la suite du code (fonctions et propriétés de Roblox).", "where": "vscode"}
+      ],
+      "recipe": {
+        "steps": [{"type": "vscode", "extension": "JohnnyMorganz.luau-lsp"}],
+        "size": "~20 Mo",
+        "after": "Ouvrez le dossier du jeu dans VS Code."
+      }
+    },
+    {
+      "id": "vscode-rojo",
+      "name": "Rojo pour VS Code",
+      "description": "Lance et arrête la synchronisation Rojo depuis VS Code, sans terminal.",
+      "url": "https://github.com/rojo-rbx/vscode-rojo",
+      "license": {"name": "MPL-2.0", "copyright": "Rojo contributors", "url": "https://github.com/rojo-rbx/vscode-rojo", "summary": "Libre, usage commercial compris."},
+      "needs": "VS Code et Rojo.",
+      "lezard": "Pratique avec un agent de code dans VS Code (Cline, Kilo Code) branché sur Lezard IA.",
+      "commands": [
+        {"use": "Ctrl+Maj+P puis « Rojo: Open menu »", "what": "Démarre ou arrête la synchronisation avec Studio.", "where": "vscode"}
+      ],
+      "recipe": {
+        "steps": [{"type": "vscode", "extension": "evaera.vscode-rojo"}],
+        "size": "~5 Mo",
+        "after": "Dans VS Code : Ctrl+Maj+P, « Rojo: Open menu »."
+      }
+    },
+    {
+      "id": "roblox-ts",
+      "name": "roblox-ts (TypeScript pour Roblox)",
+      "description": "Écrire un jeu Roblox en TypeScript plutôt qu'en Luau, puis le traduire en Luau. Utile si vous ou votre IA êtes plus à l'aise en TypeScript.",
+      "url": "https://github.com/roblox-ts/roblox-ts",
+      "license": {"name": "MIT", "copyright": "roblox-ts contributors", "url": "https://github.com/roblox-ts/roblox-ts/blob/master/LICENSE"},
+      "needs": "Node.js (installé d'abord s'il manque) et Rojo.",
+      "lezard": "Les modèles de code (Qwen Coder…) connaissent souvent mieux TypeScript que Luau.",
+      "commands": [
+        {"use": "npm init roblox-ts game", "what": "Crée un nouveau jeu en TypeScript.", "where": "terminal"},
+        {"use": "rbxtsc -w", "what": "Traduit en Luau à chaque modification.", "where": "terminal"}
+      ],
+      "recipe": {
+        "steps": [{"type": "npm", "package": "roblox-ts", "version": "3.0.0"}],
+        "size": "~30 Mo",
+        "after": "Dans un terminal : npm init roblox-ts game."
+      }
+    }
+  ],
   "removed": []
 }

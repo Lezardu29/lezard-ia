@@ -233,7 +233,7 @@ def test_bug_report_link_opens_a_prefilled_github_form():
     app = (WEB_DIR / "static" / "app.js").read_text(encoding="utf-8")
     form = (WEB_DIR.parents[1] / ".github" / "ISSUE_TEMPLATE" / "bug.yml").read_text(encoding="utf-8")
     # dans la barre du haut (data-drawer) : menu ☰ et menu du compte de l'interface Claude
-    assert 'href="https://github.com/Lezardu29/lezard-ia/issues/new?template=bug.yml"' in html
+    assert 'href="https://lezard-ia.fr/signaler.html"' in html  # formulaire du site : aucun compte demandé
     assert 'id="bug-link"' in html and 'rel="noopener"' in html and "Signaler un bug" in html
     assert 'fillBugLink($("bug-link"), me);' in app
     # champs préremplis : ceux du formulaire ; la version seulement pour la clé maître (/v1/me ne la donne qu'à elle)
